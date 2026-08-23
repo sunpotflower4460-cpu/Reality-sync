@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { STATUS } from '../src/constants.js';
 import { createTemplateFromSchedules, normalizeTemplates, parseStoredTemplates } from '../src/utils/template.js';
 
-test('template creation stores plan fields only and strips recorded reality', () => {
+test('template creation stores plan fields only, strips recorded reality, and preserves adopted learning already baked into the plan', () => {
   const template = createTemplateFromSchedules(' 平日 ', [{
     id: 'old',
     time: '09:00',
@@ -11,6 +11,7 @@ test('template creation stores plan fields only and strips recorded reality', ()
     category: '仕事',
     duration: 60,
     plannedStress: 50,
+    appliedExperimentIds: ['exp-a', 'exp-a', '  exp-b  '],
     status: STATUS.CHANGED,
     actualTitle: 'Nap',
     actualCategory: '休憩',
@@ -22,7 +23,7 @@ test('template creation stores plan fields only and strips recorded reality', ()
   assert.deepEqual(template, {
     id: 'template-1',
     name: '平日',
-    schedules: [{ time: '09:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 50 }],
+    schedules: [{ time: '09:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 50, appliedExperimentIds: ['exp-a', 'exp-b'] }],
   });
 });
 
@@ -41,5 +42,5 @@ test('template normalization deduplicates ids and sanitizes plan fields', () => 
   ]);
   assert.equal(templates.length, 1);
   assert.equal(templates[0].name, 'First');
-  assert.deepEqual(templates[0].schedules[0], { time: '00:00', title: 'Focus', category: 'その他', duration: 1440, plannedStress: 0 });
+  assert.deepEqual(templates[0].schedules[0], { time: '00:00', title: 'Focus', category: 'その他', duration: 1440, plannedStress: 0, appliedExperimentIds: [] });
 });
