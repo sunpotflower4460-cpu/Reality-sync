@@ -7,6 +7,7 @@ import {
   isValidTime,
   normalizeSchedule,
   normalizeSchedules,
+  sortSchedulesByTime,
   timeToHours,
 } from '../src/utils/schedule.js';
 import { MOOD, STATUS } from '../src/constants.js';
@@ -17,6 +18,17 @@ test('timeToHours converts valid HH:mm and rejects invalid clock values', () => 
   assert.equal(isValidTime('23:59'), true);
   assert.equal(isValidTime('24:00'), false);
   assert.equal(timeToHours('99:99'), 0);
+});
+
+test('sortSchedulesByTime returns a chronological copy without mutating input', () => {
+  const input = [
+    { id: 2, time: '18:00' },
+    { id: 1, time: '07:00' },
+    { id: 3, time: '12:30' },
+  ];
+  const ordered = sortSchedulesByTime(input);
+  assert.deepEqual(ordered.map((schedule) => schedule.id), [1, 3, 2]);
+  assert.deepEqual(input.map((schedule) => schedule.id), [2, 1, 3]);
 });
 
 test('skipped schedules do not fabricate actual rest duration', () => {
