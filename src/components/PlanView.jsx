@@ -1,4 +1,4 @@
-import { Copy, FlaskConical, LayoutTemplate, Pencil, Plus } from 'lucide-react';
+import { CalendarRange, Copy, FlaskConical, LayoutTemplate, Pencil, Plus } from 'lucide-react';
 import { STATUS } from '../constants.js';
 import { sortSchedulesByTime } from '../utils/schedule.js';
 
@@ -18,6 +18,8 @@ export function PlanView({
   templateCount = 0,
   planFeedbackSuggestions = [],
   onReviewPlanFeedback,
+  weeklyPlanFeedback = null,
+  onOpenWeeklyPlan,
 }) {
   const orderedSchedules = sortSchedulesByTime(schedules);
   const feedbackCountBySchedule = new Map();
@@ -56,10 +58,26 @@ export function PlanView({
         </button>
       </div>
 
+      {(weeklyPlanFeedback?.suggestions?.length ?? 0) > 0 && (
+        <button type="button" onClick={onOpenWeeklyPlan} className="flex w-full items-center gap-3 rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 to-indigo-50 p-4 text-left shadow-sm transition hover:border-violet-200">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-violet-600 shadow-sm"><CalendarRange className="h-5 w-5" /></div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-extrabold text-violet-900">今週の現実適応プラン</div>
+            <p className="mt-1 text-[10px] leading-relaxed text-violet-600">採用済みの学びを週全体で確認し、反映する工夫だけ選びます。</p>
+            <div className="mt-2 flex flex-wrap gap-1.5 text-[9px] font-bold">
+              <span className="rounded-full bg-white px-2 py-1 text-indigo-600">選択可能 {weeklyPlanFeedback.actionableCount}件</span>
+              {weeklyPlanFeedback.guidanceCount > 0 && <span className="rounded-full bg-white px-2 py-1 text-amber-600">参考表示 {weeklyPlanFeedback.guidanceCount}件</span>}
+              {weeklyPlanFeedback.multipleTargetGroups.length > 0 && <span className="rounded-full bg-white px-2 py-1 text-red-500">同一予定に複数候補</span>}
+            </div>
+          </div>
+          <span className="shrink-0 rounded-xl bg-violet-600 px-3 py-2 text-[10px] font-bold text-white">週で確認</span>
+        </button>
+      )}
+
       {planFeedbackSuggestions.length > 0 && (
         <section className="rounded-3xl border border-indigo-100 bg-indigo-50/50 p-4 shadow-sm">
           <div className="flex items-start justify-between gap-3">
-            <div><h3 className="flex items-center gap-2 text-sm font-extrabold text-indigo-900"><FlaskConical className="h-4 w-4" />実験から学んだ計画の工夫</h3><p className="mt-1 text-[10px] leading-relaxed text-indigo-600">採用した実験が今日の未記録予定に一致しています。自動変更せず、1件ずつプレビューします。</p></div>
+            <div><h3 className="flex items-center gap-2 text-sm font-extrabold text-indigo-900"><FlaskConical className="h-4 w-4" />実験から学んだ計画の工夫</h3><p className="mt-1 text-[10px] leading-relaxed text-indigo-600">採用した実験がこの日の未記録予定に一致しています。自動変更せず、1件ずつプレビューします。</p></div>
             <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-indigo-600">{planFeedbackSuggestions.length}件</span>
           </div>
           <div className="mt-3 space-y-2">
