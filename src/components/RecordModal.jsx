@@ -4,6 +4,7 @@ import { CATEGORIES, MOOD, STATUS } from '../constants.js';
 import { isValidDateKey } from '../utils/date.js';
 import {
   clampNumber,
+  createPlannedSnapshot,
   durationAfterStatusChange,
   isValidTime,
   parseActualDuration,
@@ -68,9 +69,12 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
         : schedule.status === STATUS.AS_PLANNED
           ? schedule.actualCategory || schedule.category
           : schedule.category;
+    const plannedSnapshot = schedule.plannedSnapshot
+      ?? (schedule.status === STATUS.PENDING ? createPlannedSnapshot(schedule) : null);
 
     onSave({
       status: recordMode,
+      plannedSnapshot,
       actualTitle: title,
       actualCategory: recordedCategory,
       mood,
