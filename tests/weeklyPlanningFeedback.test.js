@@ -167,7 +167,7 @@ test('valid weekly selections apply across multiple days in one result and prese
 });
 
 test('legacy guidance-only learning remains visible in the weekly plan but cannot be selected for mutation', () => {
-  const legacy = adoptedExperiment('legacy-guidance', { decisionDateKey: undefined });
+  const legacy = adoptedExperiment('legacy-guidance', { decisionDateKey: null });
   const days = { '2026-08-24': [pending('work', '09:00', 'Work')] };
   const weekly = buildWeeklyPlanFeedback([legacy], days, '2026-08-24', '2026-08-24');
   assert.equal(weekly.suggestions.length, 1);
