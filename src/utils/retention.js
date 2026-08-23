@@ -120,6 +120,7 @@ export function calculateRetentionSummary(experimentValue, days, throughDateKey)
   if (!experiment.decisionDateKey) {
     return {
       experimentId: experiment.id,
+      throughDateKey: isValidDateKey(throughDateKey) ? throughDateKey : null,
       signal: RETENTION_SIGNAL.UNAVAILABLE,
       reviewCandidate: false,
       totalUsageCount: 0,
@@ -171,6 +172,7 @@ export function calculateRetentionSummary(experimentValue, days, throughDateKey)
 
   return {
     experimentId: experiment.id,
+    throughDateKey: isValidDateKey(throughDateKey) ? throughDateKey : null,
     signal,
     reviewCandidate: signal === RETENTION_SIGNAL.REVIEW,
     totalUsageCount: usages.length,
