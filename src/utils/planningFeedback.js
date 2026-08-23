@@ -76,6 +76,11 @@ function pendingPlan(id, time, title, category, duration, plannedStress, applied
   };
 }
 
+function feedbackAllowedOnDate(experiment, dateKey) {
+  if (!experiment.decisionDateKey) return !experiment.planAdjustment;
+  return dateKey >= experiment.decisionDateKey;
+}
+
 export function adoptedExperiments(experiments) {
   return normalizeExperiments(experiments).filter((experiment) => (
     experiment.status === EXPERIMENT_STATUS.COMPLETED
@@ -90,6 +95,9 @@ export function createPlanFeedbackPreview(experimentValue, dateKey, schedulesVal
   if (!experiment || !isValidDateKey(dateKey) || !schedule) return { canApply: false, error: '対象の予定を確認できません。' };
   if (experiment.status !== EXPERIMENT_STATUS.COMPLETED || experiment.decision !== EXPERIMENT_DECISION.ADOPT) {
     return { canApply: false, error: '採用済みの実験ではありません。' };
+  }
+  if (experiment.decisionDateKey && dateKey < experiment.decisionDateKey) {
+    return { canApply: false, error: 'この予定は実験を採用する前の日付です。過去へ遡って学習結果を適用しません。' };
   }
   if (schedule.status !== STATUS.PENDING) return { canApply: false, error: '実績がある予定は、過去を書き換えないため変更できません。' };
   if (!experimentMatchesSchedule(experiment, dateKey, schedule)) return { canApply: false, error: 'この予定は採用した実験条件に一致しません。' };
@@ -109,12 +117,14 @@ export function createPlanFeedbackPreview(experimentValue, dateKey, schedulesVal
   };
 
   const adjustment = experiment.planAdjustment;
-  if (!adjustment) {
+  if (!adjustment || !experiment.decisionDateKey) {
     return {
       ...base,
       kind: 'guidance-only',
       canApply: false,
-      error: 'この実験はPhase 7以前の自由記述対策、または「ガイダンスのみ」です。文章から変更内容を推測せず、対策文だけを参考表示します。',
+      error: !adjustment
+        ? 'この実験はPhase 7以前の自由記述対策、または「ガイダンスのみ」です。文章から変更内容を推測せず、対策文だけを参考表示します。'
+        : 'この実験は正確な採用日を持たない旧データです。過去へ遡る可能性を避けるため、自動適用せず参考表示だけにします。',
       after: null,
     };
   }
@@ -189,6 +199,7 @@ export function buildPlanFeedbackSuggestions(experimentsValue, dateKey, schedule
   const suggestions = [];
 
   for (const experiment of experiments) {
+    if (!feedbackAllowedOnDate(experiment, dateKey)) continue;
     for (const schedule of schedules) {
       if (schedule.status !== STATUS.PENDING) continue;
       if (schedule.appliedExperimentIds.includes(experiment.id)) continue;
