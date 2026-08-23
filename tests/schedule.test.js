@@ -47,6 +47,31 @@ test('changed schedules use the recorded actual category and duration', () => {
   assert.equal(stats.categories['趣味'].actual, 45);
 });
 
+test('as-planned records keep their actual snapshot when the plan is edited later', () => {
+  const normalized = normalizeSchedule({
+    id: 'recorded',
+    time: '10:00',
+    title: 'Edited plan title',
+    category: '仕事',
+    duration: 60,
+    plannedStress: 40,
+    status: STATUS.AS_PLANNED,
+    actualTitle: 'Original recorded title',
+    actualCategory: '運動',
+    actualDuration: 30,
+    actualStress: 35,
+    mood: MOOD.GOOD,
+  });
+
+  assert.equal(normalized.actualTitle, 'Original recorded title');
+  assert.equal(normalized.actualCategory, '運動');
+
+  const stats = calculateStats([normalized]);
+  assert.equal(stats.categories['仕事'].ideal, 60);
+  assert.equal(stats.categories['仕事'].actual, 0);
+  assert.equal(stats.categories['運動'].actual, 30);
+});
+
 test('normalization clamps corrupted numeric values and rejects unknown categories', () => {
   const normalized = normalizeSchedule({
     id: 7,
