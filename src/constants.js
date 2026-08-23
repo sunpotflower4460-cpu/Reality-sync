@@ -27,4 +27,6 @@ export const CATEGORIES = Object.freeze([
   'その他',
 ]);
 
-export const STORAGE_KEY = 'reality-sync:schedules:v1';
+export const STORAGE_VERSION = 2;
+export const STORAGE_KEY = 'reality-sync:days:v2';
+export const LEGACY_STORAGE_KEY = 'reality-sync:schedules:v1';

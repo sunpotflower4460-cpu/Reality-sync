@@ -23,6 +23,34 @@ function dotClass(status) {
   return 'bg-indigo-300';
 }
 
+function TimelineTitle({ schedule, recorded }) {
+  if (!recorded) return schedule.title;
+
+  if (schedule.status === STATUS.CHANGED) {
+    return (
+      <span className="flex flex-col">
+        <span className="text-xs font-normal text-gray-400 line-through">{schedule.title}</span>
+        <span className="break-words">{schedule.actualTitle}<span className="ml-1 text-[10px] font-normal text-orange-600">({schedule.actualCategory})</span></span>
+      </span>
+    );
+  }
+
+  if (schedule.status === STATUS.SKIPPED) return <span className="line-through">{schedule.title}</span>;
+
+  const recordedTitle = schedule.actualTitle || schedule.title;
+  const recordedCategory = schedule.actualCategory || schedule.category;
+  const planChangedAfterRecord = recordedTitle !== schedule.title || recordedCategory !== schedule.category;
+
+  if (!planChangedAfterRecord) return schedule.title;
+
+  return (
+    <span className="flex flex-col">
+      <span className="text-[10px] font-normal text-gray-400">現在の予定: {schedule.title}</span>
+      <span className="break-words">記録時: {recordedTitle}<span className="ml-1 text-[10px] font-normal text-green-700">({recordedCategory})</span></span>
+    </span>
+  );
+}
+
 export function TrackView({ schedules, onRecord }) {
   const orderedSchedules = sortSchedulesByTime(schedules);
 
@@ -30,7 +58,7 @@ export function TrackView({ schedules, onRecord }) {
     return (
       <div className="animate-fade-in pt-4">
         <section className="rounded-3xl border border-dashed border-indigo-200 bg-white p-8 text-center shadow-sm">
-          <h2 className="mb-2 text-lg font-extrabold text-gray-800">今日はまだ予定がありません</h2>
+          <h2 className="mb-2 text-lg font-extrabold text-gray-800">この日はまだ予定がありません</h2>
           <p className="text-sm leading-relaxed text-gray-500">計画タブで予定を置くと、ここに実行タイムラインと負荷の波が表示されます。</p>
         </section>
       </div>
@@ -52,9 +80,7 @@ export function TrackView({ schedules, onRecord }) {
                 <button type="button" onClick={() => onRecord(schedule)} className={`w-full rounded-2xl border p-4 text-left shadow-sm transition hover:shadow-md active:scale-[0.99] ${statusCardClass(schedule.status)}`} aria-label={`${schedule.time} ${schedule.title} の実績を${recorded ? '編集' : '記録'}する`}>
                   <div className="mb-2 flex items-start justify-between gap-3">
                     <div className={`min-w-0 font-bold ${schedule.status === STATUS.SKIPPED ? 'text-gray-500' : 'text-gray-800'}`}>
-                      {!recorded || schedule.status === STATUS.AS_PLANNED ? schedule.title : schedule.status === STATUS.CHANGED ? (
-                        <span className="flex flex-col"><span className="text-xs font-normal text-gray-400 line-through">{schedule.title}</span><span className="break-words">{schedule.actualTitle}<span className="ml-1 text-[10px] font-normal text-orange-600">({schedule.actualCategory})</span></span></span>
-                      ) : <span className="line-through">{schedule.title}</span>}
+                      <TimelineTitle schedule={schedule} recorded={recorded} />
                     </div>
                     {recorded && <span className="shrink-0 rounded-full border border-gray-100 bg-white px-2 py-0.5 shadow-sm"><MoodIcon mood={schedule.mood} /></span>}
                   </div>
