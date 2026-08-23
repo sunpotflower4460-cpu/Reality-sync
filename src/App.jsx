@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, RotateCcw } from 'lucide-react';
 import { TABS } from './constants.js';
 import { calculateStats } from './utils/schedule.js';
@@ -16,10 +16,25 @@ export default function App() {
   const { schedules, setSchedules, resetSchedules } = usePersistentSchedules();
   const stats = useMemo(() => calculateStats(schedules), [schedules]);
 
+  useEffect(() => {
+    if (!isPlanModalOpen) return undefined;
+    const onKeyDown = (event) => { if (event.key === 'Escape') setIsPlanModalOpen(false); };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isPlanModalOpen]);
+
   const saveRecord = (record) => {
     if (!selectedSchedule) return;
     setSchedules((current) => current.map((schedule) => schedule.id === selectedSchedule.id ? { ...schedule, ...record } : schedule));
     setSelectedSchedule(null);
+  };
+
+  const resetDemo = () => {
+    const shouldReset = typeof window === 'undefined' || window.confirm('記録したデモデータをすべて初期状態に戻しますか？');
+    if (!shouldReset) return;
+    setSelectedSchedule(null);
+    setIsPlanModalOpen(false);
+    resetSchedules();
   };
 
   return (
@@ -28,7 +43,7 @@ export default function App() {
         <div className="mx-auto flex max-w-md items-end justify-between gap-4">
           <div><h1 className="mb-1 text-3xl font-extrabold tracking-tight">RealitySync</h1><p className="text-sm font-medium text-indigo-200">理想と現実のギャップを力に変える</p></div>
           <div className="flex gap-2">
-            <button type="button" onClick={resetSchedules} aria-label="デモデータをリセット" title="デモデータをリセット" className="rounded-full bg-white/15 p-2 text-white backdrop-blur-sm transition hover:bg-white/25"><RotateCcw className="h-5 w-5" /></button>
+            <button type="button" onClick={resetDemo} aria-label="デモデータをリセット" title="デモデータをリセット" className="rounded-full bg-white/15 p-2 text-white backdrop-blur-sm transition hover:bg-white/25"><RotateCcw className="h-5 w-5" /></button>
             {activeTab === TABS.PLAN && <button type="button" onClick={() => setIsPlanModalOpen(true)} aria-label="予定を追加" className="rounded-full bg-white/20 p-2 text-white backdrop-blur-sm transition hover:bg-white/30"><Plus className="h-5 w-5" /></button>}
           </div>
         </div>
