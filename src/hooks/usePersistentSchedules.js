@@ -6,6 +6,7 @@ import { normalizeSchedules } from '../utils/schedule.js';
 import {
   createEmptyScheduleStore,
   migrateLegacySchedules,
+  normalizeScheduleStore,
   parseStoredScheduleStore,
 } from '../utils/storage.js';
 
@@ -72,5 +73,9 @@ export function usePersistentSchedules(dateKey) {
     });
   }, [dateKey]);
 
-  return { schedules, setSchedules, clearDay, store };
+  const replaceStore = useCallback((nextStore) => {
+    setStore(normalizeScheduleStore(nextStore));
+  }, []);
+
+  return { schedules, setSchedules, clearDay, store, replaceStore };
 }
