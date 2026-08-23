@@ -19,10 +19,14 @@ export function RecordModal({ schedule, onClose, onSave }) {
   const [error, setError] = useState('');
 
   const title = useMemo(() => {
-    if (recordMode === STATUS.AS_PLANNED) return schedule.title;
+    if (recordMode === STATUS.AS_PLANNED) {
+      return schedule.status === STATUS.AS_PLANNED && schedule.actualTitle
+        ? schedule.actualTitle
+        : schedule.title;
+    }
     if (recordMode === STATUS.SKIPPED) return 'スキップ';
     return actualTitle.trim();
-  }, [actualTitle, recordMode, schedule.title]);
+  }, [actualTitle, recordMode, schedule.actualTitle, schedule.status, schedule.title]);
 
   const selectMode = (nextMode) => {
     setActualDuration((current) => durationAfterStatusChange(current, recordMode, nextMode, schedule.duration));
@@ -42,10 +46,18 @@ export function RecordModal({ schedule, onClose, onSave }) {
       return;
     }
 
+    const recordedCategory = recordMode === STATUS.SKIPPED
+      ? null
+      : recordMode === STATUS.CHANGED
+        ? actualCategory
+        : schedule.status === STATUS.AS_PLANNED
+          ? schedule.actualCategory || schedule.category
+          : schedule.category;
+
     onSave({
       status: recordMode,
       actualTitle: title,
-      actualCategory: recordMode === STATUS.CHANGED ? actualCategory : null,
+      actualCategory: recordedCategory,
       mood,
       actualStress: clampNumber(actualStress, 0, 100),
       actualDuration: parsedDuration,
