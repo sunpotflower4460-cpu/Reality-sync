@@ -56,6 +56,16 @@ test('v2 storage preserves independent days and ignores invalid date keys', () =
   assert.deepEqual(store.days['2026-08-24'], []);
 });
 
+test('unknown future storage versions are rejected instead of rewritten as v2', () => {
+  const store = parseStoredScheduleStore(JSON.stringify({
+    version: 3,
+    days: {
+      '2026-08-23': [{ id: 'future', time: '09:00', title: 'Future field data', category: '仕事', duration: 60, plannedStress: 40, status: STATUS.PENDING, futureField: 'keep-me' }],
+    },
+  }));
+  assert.deepEqual(store, { version: 2, days: {} });
+});
+
 test('malformed v2 storage starts from an empty real-product store', () => {
   assert.deepEqual(parseStoredScheduleStore('{broken'), { version: 2, days: {} });
 });
