@@ -13,18 +13,26 @@ function improvementPoints(preview) {
   return Math.round((baseline - experiment) * 1000) / 10;
 }
 
-function reviewSort(left, right) {
-  if (left.dateKey !== right.dateKey) return left.dateKey.localeCompare(right.dateKey);
+function evidenceSort(left, right) {
   const leftTrials = Number(left.preview?.trialCount) || 0;
   const rightTrials = Number(right.preview?.trialCount) || 0;
   if (leftTrials !== rightTrials) return rightTrials - leftTrials;
   const leftImprovement = improvementPoints(left.preview) ?? -Infinity;
   const rightImprovement = improvementPoints(right.preview) ?? -Infinity;
   if (leftImprovement !== rightImprovement) return rightImprovement - leftImprovement;
+  if (left.dateKey !== right.dateKey) return left.dateKey.localeCompare(right.dateKey);
   const leftTime = left.preview?.before?.time ?? '99:99';
   const rightTime = right.preview?.before?.time ?? '99:99';
   if (leftTime !== rightTime) return leftTime.localeCompare(rightTime);
   return left.id.localeCompare(right.id);
+}
+
+function calendarSort(left, right) {
+  if (left.dateKey !== right.dateKey) return left.dateKey.localeCompare(right.dateKey);
+  const leftTime = left.preview?.before?.time ?? '99:99';
+  const rightTime = right.preview?.before?.time ?? '99:99';
+  if (leftTime !== rightTime) return leftTime.localeCompare(rightTime);
+  return (left.evidenceOrder ?? Number.MAX_SAFE_INTEGER) - (right.evidenceOrder ?? Number.MAX_SAFE_INTEGER);
 }
 
 function sameTargetKey(suggestion) {
@@ -51,8 +59,9 @@ export function buildWeeklyPlanFeedback(experiments, days, anchorDateKey, todayD
     }
   }
 
-  suggestions.sort(reviewSort);
-  suggestions.forEach((suggestion, index) => { suggestion.reviewOrder = index + 1; });
+  const evidenceOrdered = [...suggestions].sort(evidenceSort);
+  evidenceOrdered.forEach((suggestion, index) => { suggestion.evidenceOrder = index + 1; });
+  suggestions.sort(calendarSort);
 
   const targetGroups = new Map();
   for (const suggestion of suggestions.filter((item) => item.preview?.canApply)) {
@@ -116,7 +125,7 @@ export function simulateWeeklyPlanFeedback(experiments, days, weeklyPlan, select
   const experimentById = new Map((Array.isArray(experiments) ? experiments : []).map((experiment) => [experiment.id, experiment]));
   const workingDays = cloneDays(days);
   const applied = [];
-  const ordered = [...selected].sort(reviewSort);
+  const ordered = [...selected].sort(calendarSort);
 
   for (let index = 0; index < ordered.length; index += 1) {
     const suggestion = ordered[index];
