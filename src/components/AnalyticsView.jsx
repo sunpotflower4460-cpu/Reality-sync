@@ -15,6 +15,7 @@ export function AnalyticsView({
   selectedDate,
   onChangeDate,
   onStartExperiment,
+  onStartRevalidation,
   onCaptureTrial,
   onRemoveTrial,
   onFinishExperiment,
@@ -54,6 +55,7 @@ export function AnalyticsView({
           days={days}
           selectedDate={selectedDate}
           onStartExperiment={onStartExperiment}
+          onStartRevalidation={onStartRevalidation}
           onCaptureTrial={onCaptureTrial}
           onRemoveTrial={onRemoveTrial}
           onFinishExperiment={onFinishExperiment}
