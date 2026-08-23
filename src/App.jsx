@@ -6,6 +6,7 @@ import { dateKeyFromDate, shiftDateKey } from './utils/date.js';
 import { calculateLongitudinalInsights } from './utils/insights.js';
 import { applyPlanFeedback, buildPlanFeedbackSuggestions } from './utils/planningFeedback.js';
 import { calculateStats, createPendingScheduleCopy } from './utils/schedule.js';
+import { applyWeeklyPlanFeedback, buildWeeklyPlanFeedback } from './utils/weeklyPlanningFeedback.js';
 import { useDueRecordReminders } from './hooks/useDueRecordReminders.js';
 import { useExperiments } from './hooks/useExperiments.js';
 import { usePersistentSchedules } from './hooks/usePersistentSchedules.js';
@@ -22,18 +23,21 @@ import { ScheduleEditorModal } from './components/ScheduleEditorModal.jsx';
 import { SettingsModal } from './components/SettingsModal.jsx';
 import { TemplateModal } from './components/TemplateModal.jsx';
 import { TrackView } from './components/TrackView.jsx';
+import { WeeklyPlanFeedbackModal } from './components/WeeklyPlanFeedbackModal.jsx';
 
 function createScheduleId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   return `schedule-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 function instantiatePlans(source) { return source.map((schedule) => createPendingScheduleCopy(schedule, createScheduleId())); }
+function emptyWeeklyPlan(anchorDateKey) { return { anchorDateKey, dateKeys: [], suggestions: [], actionableCount: 0, guidanceCount: 0, multipleTargetGroups: [] }; }
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(TABS.TRACK);
   const [selectedDate, setSelectedDate] = useState(() => dateKeyFromDate());
   const [selectedScheduleId, setSelectedScheduleId] = useState(null);
   const [selectedPlanFeedbackId, setSelectedPlanFeedbackId] = useState(null);
+  const [isWeeklyPlanOpen, setIsWeeklyPlanOpen] = useState(false);
   const [editorState, setEditorState] = useState(null);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -52,6 +56,10 @@ export default function App() {
     () => selectedDate >= todayKey ? buildPlanFeedbackSuggestions(experiments, selectedDate, schedules) : [],
     [experiments, schedules, selectedDate, todayKey],
   );
+  const weeklyPlanFeedback = useMemo(
+    () => selectedDate >= todayKey ? buildWeeklyPlanFeedback(experiments, store.days, selectedDate, todayKey) : emptyWeeklyPlan(selectedDate),
+    [experiments, selectedDate, store.days, todayKey],
+  );
   const selectedPlanFeedback = useMemo(
     () => planFeedbackSuggestions.find((suggestion) => suggestion.id === selectedPlanFeedbackId) ?? null,
     [planFeedbackSuggestions, selectedPlanFeedbackId],
@@ -66,6 +74,7 @@ export default function App() {
   const changeDate = (dateKey) => {
     setSelectedScheduleId(null);
     setSelectedPlanFeedbackId(null);
+    setIsWeeklyPlanOpen(false);
     setEditorState(null);
     setIsTemplateModalOpen(false);
     setSelectedDate(dateKey);
@@ -95,9 +104,24 @@ export default function App() {
     setSelectedPlanFeedbackId(null);
   };
 
+  const applySelectedWeeklyPlanFeedback = (selectedSuggestionIds) => {
+    if (protectedMode) return;
+    const result = applyWeeklyPlanFeedback(
+      experiments,
+      store.days,
+      weeklyPlanFeedback,
+      selectedSuggestionIds,
+      () => createScheduleId(),
+    );
+    if (!result.ok) return;
+    replaceStore({ ...store, days: result.days });
+    setSelectedPlanFeedbackId(null);
+    setIsWeeklyPlanOpen(false);
+  };
+
   const restoreBackup = ({ scheduleStore, templates: restoredTemplates, reminderPreferences: restoredReminders, experiments: restoredExperiments = [] }) => {
     replaceStore(scheduleStore); replaceTemplates(restoredTemplates); replaceReminderPreferences(restoredReminders); replaceExperiments(restoredExperiments);
-    setSelectedScheduleId(null); setSelectedPlanFeedbackId(null); setEditorState(null); setIsTemplateModalOpen(false);
+    setSelectedScheduleId(null); setSelectedPlanFeedbackId(null); setIsWeeklyPlanOpen(false); setEditorState(null); setIsTemplateModalOpen(false);
     const dayKeys = Object.keys(scheduleStore.days).sort();
     if (!(selectedDate in scheduleStore.days) && dayKeys.length > 0) setSelectedDate(dayKeys.at(-1));
   };
@@ -116,11 +140,12 @@ export default function App() {
       <main className="mx-auto -mt-2 max-w-md p-4">
         {protectedMode ? (
           <section className="mt-6 rounded-3xl border border-red-200 bg-white p-6 text-center shadow-sm"><div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-500"><AlertTriangle className="h-6 w-6" /></div><h2 className="text-lg font-extrabold text-gray-800">保存データを保護しています</h2><p className="mt-2 text-sm leading-relaxed text-gray-500">現在版では保存済みデータを安全に解釈できないため、編集と自動保存を停止しました。元のlocalStorageは上書きしていません。</p>{storageProtection.unsupportedVersion !== null && <p className="mt-2 text-xs font-bold text-red-600">検出した保存版: {String(storageProtection.unsupportedVersion)}</p>}<button type="button" onClick={() => setIsSettingsOpen(true)} className="mt-5 w-full rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white">設定とデータを開く</button></section>
-        ) : <>{activeTab === TABS.PLAN && <PlanView schedules={schedules} onCreate={() => setEditorState({ type: 'create' })} onEdit={(id) => setEditorState({ type: 'edit', id })} onCopyPrevious={copyPreviousDay} hasPreviousSchedules={previousSchedules.length > 0} onOpenTemplates={() => setIsTemplateModalOpen(true)} templateCount={templates.length} planFeedbackSuggestions={planFeedbackSuggestions} onReviewPlanFeedback={(suggestion) => setSelectedPlanFeedbackId(suggestion.id)} />}{activeTab === TABS.TRACK && <TrackView schedules={schedules} dueSchedules={dueSchedules} dateKey={selectedDate} onRecord={(schedule) => setSelectedScheduleId(schedule.id)} />}{activeTab === TABS.ANALYTICS && <AnalyticsView stats={stats} weeklyInsights={weeklyInsights} monthlyInsights={monthlyInsights} longitudinalInsights={longitudinalInsights} experiments={experiments} days={store.days} selectedDate={selectedDate} onChangeDate={changeDate} onStartExperiment={startExperiment} onCaptureTrial={captureTrial} onRemoveTrial={removeTrial} onFinishExperiment={finish} onAbandonExperiment={abandon} onDeleteExperiment={deleteExperiment} />}</>}
+        ) : <>{activeTab === TABS.PLAN && <PlanView schedules={schedules} onCreate={() => setEditorState({ type: 'create' })} onEdit={(id) => setEditorState({ type: 'edit', id })} onCopyPrevious={copyPreviousDay} hasPreviousSchedules={previousSchedules.length > 0} onOpenTemplates={() => setIsTemplateModalOpen(true)} templateCount={templates.length} planFeedbackSuggestions={planFeedbackSuggestions} onReviewPlanFeedback={(suggestion) => setSelectedPlanFeedbackId(suggestion.id)} weeklyPlanFeedback={weeklyPlanFeedback} onOpenWeeklyPlan={() => setIsWeeklyPlanOpen(true)} />}{activeTab === TABS.TRACK && <TrackView schedules={schedules} dueSchedules={dueSchedules} dateKey={selectedDate} onRecord={(schedule) => setSelectedScheduleId(schedule.id)} />}{activeTab === TABS.ANALYTICS && <AnalyticsView stats={stats} weeklyInsights={weeklyInsights} monthlyInsights={monthlyInsights} longitudinalInsights={longitudinalInsights} experiments={experiments} days={store.days} selectedDate={selectedDate} onChangeDate={changeDate} onStartExperiment={startExperiment} onCaptureTrial={captureTrial} onRemoveTrial={removeTrial} onFinishExperiment={finish} onAbandonExperiment={abandon} onDeleteExperiment={deleteExperiment} />}</>}
       </main>
       {!protectedMode && <BottomNav activeTab={activeTab} onChange={setActiveTab} />}
       {!protectedMode && selectedSchedule && <RecordModal schedule={selectedSchedule} dateKey={selectedDate} onClose={() => setSelectedScheduleId(null)} onSave={saveRecord} />}
       {!protectedMode && selectedPlanFeedback && <PlanFeedbackModal preview={selectedPlanFeedback.preview} onApply={applySelectedPlanFeedback} onClose={() => setSelectedPlanFeedbackId(null)} />}
+      {!protectedMode && isWeeklyPlanOpen && <WeeklyPlanFeedbackModal weeklyPlan={weeklyPlanFeedback} experiments={experiments} days={store.days} onApply={applySelectedWeeklyPlanFeedback} onClose={() => setIsWeeklyPlanOpen(false)} />}
       {!protectedMode && editorState && (editorState.type !== 'edit' || editingSchedule) && <ScheduleEditorModal schedule={editingSchedule} onClose={() => setEditorState(null)} onSave={saveSchedule} onDelete={editorState.type === 'edit' ? deleteSchedule : undefined} />}
       {!protectedMode && isTemplateModalOpen && <TemplateModal templates={templates} currentSchedules={schedules} onClose={() => setIsTemplateModalOpen(false)} onSaveTemplate={(name) => saveTemplate(name, schedules)} onApplyTemplate={applyTemplate} onDeleteTemplate={deleteTemplate} />}
       {isSettingsOpen && <SettingsModal store={store} templates={templates} experiments={experiments} reminderPreferences={reminderPreferences} storageProtection={storageProtection} onChangeReminderPreferences={setReminderPreferences} onRestoreBackup={restoreBackup} canInstall={canInstall} isInstalled={isInstalled} onInstall={install} onClose={() => setIsSettingsOpen(false)} />}
