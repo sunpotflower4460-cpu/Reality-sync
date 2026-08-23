@@ -85,8 +85,12 @@ export function normalizeExperiment(value, generatedId = 'experiment') {
     baselineFailureRate: normalizeRate(value.baselineFailureRate),
     baselineSampleCount: clampInteger(value.baselineSampleCount, 0, 100000, 0),
     planAdjustment: normalizePlanAdjustment(value.planAdjustment),
-    status, decision: status === EXPERIMENT_STATUS.COMPLETED ? decision : null, trials,
-    createdAt: text(value.createdAt), completedAt: status === EXPERIMENT_STATUS.COMPLETED || status === EXPERIMENT_STATUS.ABANDONED ? text(value.completedAt) : '',
+    status,
+    decision: status === EXPERIMENT_STATUS.COMPLETED ? decision : null,
+    decisionDateKey: status === EXPERIMENT_STATUS.COMPLETED && isValidDateKey(value.decisionDateKey) ? value.decisionDateKey : null,
+    trials,
+    createdAt: text(value.createdAt),
+    completedAt: status === EXPERIMENT_STATUS.COMPLETED || status === EXPERIMENT_STATUS.ABANDONED ? text(value.completedAt) : '',
   };
 }
 
@@ -186,7 +190,7 @@ export function createExperimentFromCandidate(candidate, { id, startDateKey, act
     action: text(action, blueprint.actionSuggestion), metricKind: blueprint.metricKind, metricLabel: blueprint.metricLabel,
     condition: blueprint.condition, startDateKey, targetRuns, baselineFailureRate: baseline.rate, baselineSampleCount: baseline.count,
     planAdjustment: planAdjustment === undefined ? blueprint.planAdjustmentSuggestion : planAdjustment,
-    status: EXPERIMENT_STATUS.ACTIVE, decision: null, trials: [], createdAt, completedAt: '',
+    status: EXPERIMENT_STATUS.ACTIVE, decision: null, decisionDateKey: null, trials: [], createdAt, completedAt: '',
   }, id || 'experiment');
 }
 
@@ -229,8 +233,10 @@ export function calculateExperimentResult(experimentValue) {
   return { trialCount, successes, failures, failureRate, baselineFailureRate: baseline, baselineSampleCount: experiment.baselineSampleCount, differencePoints, targetMet, signal };
 }
 
-export function finishExperiment(experimentValue, decision, completedAt = new Date().toISOString()) {
+export function finishExperiment(experimentValue, decision, completedAt = new Date().toISOString(), decisionDateKey = null) {
   const experiment = normalizeExperiment(experimentValue); const result = calculateExperimentResult(experiment);
-  return !experiment || !result?.targetMet || !VALID_DECISIONS.has(decision) ? experiment : { ...experiment, status: EXPERIMENT_STATUS.COMPLETED, decision, completedAt };
+  return !experiment || !result?.targetMet || !VALID_DECISIONS.has(decision)
+    ? experiment
+    : { ...experiment, status: EXPERIMENT_STATUS.COMPLETED, decision, decisionDateKey: isValidDateKey(decisionDateKey) ? decisionDateKey : null, completedAt };
 }
-export function abandonExperiment(experimentValue, completedAt = new Date().toISOString()) { const experiment = normalizeExperiment(experimentValue); return experiment ? { ...experiment, status: EXPERIMENT_STATUS.ABANDONED, decision: null, completedAt } : null; }
+export function abandonExperiment(experimentValue, completedAt = new Date().toISOString()) { const experiment = normalizeExperiment(experimentValue); return experiment ? { ...experiment, status: EXPERIMENT_STATUS.ABANDONED, decision: null, decisionDateKey: null, completedAt } : null; }
