@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { EXPERIMENT_STORAGE_KEY } from '../constants.js';
-import { dateKeyFromDate } from '../utils/date.js';
+import { dateKeyFromDate, shiftDateKey } from '../utils/date.js';
 import {
   abandonExperiment,
   addExperimentTrial,
   createExperimentFromCandidate,
+  createRevalidationExperiment,
   finishExperiment,
+  nextLearningVersion,
   normalizeExperiments,
   parseStoredExperiments,
   removeExperimentTrial,
@@ -42,6 +44,25 @@ export function useExperiments() {
     return true;
   }, []);
 
+  const startRevalidation = useCallback((sourceExperimentId, retentionSummary, options = {}) => {
+    const today = dateKeyFromDate();
+    if (!retentionSummary?.reviewCandidate || retentionSummary.throughDateKey !== today) return false;
+    const source = experiments.find((experiment) => experiment.id === sourceExperimentId);
+    if (!source) return false;
+    const rootId = source.learningRootId || source.id;
+    if (experiments.some((experiment) => experiment.status === 'active' && (experiment.learningRootId || experiment.id) === rootId)) return false;
+    const experiment = createRevalidationExperiment(source, retentionSummary, {
+      ...options,
+      id: createExperimentId(),
+      startDateKey: shiftDateKey(today, 1),
+      learningVersion: nextLearningVersion(experiments, source),
+      createdAt: new Date().toISOString(),
+    });
+    if (!experiment) return false;
+    setExperiments((current) => [experiment, ...current]);
+    return true;
+  }, [experiments]);
+
   const captureTrial = useCallback((experimentId, eligibleRecord) => {
     setExperiments((current) => current.map((experiment) => experiment.id === experimentId ? addExperimentTrial(experiment, eligibleRecord) : experiment));
   }, []);
@@ -66,5 +87,5 @@ export function useExperiments() {
 
   const replaceExperiments = useCallback((next) => setExperiments(normalizeExperiments(next)), []);
 
-  return { experiments, startExperiment, captureTrial, removeTrial, finish, abandon, deleteExperiment, replaceExperiments };
+  return { experiments, startExperiment, startRevalidation, captureTrial, removeTrial, finish, abandon, deleteExperiment, replaceExperiments };
 }
