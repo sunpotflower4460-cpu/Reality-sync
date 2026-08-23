@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plus, Settings } from 'lucide-react';
+import { AlertTriangle, Plus, Settings } from 'lucide-react';
 import { STATUS, TABS } from './constants.js';
 import { calculateMonthlyInsights, calculateWeeklyInsights } from './utils/analytics.js';
 import { dateKeyFromDate, shiftDateKey } from './utils/date.js';
@@ -35,7 +35,7 @@ export default function App() {
   const [editorState, setEditorState] = useState(null);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const { schedules, setSchedules, store, replaceStore } = usePersistentSchedules(selectedDate);
+  const { schedules, setSchedules, store, replaceStore, storageProtection } = usePersistentSchedules(selectedDate);
   const { templates, saveTemplate, deleteTemplate, replaceTemplates } = useScheduleTemplates();
   const { preferences: reminderPreferences, setPreferences: setReminderPreferences, replacePreferences: replaceReminderPreferences } = useReminderPreferences();
   const { canInstall, isInstalled, install } = usePwaInstall();
@@ -148,6 +148,15 @@ export default function App() {
         </div>
       </header>
 
+      {storageProtection.persistenceBlocked && (
+        <div className="mx-auto mt-3 max-w-md px-4">
+          <div className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 p-3 text-xs leading-relaxed text-red-700">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>保存済みデータを安全に解釈できないため、自動保存を停止しています。既存のlocalStorageは上書きしていません。{storageProtection.unsupportedVersion !== null ? ` 保存版: ${String(storageProtection.unsupportedVersion)}` : ''}</span>
+          </div>
+        </div>
+      )}
+
       <main className="mx-auto -mt-2 max-w-md p-4">
         {activeTab === TABS.PLAN && (
           <PlanView
@@ -197,6 +206,7 @@ export default function App() {
           store={store}
           templates={templates}
           reminderPreferences={reminderPreferences}
+          storageProtection={storageProtection}
           onChangeReminderPreferences={setReminderPreferences}
           onRestoreBackup={restoreBackup}
           canInstall={canInstall}
