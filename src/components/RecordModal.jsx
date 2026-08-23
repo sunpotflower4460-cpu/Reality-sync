@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, Clock, Frown, Meh, Smile, XCircle } from 'lucide-react';
 import { CATEGORIES, MOOD, STATUS } from '../constants.js';
+import { isValidDateKey } from '../utils/date.js';
 import {
   clampNumber,
   durationAfterStatusChange,
@@ -10,7 +11,7 @@ import {
 } from '../utils/schedule.js';
 import { ModalDialog } from './ModalDialog.jsx';
 
-export function RecordModal({ schedule, onClose, onSave }) {
+export function RecordModal({ schedule, dateKey, onClose, onSave }) {
   const [recordMode, setRecordMode] = useState(schedule.status !== STATUS.PENDING ? schedule.status : STATUS.AS_PLANNED);
   const [actualTitle, setActualTitle] = useState(() => replacementTitleForEditing(schedule));
   const [actualCategory, setActualCategory] = useState(schedule.actualCategory || schedule.category || 'その他');
@@ -18,6 +19,7 @@ export function RecordModal({ schedule, onClose, onSave }) {
   const [actualStress, setActualStress] = useState(schedule.actualStress ?? schedule.plannedStress);
   const [actualDuration, setActualDuration] = useState(schedule.actualDuration ?? (schedule.status === STATUS.SKIPPED ? 0 : schedule.duration));
   const [actualStartTime, setActualStartTime] = useState(schedule.actualStartTime || '');
+  const [actualStartDateKey, setActualStartDateKey] = useState(schedule.actualStartDateKey || dateKey || '');
   const [deviationReason, setDeviationReason] = useState(schedule.deviationReason || '');
   const [error, setError] = useState('');
 
@@ -54,6 +56,11 @@ export function RecordModal({ schedule, onClose, onSave }) {
       return;
     }
 
+    if (recordMode !== STATUS.SKIPPED && actualStartTime && !isValidDateKey(actualStartDateKey)) {
+      setError('実際の開始日を正しい日付で入力してください。');
+      return;
+    }
+
     const recordedCategory = recordMode === STATUS.SKIPPED
       ? null
       : recordMode === STATUS.CHANGED
@@ -70,6 +77,7 @@ export function RecordModal({ schedule, onClose, onSave }) {
       actualStress: clampNumber(actualStress, 0, 100),
       actualDuration: parsedDuration,
       actualStartTime: recordMode === STATUS.SKIPPED ? null : (actualStartTime || null),
+      actualStartDateKey: recordMode === STATUS.SKIPPED || !actualStartTime ? null : actualStartDateKey,
       deviationReason: recordMode === STATUS.CHANGED || recordMode === STATUS.SKIPPED
         ? deviationReason.trim() || null
         : null,
@@ -88,7 +96,7 @@ export function RecordModal({ schedule, onClose, onSave }) {
       </div>
 
       <div className="space-y-6 p-5">
-        <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm"><Clock className="h-5 w-5 text-indigo-400" aria-hidden="true" /><div><div className="font-medium text-gray-500">予定 {schedule.time}</div><div className="font-bold text-gray-800">{schedule.title}</div></div></div>
+        <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm"><Clock className="h-5 w-5 text-indigo-400" aria-hidden="true" /><div><div className="font-medium text-gray-500">予定 {dateKey} {schedule.time}</div><div className="font-bold text-gray-800">{schedule.title}</div></div></div>
 
         <fieldset className="space-y-3">
           <legend className="text-sm font-bold text-gray-700">実際にはどうでしたか？</legend>
@@ -107,12 +115,18 @@ export function RecordModal({ schedule, onClose, onSave }) {
         )}
 
         {recordMode !== STATUS.SKIPPED && (
-          <div className="grid grid-cols-[1fr_1.4fr] gap-3 rounded-xl border border-gray-100 bg-gray-50 p-4">
-            <label className="block">
-              <span className="mb-2 block text-xs font-bold text-gray-700">実際の開始時刻</span>
-              <input type="time" value={actualStartTime} onChange={(event) => { setActualStartTime(event.target.value); setError(''); }} className="w-full rounded-xl border border-gray-200 bg-white p-3 text-sm" />
-              <span className="mt-1 block text-[9px] leading-relaxed text-gray-400">覚えていなければ空欄のままでOK</span>
-            </label>
+          <div className="space-y-3 rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="mb-2 block text-xs font-bold text-gray-700">実際に始めた日</span>
+                <input type="date" value={actualStartDateKey} onChange={(event) => { setActualStartDateKey(event.target.value); setError(''); }} className="w-full rounded-xl border border-gray-200 bg-white p-3 text-sm" />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-xs font-bold text-gray-700">実際の開始時刻</span>
+                <input type="time" value={actualStartTime} onChange={(event) => { setActualStartTime(event.target.value); setError(''); }} className="w-full rounded-xl border border-gray-200 bg-white p-3 text-sm" />
+              </label>
+            </div>
+            <p className="text-[9px] leading-relaxed text-gray-400">開始時刻を覚えていなければ空欄でOKです。時刻を記録する場合は開始日も一緒に保存し、日付をまたいだズレを正確に計算します。</p>
             <label className="block">
               <span className="mb-2 flex items-center justify-between gap-2 text-xs font-bold text-gray-700"><span>実際に費やした時間</span><span className="text-indigo-600">{actualDuration === '' ? '—' : `${actualDuration}分`}</span></span>
               <input type="number" inputMode="numeric" min="0" max="1440" step="5" value={actualDuration} onChange={(event) => { setActualDuration(event.target.value); setError(''); }} className="w-full rounded-xl border border-gray-200 bg-white p-3 text-sm" />

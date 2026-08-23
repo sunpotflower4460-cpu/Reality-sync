@@ -54,6 +54,21 @@ test('as-planned records keep their actual snapshot when the plan is edited late
   assert.equal(stats.categories['運動'].actual, 30);
 });
 
+test('actual start date is preserved only when explicitly valid and paired with a start time', () => {
+  const exact = normalizeSchedule({ id: 1, time: '23:50', title: 'Work', category: '仕事', duration: 60, plannedStress: 50, status: STATUS.AS_PLANNED, actualDuration: 55, actualStartTime: '00:10', actualStartDateKey: '2026-08-24' });
+  const legacyTimeOnly = normalizeSchedule({ id: 2, time: '10:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 50, status: STATUS.AS_PLANNED, actualDuration: 55, actualStartTime: '10:15' });
+  const invalidDate = normalizeSchedule({ id: 3, time: '10:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 50, status: STATUS.AS_PLANNED, actualDuration: 55, actualStartTime: '10:15', actualStartDateKey: '2026-02-30' });
+  const noTime = normalizeSchedule({ id: 4, time: '10:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 50, status: STATUS.AS_PLANNED, actualDuration: 55, actualStartDateKey: '2026-08-24' });
+
+  assert.equal(exact.actualStartTime, '00:10');
+  assert.equal(exact.actualStartDateKey, '2026-08-24');
+  assert.equal(legacyTimeOnly.actualStartTime, '10:15');
+  assert.equal(legacyTimeOnly.actualStartDateKey, null);
+  assert.equal(invalidDate.actualStartDateKey, null);
+  assert.equal(noTime.actualStartTime, null);
+  assert.equal(noTime.actualStartDateKey, null);
+});
+
 test('actual start time stays unknown unless a valid time was explicitly recorded', () => {
   const valid = normalizeSchedule({ id: 1, time: '09:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 50, status: STATUS.AS_PLANNED, actualDuration: 55, actualStartTime: '09:17' });
   const invalid = normalizeSchedule({ id: 2, time: '10:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 50, status: STATUS.AS_PLANNED, actualDuration: 55, actualStartTime: '99:99' });
@@ -68,11 +83,12 @@ test('deviation reasons are only retained for changed or skipped reality', () =>
   assert.equal(changed.deviationReason, 'sudden fatigue');
   assert.equal(skipped.deviationReason, 'rain');
   assert.equal(skipped.actualStartTime, null);
+  assert.equal(skipped.actualStartDateKey, null);
   assert.equal(planned.deviationReason, null);
 });
 
 test('pending plan copies strip all historical reality fields and receive a fresh id', () => {
-  const copied = createPendingScheduleCopy({ id: 'old', time: '09:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 50, status: STATUS.CHANGED, actualTitle: 'Nap', actualCategory: '休憩', actualDuration: 30, actualStartTime: '09:20', deviationReason: 'tired', mood: MOOD.BAD, actualStress: 90 }, 'fresh');
+  const copied = createPendingScheduleCopy({ id: 'old', time: '09:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 50, status: STATUS.CHANGED, actualTitle: 'Nap', actualCategory: '休憩', actualDuration: 30, actualStartTime: '09:20', actualStartDateKey: '2026-08-23', deviationReason: 'tired', mood: MOOD.BAD, actualStress: 90 }, 'fresh');
   assert.equal(copied.id, 'fresh');
   assert.equal(copied.status, STATUS.PENDING);
   assert.equal(copied.title, 'Work');
@@ -80,6 +96,7 @@ test('pending plan copies strip all historical reality fields and receive a fres
   assert.equal(copied.actualCategory, null);
   assert.equal(copied.actualDuration, null);
   assert.equal(copied.actualStartTime, null);
+  assert.equal(copied.actualStartDateKey, null);
   assert.equal(copied.deviationReason, null);
   assert.equal(copied.mood, null);
   assert.equal(copied.actualStress, null);
@@ -98,12 +115,13 @@ test('normalization clamps corrupted numeric values and rejects unknown categori
 });
 
 test('malformed changed records return to pending instead of keeping inconsistent actual fields', () => {
-  const normalized = normalizeSchedule({ id: 3, time: '12:00', title: 'Lunch', category: '休憩', duration: 60, plannedStress: 10, status: STATUS.CHANGED, actualTitle: '   ', actualCategory: '趣味', actualDuration: 30, actualStartTime: '12:10', deviationReason: 'busy', actualStress: 80, mood: MOOD.BAD });
+  const normalized = normalizeSchedule({ id: 3, time: '12:00', title: 'Lunch', category: '休憩', duration: 60, plannedStress: 10, status: STATUS.CHANGED, actualTitle: '   ', actualCategory: '趣味', actualDuration: 30, actualStartTime: '12:10', actualStartDateKey: '2026-08-23', deviationReason: 'busy', actualStress: 80, mood: MOOD.BAD });
   assert.equal(normalized.status, STATUS.PENDING);
   assert.equal(normalized.actualTitle, '');
   assert.equal(normalized.actualCategory, null);
   assert.equal(normalized.actualDuration, null);
   assert.equal(normalized.actualStartTime, null);
+  assert.equal(normalized.actualStartDateKey, null);
   assert.equal(normalized.deviationReason, null);
   assert.equal(normalized.actualStress, null);
   assert.equal(normalized.mood, null);

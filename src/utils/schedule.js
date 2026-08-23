@@ -1,4 +1,5 @@
 import { CATEGORIES, MOOD, STATUS } from '../constants.js';
+import { isValidDateKey } from './date.js';
 
 const VALID_STATUSES = new Set(Object.values(STATUS));
 const VALID_MOODS = new Set(Object.values(MOOD));
@@ -64,6 +65,11 @@ function normalizeActualStartTime(value, fallback = null) {
   return isValidTime(fallback) ? fallback : null;
 }
 
+function normalizeActualStartDateKey(value, fallback = null) {
+  if (isValidDateKey(value)) return value;
+  return isValidDateKey(fallback) ? fallback : null;
+}
+
 export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedule') {
   const source = schedule && typeof schedule === 'object' && !Array.isArray(schedule) ? schedule : {};
   const base = fallback && typeof fallback === 'object' && !Array.isArray(fallback) ? fallback : {};
@@ -84,6 +90,7 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
     actualCategory: null,
     actualDuration: null,
     actualStartTime: null,
+    actualStartDateKey: null,
     deviationReason: null,
     mood: null,
     actualStress: null,
@@ -100,11 +107,15 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
     normalized.actualTitle = 'スキップ';
     normalized.actualDuration = 0;
     normalized.actualStartTime = null;
+    normalized.actualStartDateKey = null;
     normalized.deviationReason = normalizeOptionalText(source.deviationReason, base.deviationReason);
     return normalized;
   }
 
   normalized.actualStartTime = normalizeActualStartTime(source.actualStartTime, base.actualStartTime);
+  normalized.actualStartDateKey = normalized.actualStartTime
+    ? normalizeActualStartDateKey(source.actualStartDateKey, base.actualStartDateKey)
+    : null;
 
   if (status === STATUS.AS_PLANNED) {
     // Snapshot what was actually recorded. A later edit to the plan must not
@@ -125,6 +136,7 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
       actualCategory: null,
       actualDuration: null,
       actualStartTime: null,
+      actualStartDateKey: null,
       deviationReason: null,
       mood: null,
       actualStress: null,
@@ -181,6 +193,7 @@ export function createPendingScheduleCopy(schedule, id) {
     actualCategory: null,
     actualDuration: null,
     actualStartTime: null,
+    actualStartDateKey: null,
     deviationReason: null,
     mood: null,
     actualStress: null,
