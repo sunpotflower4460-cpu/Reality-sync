@@ -9,7 +9,7 @@ import {
 } from '../src/utils/analytics.js';
 
 function schedule(overrides = {}) {
-  return {
+  const value = {
     id: overrides.id ?? Math.random().toString(36),
     time: '09:00',
     title: 'Work',
@@ -19,6 +19,19 @@ function schedule(overrides = {}) {
     status: STATUS.PENDING,
     ...overrides,
   };
+  if (
+    value.status !== STATUS.PENDING
+    && !Object.prototype.hasOwnProperty.call(overrides, 'plannedSnapshot')
+  ) {
+    value.plannedSnapshot = {
+      time: value.time,
+      title: value.title,
+      category: value.category,
+      duration: value.duration,
+      plannedStress: value.plannedStress,
+    };
+  }
+  return value;
 }
 
 test('legacy clock-only delta stays conservative while exact date-aware delta handles midnight', () => {
@@ -32,7 +45,7 @@ test('legacy clock-only delta stays conservative while exact date-aware delta ha
   assert.equal(exactStartDeltaMinutes('bad-date', '09:00', '2026-08-22', '09:00'), null);
 });
 
-test('weekly insights use exact start dates and never invent dates for legacy records', () => {
+test('weekly insights use original plan snapshots for exact timing and exclude legacy historical plans', () => {
   const days = {
     '2026-08-17': [
       schedule({
@@ -119,6 +132,7 @@ test('weekly insights use exact start dates and never invent dates for legacy re
         time: '10:00',
         duration: 60,
         status: STATUS.AS_PLANNED,
+        plannedSnapshot: null,
         actualTitle: 'Work',
         actualCategory: '仕事',
         actualDuration: 60,
@@ -149,7 +163,9 @@ test('weekly insights use exact start dates and never invent dates for legacy re
   assert.equal(insights.averageStartDelta, 22);
   assert.equal(insights.averageAbsoluteStartDelta, 22);
   assert.equal(insights.untimedStartCount, 1);
-  assert.equal(insights.undatedStartCount, 1);
+  assert.equal(insights.undatedStartCount, 0);
+  assert.equal(insights.legacyPlannedCount, 1);
+  assert.equal(insights.daily[5].legacyPlannedCount, 1);
 
   assert.deepEqual(insights.reasons, [
     { reason: '体調不良', count: 1 },
@@ -237,6 +253,7 @@ test('monthly insights aggregate multiple weeks and weekday observations descrip
   assert.equal(insights.asPlannedRate, 50);
   assert.equal(insights.startSampleCount, 3);
   assert.equal(insights.averageStartDelta, 20);
+  assert.equal(insights.legacyPlannedCount, 0);
   assert.equal(insights.weeks.length, 6);
 
   const monday = insights.weekdays[0];
@@ -268,6 +285,7 @@ test('weekly and monthly insights return stable empty structures', () => {
   const month = calculateMonthlyInsights({}, '2026-08-23');
   assert.equal(week.totalSchedules, 0);
   assert.equal(week.averageStartDelta, null);
+  assert.equal(week.legacyPlannedCount, 0);
   assert.equal(week.daily.length, 7);
   assert.equal(month.totalSchedules, 0);
   assert.equal(month.daily.length, 31);
