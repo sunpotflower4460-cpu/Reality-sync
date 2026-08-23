@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { EXPERIMENT_STORAGE_KEY } from '../constants.js';
+import { dateKeyFromDate } from '../utils/date.js';
 import {
   abandonExperiment,
   addExperimentTrial,
@@ -50,7 +51,9 @@ export function useExperiments() {
   }, []);
 
   const finish = useCallback((experimentId, decision) => {
-    setExperiments((current) => current.map((experiment) => experiment.id === experimentId ? finishExperiment(experiment, decision) : experiment));
+    const completedAt = new Date().toISOString();
+    const decisionDateKey = dateKeyFromDate();
+    setExperiments((current) => current.map((experiment) => experiment.id === experimentId ? finishExperiment(experiment, decision, completedAt, decisionDateKey) : experiment));
   }, []);
 
   const abandon = useCallback((experimentId) => {
