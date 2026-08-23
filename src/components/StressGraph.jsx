@@ -1,7 +1,7 @@
 import { Zap } from 'lucide-react';
 import { STATUS } from '../constants.js';
 import { differenceInCalendarDays } from '../utils/date.js';
-import { sortSchedulesByTime, timeToHours } from '../utils/schedule.js';
+import { recordedPlanForSchedule, timeToHours } from '../utils/schedule.js';
 
 const WIDTH = 900;
 const HEIGHT = 300;
@@ -27,7 +27,7 @@ function formatAxisHour(value) {
 }
 
 function createTimeScale(schedules, dateKey) {
-  const plannedHours = schedules.map((schedule) => timeToHours(schedule.time));
+  const plannedHours = schedules.map((schedule) => timeToHours(recordedPlanForSchedule(schedule).time));
   const actualHours = schedules.map((schedule) => actualAxisHour(schedule, dateKey)).filter(Number.isFinite);
   const values = [...plannedHours, ...actualHours];
   const minValue = values.length > 0 ? Math.min(...values) : DEFAULT_START_HOUR;
@@ -58,10 +58,13 @@ function generateSmoothPath(points) {
 }
 
 export function StressGraph({ schedules, dateKey }) {
-  const sorted = sortSchedulesByTime(schedules);
-  const { startHour, endHour, gridHours, getX } = createTimeScale(sorted, dateKey);
-  const plannedPoints = sorted.map((schedule) => ({ x: getX(timeToHours(schedule.time)), y: getY(schedule.plannedStress) }));
-  const recorded = sorted.filter((schedule) => schedule.status !== STATUS.PENDING && Number.isFinite(schedule.actualStress));
+  const plannedSorted = [...schedules].sort((a, b) => timeToHours(recordedPlanForSchedule(a).time) - timeToHours(recordedPlanForSchedule(b).time));
+  const { startHour, endHour, gridHours, getX } = createTimeScale(plannedSorted, dateKey);
+  const plannedPoints = plannedSorted.map((schedule) => {
+    const planned = recordedPlanForSchedule(schedule);
+    return { x: getX(timeToHours(planned.time)), y: getY(planned.plannedStress) };
+  });
+  const recorded = schedules.filter((schedule) => schedule.status !== STATUS.PENDING && Number.isFinite(schedule.actualStress));
   const actualTimed = recorded
     .map((schedule) => ({ schedule, axisHour: schedule.status === STATUS.SKIPPED ? null : actualAxisHour(schedule, dateKey) }))
     .filter((entry) => Number.isFinite(entry.axisHour))
@@ -81,21 +84,21 @@ export function StressGraph({ schedules, dateKey }) {
 
   return (
     <section className="relative mb-6 overflow-hidden rounded-3xl border border-gray-100 bg-white p-5 shadow-sm" aria-labelledby="stress-graph-title">
-      {hasHighStress && <div className="-mx-5 -mt-5 mb-4 border-b border-red-100 bg-red-50 px-4 py-2 text-center text-[10px] font-bold text-red-600">⚠️ 負荷80超えの記録があります。前後の予定変更との関係を見てみましょう。</div>}
+      {hasHighStress && <div className="-mx-5 -mt-5 mb-4 border-b border-red-100 bg-red-50 px-4 py-2 text-center text-[10px] font-bold text-red-600">⚠️ 負荷80超えの記録があります。原因とは決めず、前後の記録と一緒に観察しましょう。</div>}
       <div className="mb-4 flex flex-col">
         <h2 id="stress-graph-title" className="mb-1 flex items-center gap-1.5 text-sm font-bold text-gray-800"><Zap className="h-4 w-4 text-indigo-500" aria-hidden="true" />ストレス・負荷の波（計画 vs 現実）</h2>
-        <div className="flex gap-4 text-[10px] font-bold"><span className="flex items-center gap-1 text-gray-400"><span className="w-3 border-b border-dashed border-gray-400" />計画時刻</span><span className="flex items-center gap-1 text-indigo-600"><span className="h-1 w-3 rounded bg-indigo-500" />実際の開始日時</span></div>
+        <div className="flex gap-4 text-[10px] font-bold"><span className="flex items-center gap-1 text-gray-400"><span className="w-3 border-b border-dashed border-gray-400" />記録時の計画</span><span className="flex items-center gap-1 text-indigo-600"><span className="h-1 w-3 rounded bg-indigo-500" />実際の開始日時</span></div>
         {(untimedCount > 0 || undatedCount > 0 || distantCount > 0) && <p className="mt-1.5 text-[9px] leading-relaxed text-gray-400">時間軸から除外: 開始時刻なし {untimedCount}件、開始日不明 {undatedCount}件、前後1日より遠い開始 {distantCount}件。計画時刻への推測配置はしていません。</p>}
       </div>
       <div className="relative w-full overflow-hidden" style={{ aspectRatio: `${WIDTH}/${HEIGHT}` }}>
-        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-full w-full" role="img" aria-label="計画時刻の想定負荷と、記録された実際の開始日時における負荷を比較する折れ線グラフ">
+        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-full w-full" role="img" aria-label="記録時の計画負荷と、記録された実際の開始日時における負荷を比較する折れ線グラフ">
           <defs><linearGradient id="actualLineGradient" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor="#6366f1" /><stop offset="100%" stopColor="#ec4899" /></linearGradient><linearGradient id="actualAreaGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ec4899" stopOpacity="0.2" /><stop offset="100%" stopColor="#ec4899" stopOpacity="0" /></linearGradient></defs>
           {[25, 50, 75].map((percent) => <line key={percent} x1={PADDING_X} y1={getY(percent)} x2={WIDTH - PADDING_X} y2={getY(percent)} stroke="#f3f4f6" strokeWidth="2" />)}
           {gridHours.map((hour) => { const x = PADDING_X + ((hour - startHour) / Math.max(endHour - startHour, 3)) * (WIDTH - PADDING_X * 2); return <g key={hour}><line x1={x} y1={PADDING_Y - 10} x2={x} y2={HEIGHT - PADDING_Y + 10} stroke="#f3f4f6" strokeWidth="2" strokeDasharray="4 4" /><text x={x} y={HEIGHT - 18} textAnchor="middle" fill="#9ca3af" fontSize="18" fontWeight="700">{formatAxisHour(hour)}</text></g>; })}
           {plannedPoints.length > 0 && <path d={plannedPath} fill="none" stroke="#cbd5e1" strokeWidth="4" strokeDasharray="8 8" strokeLinecap="round" />}
           {actualPoints.length > 1 && <path d={`${actualPath} L ${actualPoints.at(-1).x} ${HEIGHT - PADDING_Y} L ${actualPoints[0].x} ${HEIGHT - PADDING_Y} Z`} fill="url(#actualAreaGradient)" />}
           {actualPoints.length > 0 && <path d={actualPath} fill="none" stroke="url(#actualLineGradient)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />}
-          {plannedPoints.map((point, index) => <circle key={`planned-${sorted[index].id}`} cx={point.x} cy={point.y} r="6" fill="#f1f5f9" stroke="#94a3b8" strokeWidth="3" />)}
+          {plannedPoints.map((point, index) => <circle key={`planned-${plannedSorted[index].id}`} cx={point.x} cy={point.y} r="6" fill="#f1f5f9" stroke="#94a3b8" strokeWidth="3" />)}
           {actualPoints.map((point, index) => <circle key={`actual-${actualTimed[index].schedule.id}`} cx={point.x} cy={point.y} r="8" fill="#fff" stroke={actualTimed[index].schedule.actualStress > 80 ? '#ef4444' : '#6366f1'} strokeWidth="4" />)}
         </svg>
       </div>
