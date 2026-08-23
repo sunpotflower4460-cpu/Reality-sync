@@ -56,6 +56,8 @@ export function WeeklyAnalyticsView({ insights, selectedDate, onChangeDate }) {
             <MetricCard label="現実時間" value={formatTime(insights.actualMinutes)} detail="明示的な実績のみ" />
           </section>
 
+          {insights.legacyPlannedCount > 0 && <LegacyPlanNotice count={insights.legacyPlannedCount} />}
+
           <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div><h2 className="flex items-center gap-2 text-base font-bold text-gray-800"><Clock3 className="h-5 w-5 text-indigo-500" />開始日時のズレ</h2><p className="mt-1 text-xs leading-relaxed text-gray-500">プラスは予定より遅く、マイナスは早く開始。日付をまたいだ記録も開始日があれば正確に計算します。</p></div>
@@ -103,6 +105,7 @@ export function WeeklyAnalyticsView({ insights, selectedDate, onChangeDate }) {
   );
 }
 
+function LegacyPlanNotice({ count }) { return <div className="flex items-start gap-2 rounded-2xl border border-amber-100 bg-amber-50 p-3 text-xs leading-relaxed text-amber-800"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>記録時の予定スナップショットがない旧実績が {count}件あります。これらの理想側は現在保存されている予定を表示しており、過去の計画を推測復元したものではありません。計画内容を使う「傾向」分析からは除外します。</span></div>; }
 function MetricCard({ label, value, detail }) { return <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"><div className="text-xs font-bold text-gray-400">{label}</div><div className="mt-1 text-2xl font-black text-gray-800">{value}</div><div className="mt-1 text-[10px] text-gray-400">{detail}</div></div>; }
 function SmallStat({ label, value }) { return <div className="rounded-2xl bg-gray-50 p-3"><div className="text-[10px] font-bold text-gray-400">{label}</div><div className="mt-1 font-black text-gray-700">{value}</div></div>; }
 function WeeklyBar({ label, value, max, className, strong = false }) { const width = Math.max(0, Math.min(100, (value / Math.max(max, 1)) * 100)); return <div className="flex items-center gap-2"><span className={`w-6 text-[10px] ${strong ? 'font-bold text-indigo-600' : 'text-gray-400'}`}>{label}</span><div className="h-3 flex-1 overflow-hidden rounded-full bg-gray-100"><div className={`h-full rounded-full ${className}`} style={{ width: `${width}%` }} /></div><span className={`w-14 text-right text-xs ${strong ? 'font-bold text-indigo-600' : 'font-medium text-gray-500'}`}>{formatTime(value)}</span></div>; }
