@@ -139,6 +139,11 @@ export function durationAfterStatusChange(currentDuration, previousStatus, nextS
   return clampNumber(currentDuration, 0, 1440);
 }
 
+export function replacementTitleForEditing(schedule) {
+  if (!schedule || schedule.status !== STATUS.CHANGED) return '';
+  return normalizeText(schedule.actualTitle);
+}
+
 export function formatTime(mins) {
   const safeMinutes = Math.max(0, Math.round(Number(mins) || 0));
   if (safeMinutes === 0) return '0分';
