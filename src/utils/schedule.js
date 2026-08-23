@@ -88,7 +88,10 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
   }
 
   if (status === STATUS.AS_PLANNED) {
-    normalized.actualTitle = normalized.title;
+    // Snapshot what was actually recorded. A later edit to the plan must not
+    // rewrite historical reality such as the activity title/category.
+    normalized.actualTitle = normalizeText(source.actualTitle, normalizeText(base.actualTitle, normalized.title));
+    normalized.actualCategory = normalizeCategory(source.actualCategory, base.actualCategory ?? normalized.category);
     normalized.actualDuration = clampNumber(source.actualDuration ?? base.actualDuration ?? duration, 0, 1440);
     return normalized;
   }
@@ -118,9 +121,6 @@ export function normalizeSchedules(schedules, fallbacks = []) {
     return fallbackList.map((schedule, index) => normalizeSchedule(schedule, schedule, `schedule-${index + 1}`));
   }
 
-  // An explicit empty list is valid application state. This matters once users
-  // can delete every schedule; only malformed/non-array payloads should restore
-  // fallback demo data.
   if (schedules.length === 0) return [];
 
   const fallbackById = new Map(fallbackList.map((schedule) => [String(schedule.id), schedule]));
@@ -186,7 +186,9 @@ export function calculateStats(schedules) {
     categories[schedule.category].ideal += schedule.duration;
 
     if (schedule.status === STATUS.AS_PLANNED) {
-      categories[schedule.category].actual += schedule.actualDuration ?? 0;
+      const category = schedule.actualCategory || schedule.category;
+      ensureCategory(category);
+      categories[category].actual += schedule.actualDuration ?? 0;
       continue;
     }
 
