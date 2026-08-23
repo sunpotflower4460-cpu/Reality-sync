@@ -6,6 +6,7 @@ import { dateKeyFromDate, shiftDateKey } from './utils/date.js';
 import { calculateLongitudinalInsights } from './utils/insights.js';
 import { calculateStats, createPendingScheduleCopy } from './utils/schedule.js';
 import { useDueRecordReminders } from './hooks/useDueRecordReminders.js';
+import { useExperiments } from './hooks/useExperiments.js';
 import { usePersistentSchedules } from './hooks/usePersistentSchedules.js';
 import { usePwaInstall } from './hooks/usePwaInstall.js';
 import { useReminderPreferences } from './hooks/useReminderPreferences.js';
@@ -24,10 +25,7 @@ function createScheduleId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   return `schedule-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
-
-function instantiatePlans(source) {
-  return source.map((schedule) => createPendingScheduleCopy(schedule, createScheduleId()));
-}
+function instantiatePlans(source) { return source.map((schedule) => createPendingScheduleCopy(schedule, createScheduleId())); }
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(TABS.TRACK);
@@ -38,6 +36,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const { schedules, setSchedules, store, replaceStore, storageProtection } = usePersistentSchedules(selectedDate);
   const { templates, saveTemplate, deleteTemplate, replaceTemplates } = useScheduleTemplates();
+  const { experiments, startExperiment, captureTrial, removeTrial, finish, abandon, deleteExperiment, replaceExperiments } = useExperiments();
   const { preferences: reminderPreferences, setPreferences: setReminderPreferences, replacePreferences: replaceReminderPreferences } = useReminderPreferences();
   const { canInstall, isInstalled, install } = usePwaInstall();
   const dueSchedules = useDueRecordReminders({ schedules, dateKey: selectedDate, preferences: reminderPreferences });
@@ -49,90 +48,29 @@ export default function App() {
   const previousSchedules = store.days[previousDate] ?? [];
   const protectedMode = storageProtection.persistenceBlocked;
 
-  const selectedSchedule = useMemo(
-    () => schedules.find((schedule) => schedule.id === selectedScheduleId) ?? null,
-    [schedules, selectedScheduleId],
-  );
-  const editingSchedule = useMemo(
-    () => editorState?.type === 'edit'
-      ? schedules.find((schedule) => schedule.id === editorState.id) ?? null
-      : null,
-    [editorState, schedules],
-  );
+  const selectedSchedule = useMemo(() => schedules.find((schedule) => schedule.id === selectedScheduleId) ?? null, [schedules, selectedScheduleId]);
+  const editingSchedule = useMemo(() => editorState?.type === 'edit' ? schedules.find((schedule) => schedule.id === editorState.id) ?? null : null, [editorState, schedules]);
 
-  const changeDate = (dateKey) => {
-    setSelectedScheduleId(null);
-    setEditorState(null);
-    setIsTemplateModalOpen(false);
-    setSelectedDate(dateKey);
-  };
-
-  const saveRecord = (record) => {
-    if (selectedScheduleId === null || protectedMode) return;
-    setSchedules((current) => current.map((schedule) => schedule.id === selectedScheduleId ? { ...schedule, ...record } : schedule));
-    setSelectedScheduleId(null);
-  };
-
+  const changeDate = (dateKey) => { setSelectedScheduleId(null); setEditorState(null); setIsTemplateModalOpen(false); setSelectedDate(dateKey); };
+  const saveRecord = (record) => { if (selectedScheduleId === null || protectedMode) return; setSchedules((current) => current.map((schedule) => schedule.id === selectedScheduleId ? { ...schedule, ...record } : schedule)); setSelectedScheduleId(null); };
   const saveSchedule = (draft) => {
     if (protectedMode) return;
-    if (editorState?.type === 'edit') {
-      setSchedules((current) => current.map((schedule) => schedule.id === editorState.id ? { ...schedule, ...draft } : schedule));
-    } else {
-      setSchedules((current) => [
-        ...current,
-        {
-          id: createScheduleId(),
-          ...draft,
-          status: STATUS.PENDING,
-          plannedSnapshot: null,
-          actualTitle: '',
-          actualCategory: null,
-          actualDuration: null,
-          actualStartTime: null,
-          actualStartDateKey: null,
-          deviationReason: null,
-          mood: null,
-          actualStress: null,
-        },
-      ]);
-    }
+    if (editorState?.type === 'edit') setSchedules((current) => current.map((schedule) => schedule.id === editorState.id ? { ...schedule, ...draft } : schedule));
+    else setSchedules((current) => [...current, { id: createScheduleId(), ...draft, status: STATUS.PENDING, plannedSnapshot: null, actualTitle: '', actualCategory: null, actualDuration: null, actualStartTime: null, actualStartDateKey: null, deviationReason: null, mood: null, actualStress: null }]);
     setEditorState(null);
   };
-
-  const deleteSchedule = (scheduleId) => {
-    if (protectedMode) return;
-    setSchedules((current) => current.filter((schedule) => schedule.id !== scheduleId));
-    if (selectedScheduleId === scheduleId) setSelectedScheduleId(null);
-    setEditorState(null);
-  };
-
+  const deleteSchedule = (scheduleId) => { if (protectedMode) return; setSchedules((current) => current.filter((schedule) => schedule.id !== scheduleId)); if (selectedScheduleId === scheduleId) setSelectedScheduleId(null); setEditorState(null); };
   const confirmReplaceDay = (sourceLabel) => {
     if (schedules.length === 0) return true;
     const hasReality = schedules.some((schedule) => schedule.status !== STATUS.PENDING);
-    const detail = hasReality
-      ? '現在の予定と、この日に記録済みの実績も削除されます。'
-      : '現在の予定は削除されます。';
-    return window.confirm(`${sourceLabel}でこの日の予定を置き換えますか？\n${detail}`);
+    return window.confirm(`${sourceLabel}でこの日の予定を置き換えますか？\n${hasReality ? '現在の予定と、この日に記録済みの実績も削除されます。' : '現在の予定は削除されます。'}`);
   };
+  const copyPreviousDay = () => { if (protectedMode || previousSchedules.length === 0 || !confirmReplaceDay('前日の予定')) return; setSchedules(instantiatePlans(previousSchedules)); };
+  const applyTemplate = (template) => { if (protectedMode || !template?.schedules?.length || !confirmReplaceDay(`テンプレート「${template.name}」`)) return; setSchedules(instantiatePlans(template.schedules)); setIsTemplateModalOpen(false); };
 
-  const copyPreviousDay = () => {
-    if (protectedMode || previousSchedules.length === 0 || !confirmReplaceDay('前日の予定')) return;
-    setSchedules(instantiatePlans(previousSchedules));
-  };
-
-  const applyTemplate = (template) => {
-    if (protectedMode || !template?.schedules?.length || !confirmReplaceDay(`テンプレート「${template.name}」`)) return;
-    setSchedules(instantiatePlans(template.schedules));
-    setIsTemplateModalOpen(false);
-  };
-
-  const restoreBackup = ({ scheduleStore, templates: restoredTemplates, reminderPreferences: restoredReminders }) => {
-    replaceStore(scheduleStore);
-    replaceTemplates(restoredTemplates);
-    replaceReminderPreferences(restoredReminders);
-    setSelectedScheduleId(null);
-    setEditorState(null);
-    setIsTemplateModalOpen(false);
+  const restoreBackup = ({ scheduleStore, templates: restoredTemplates, reminderPreferences: restoredReminders, experiments: restoredExperiments = [] }) => {
+    replaceStore(scheduleStore); replaceTemplates(restoredTemplates); replaceReminderPreferences(restoredReminders); replaceExperiments(restoredExperiments);
+    setSelectedScheduleId(null); setEditorState(null); setIsTemplateModalOpen(false);
     const dayKeys = Object.keys(scheduleStore.days).sort();
     if (!(selectedDate in scheduleStore.days) && dayKeys.length > 0) setSelectedDate(dayKeys.at(-1));
   };
@@ -143,89 +81,21 @@ export default function App() {
         <div className="mx-auto max-w-md">
           <div className="flex items-end justify-between gap-4">
             <div><h1 className="mb-1 text-3xl font-extrabold tracking-tight">RealitySync</h1><p className="text-sm font-medium text-indigo-200">理想と現実のギャップを力に変える</p></div>
-            <div className="flex items-center gap-2">
-              {activeTab === TABS.PLAN && !protectedMode && (
-                <button type="button" onClick={() => setEditorState({ type: 'create' })} aria-label="予定を追加" className="rounded-full bg-white/20 p-2 text-white backdrop-blur-sm transition hover:bg-white/30"><Plus className="h-5 w-5" /></button>
-              )}
-              <button type="button" onClick={() => setIsSettingsOpen(true)} aria-label="設定とデータを開く" className="rounded-full bg-white/20 p-2 text-white backdrop-blur-sm transition hover:bg-white/30"><Settings className="h-5 w-5" /></button>
-            </div>
+            <div className="flex items-center gap-2">{activeTab === TABS.PLAN && !protectedMode && <button type="button" onClick={() => setEditorState({ type: 'create' })} aria-label="予定を追加" className="rounded-full bg-white/20 p-2 text-white backdrop-blur-sm transition hover:bg-white/30"><Plus className="h-5 w-5" /></button>}<button type="button" onClick={() => setIsSettingsOpen(true)} aria-label="設定とデータを開く" className="rounded-full bg-white/20 p-2 text-white backdrop-blur-sm transition hover:bg-white/30"><Settings className="h-5 w-5" /></button></div>
           </div>
           <DateNavigator dateKey={selectedDate} onChange={changeDate} />
         </div>
       </header>
-
       <main className="mx-auto -mt-2 max-w-md p-4">
         {protectedMode ? (
-          <section className="mt-6 rounded-3xl border border-red-200 bg-white p-6 text-center shadow-sm">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-500"><AlertTriangle className="h-6 w-6" /></div>
-            <h2 className="text-lg font-extrabold text-gray-800">保存データを保護しています</h2>
-            <p className="mt-2 text-sm leading-relaxed text-gray-500">現在版では保存済みデータを安全に解釈できないため、編集と自動保存を停止しました。元のlocalStorageは上書きしていません。</p>
-            {storageProtection.unsupportedVersion !== null && <p className="mt-2 text-xs font-bold text-red-600">検出した保存版: {String(storageProtection.unsupportedVersion)}</p>}
-            <p className="mt-3 text-xs leading-relaxed text-gray-400">対応する新しいRealitySyncで開くか、互換性のあるバックアップを設定画面から復元してください。</p>
-            <button type="button" onClick={() => setIsSettingsOpen(true)} className="mt-5 w-full rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white">設定とデータを開く</button>
-          </section>
-        ) : (
-          <>
-            {activeTab === TABS.PLAN && (
-              <PlanView
-                schedules={schedules}
-                onCreate={() => setEditorState({ type: 'create' })}
-                onEdit={(id) => setEditorState({ type: 'edit', id })}
-                onCopyPrevious={copyPreviousDay}
-                hasPreviousSchedules={previousSchedules.length > 0}
-                onOpenTemplates={() => setIsTemplateModalOpen(true)}
-                templateCount={templates.length}
-              />
-            )}
-            {activeTab === TABS.TRACK && <TrackView schedules={schedules} dueSchedules={dueSchedules} dateKey={selectedDate} onRecord={(schedule) => setSelectedScheduleId(schedule.id)} />}
-            {activeTab === TABS.ANALYTICS && (
-              <AnalyticsView
-                stats={stats}
-                weeklyInsights={weeklyInsights}
-                monthlyInsights={monthlyInsights}
-                longitudinalInsights={longitudinalInsights}
-                selectedDate={selectedDate}
-                onChangeDate={changeDate}
-              />
-            )}
-          </>
-        )}
+          <section className="mt-6 rounded-3xl border border-red-200 bg-white p-6 text-center shadow-sm"><div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-500"><AlertTriangle className="h-6 w-6" /></div><h2 className="text-lg font-extrabold text-gray-800">保存データを保護しています</h2><p className="mt-2 text-sm leading-relaxed text-gray-500">現在版では保存済みデータを安全に解釈できないため、編集と自動保存を停止しました。元のlocalStorageは上書きしていません。</p>{storageProtection.unsupportedVersion !== null && <p className="mt-2 text-xs font-bold text-red-600">検出した保存版: {String(storageProtection.unsupportedVersion)}</p>}<button type="button" onClick={() => setIsSettingsOpen(true)} className="mt-5 w-full rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white">設定とデータを開く</button></section>
+        ) : <>{activeTab === TABS.PLAN && <PlanView schedules={schedules} onCreate={() => setEditorState({ type: 'create' })} onEdit={(id) => setEditorState({ type: 'edit', id })} onCopyPrevious={copyPreviousDay} hasPreviousSchedules={previousSchedules.length > 0} onOpenTemplates={() => setIsTemplateModalOpen(true)} templateCount={templates.length} />}{activeTab === TABS.TRACK && <TrackView schedules={schedules} dueSchedules={dueSchedules} dateKey={selectedDate} onRecord={(schedule) => setSelectedScheduleId(schedule.id)} />}{activeTab === TABS.ANALYTICS && <AnalyticsView stats={stats} weeklyInsights={weeklyInsights} monthlyInsights={monthlyInsights} longitudinalInsights={longitudinalInsights} experiments={experiments} days={store.days} selectedDate={selectedDate} onChangeDate={changeDate} onStartExperiment={startExperiment} onCaptureTrial={captureTrial} onRemoveTrial={removeTrial} onFinishExperiment={finish} onAbandonExperiment={abandon} onDeleteExperiment={deleteExperiment} />}</>}
       </main>
-
       {!protectedMode && <BottomNav activeTab={activeTab} onChange={setActiveTab} />}
       {!protectedMode && selectedSchedule && <RecordModal schedule={selectedSchedule} dateKey={selectedDate} onClose={() => setSelectedScheduleId(null)} onSave={saveRecord} />}
-      {!protectedMode && editorState && (editorState.type !== 'edit' || editingSchedule) && (
-        <ScheduleEditorModal
-          schedule={editingSchedule}
-          onClose={() => setEditorState(null)}
-          onSave={saveSchedule}
-          onDelete={editorState.type === 'edit' ? deleteSchedule : undefined}
-        />
-      )}
-      {!protectedMode && isTemplateModalOpen && (
-        <TemplateModal
-          templates={templates}
-          currentSchedules={schedules}
-          onClose={() => setIsTemplateModalOpen(false)}
-          onSaveTemplate={(name) => saveTemplate(name, schedules)}
-          onApplyTemplate={applyTemplate}
-          onDeleteTemplate={deleteTemplate}
-        />
-      )}
-      {isSettingsOpen && (
-        <SettingsModal
-          store={store}
-          templates={templates}
-          reminderPreferences={reminderPreferences}
-          storageProtection={storageProtection}
-          onChangeReminderPreferences={setReminderPreferences}
-          onRestoreBackup={restoreBackup}
-          canInstall={canInstall}
-          isInstalled={isInstalled}
-          onInstall={install}
-          onClose={() => setIsSettingsOpen(false)}
-        />
-      )}
+      {!protectedMode && editorState && (editorState.type !== 'edit' || editingSchedule) && <ScheduleEditorModal schedule={editingSchedule} onClose={() => setEditorState(null)} onSave={saveSchedule} onDelete={editorState.type === 'edit' ? deleteSchedule : undefined} />}
+      {!protectedMode && isTemplateModalOpen && <TemplateModal templates={templates} currentSchedules={schedules} onClose={() => setIsTemplateModalOpen(false)} onSaveTemplate={(name) => saveTemplate(name, schedules)} onApplyTemplate={applyTemplate} onDeleteTemplate={deleteTemplate} />}
+      {isSettingsOpen && <SettingsModal store={store} templates={templates} experiments={experiments} reminderPreferences={reminderPreferences} storageProtection={storageProtection} onChangeReminderPreferences={setReminderPreferences} onRestoreBackup={restoreBackup} canInstall={canInstall} isInstalled={isInstalled} onInstall={install} onClose={() => setIsSettingsOpen(false)} />}
     </div>
   );
 }

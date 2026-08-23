@@ -5,7 +5,22 @@ import { InsightCandidatesView } from './InsightCandidatesView.jsx';
 import { MonthlyAnalyticsView } from './MonthlyAnalyticsView.jsx';
 import { WeeklyAnalyticsView } from './WeeklyAnalyticsView.jsx';
 
-export function AnalyticsView({ stats, weeklyInsights, monthlyInsights, longitudinalInsights, selectedDate, onChangeDate }) {
+export function AnalyticsView({
+  stats,
+  weeklyInsights,
+  monthlyInsights,
+  longitudinalInsights,
+  experiments,
+  days,
+  selectedDate,
+  onChangeDate,
+  onStartExperiment,
+  onCaptureTrial,
+  onRemoveTrial,
+  onFinishExperiment,
+  onAbandonExperiment,
+  onDeleteExperiment,
+}) {
   const [scope, setScope] = useState('day');
 
   return (
@@ -32,7 +47,20 @@ export function AnalyticsView({ stats, weeklyInsights, monthlyInsights, longitud
       {scope === 'day' && <DailyAnalyticsContent stats={stats} />}
       {scope === 'week' && <WeeklyAnalyticsView insights={weeklyInsights} selectedDate={selectedDate} onChangeDate={onChangeDate} />}
       {scope === 'month' && <MonthlyAnalyticsView insights={monthlyInsights} selectedDate={selectedDate} onChangeDate={onChangeDate} />}
-      {scope === 'insights' && <InsightCandidatesView insights={longitudinalInsights} />}
+      {scope === 'insights' && (
+        <InsightCandidatesView
+          insights={longitudinalInsights}
+          experiments={experiments}
+          days={days}
+          selectedDate={selectedDate}
+          onStartExperiment={onStartExperiment}
+          onCaptureTrial={onCaptureTrial}
+          onRemoveTrial={onRemoveTrial}
+          onFinishExperiment={onFinishExperiment}
+          onAbandonExperiment={onAbandonExperiment}
+          onDeleteExperiment={onDeleteExperiment}
+        />
+      )}
     </div>
   );
 }
