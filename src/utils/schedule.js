@@ -40,6 +40,14 @@ function normalizeText(value, fallback = '') {
   return trimmed || fallback;
 }
 
+function normalizeOptionalText(value, fallback = null) {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed || null;
+  }
+  return typeof fallback === 'string' && fallback.trim() ? fallback.trim() : null;
+}
+
 function normalizeCategory(value, fallback = 'その他') {
   if (VALID_CATEGORIES.has(value)) return value;
   return VALID_CATEGORIES.has(fallback) ? fallback : 'その他';
@@ -49,6 +57,11 @@ function normalizeId(value, fallback) {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string' && value.trim()) return value.trim();
   return fallback;
+}
+
+function normalizeActualStartTime(value, fallback = null) {
+  if (isValidTime(value)) return value;
+  return isValidTime(fallback) ? fallback : null;
 }
 
 export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedule') {
@@ -70,6 +83,8 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
     actualTitle: '',
     actualCategory: null,
     actualDuration: null,
+    actualStartTime: null,
+    deviationReason: null,
     mood: null,
     actualStress: null,
   };
@@ -84,8 +99,12 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
   if (status === STATUS.SKIPPED) {
     normalized.actualTitle = 'スキップ';
     normalized.actualDuration = 0;
+    normalized.actualStartTime = null;
+    normalized.deviationReason = normalizeOptionalText(source.deviationReason, base.deviationReason);
     return normalized;
   }
+
+  normalized.actualStartTime = normalizeActualStartTime(source.actualStartTime, base.actualStartTime);
 
   if (status === STATUS.AS_PLANNED) {
     // Snapshot what was actually recorded. A later edit to the plan must not
@@ -93,6 +112,7 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
     normalized.actualTitle = normalizeText(source.actualTitle, normalizeText(base.actualTitle, normalized.title));
     normalized.actualCategory = normalizeCategory(source.actualCategory, base.actualCategory ?? normalized.category);
     normalized.actualDuration = clampNumber(source.actualDuration ?? base.actualDuration ?? duration, 0, 1440);
+    normalized.deviationReason = null;
     return normalized;
   }
 
@@ -104,6 +124,8 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
       actualTitle: '',
       actualCategory: null,
       actualDuration: null,
+      actualStartTime: null,
+      deviationReason: null,
       mood: null,
       actualStress: null,
     };
@@ -112,6 +134,7 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
   normalized.actualTitle = actualTitle;
   normalized.actualCategory = normalizeCategory(source.actualCategory, base.actualCategory);
   normalized.actualDuration = clampNumber(source.actualDuration ?? base.actualDuration ?? 0, 0, 1440);
+  normalized.deviationReason = normalizeOptionalText(source.deviationReason, base.deviationReason);
   return normalized;
 }
 
@@ -142,6 +165,26 @@ export function normalizeSchedules(schedules, fallbacks = []) {
   }
 
   return normalized;
+}
+
+export function createPendingScheduleCopy(schedule, id) {
+  const normalized = normalizeSchedule(schedule, {}, id);
+  return {
+    id,
+    time: normalized.time,
+    title: normalized.title,
+    category: normalized.category,
+    duration: normalized.duration,
+    plannedStress: normalized.plannedStress,
+    status: STATUS.PENDING,
+    actualTitle: '',
+    actualCategory: null,
+    actualDuration: null,
+    actualStartTime: null,
+    deviationReason: null,
+    mood: null,
+    actualStress: null,
+  };
 }
 
 export function durationAfterStatusChange(currentDuration, previousStatus, nextStatus, plannedDuration) {
