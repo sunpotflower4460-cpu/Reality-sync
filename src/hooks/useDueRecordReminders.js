@@ -35,9 +35,11 @@ async function showBrowserNotification(schedule, dateKey) {
 
   if ('serviceWorker' in navigator) {
     try {
-      const registration = await navigator.serviceWorker.ready;
-      await registration.showNotification(title, options);
-      return true;
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (registration) {
+        await registration.showNotification(title, options);
+        return true;
+      }
     } catch {
       // Fall back to a window notification when supported.
     }
@@ -87,10 +89,11 @@ export function useDueRecordReminders({ schedules, dateKey, preferences }) {
     const notify = async () => {
       for (const schedule of pendingNotifications) {
         if (cancelled) return;
+        const shown = await showBrowserNotification(schedule, dateKey);
+        if (!shown || cancelled) continue;
         const key = reminderNotificationKey(dateKey, schedule.id);
         notified.add(key);
         writeNotifiedKeys([...notified]);
-        await showBrowserNotification(schedule, dateKey);
       }
     };
     notify();
