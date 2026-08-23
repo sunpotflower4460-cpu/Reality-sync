@@ -1,37 +1,35 @@
 import { useState } from 'react';
 import { Activity, Heart, Layers, Lock, Sparkles } from 'lucide-react';
 import { formatTime } from '../utils/schedule.js';
+import { MonthlyAnalyticsView } from './MonthlyAnalyticsView.jsx';
 import { WeeklyAnalyticsView } from './WeeklyAnalyticsView.jsx';
 
-export function AnalyticsView({ stats, weeklyInsights, selectedDate, onChangeDate }) {
+export function AnalyticsView({ stats, weeklyInsights, monthlyInsights, selectedDate, onChangeDate }) {
   const [scope, setScope] = useState('day');
 
   return (
     <div className="animate-fade-in space-y-4 pt-4">
-      <div className="grid grid-cols-2 rounded-2xl bg-gray-100 p-1" role="group" aria-label="分析期間">
-        <button
-          type="button"
-          onClick={() => setScope('day')}
-          aria-pressed={scope === 'day'}
-          className={`rounded-xl py-2.5 text-sm font-bold transition ${scope === 'day' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}
-        >
-          日
-        </button>
-        <button
-          type="button"
-          onClick={() => setScope('week')}
-          aria-pressed={scope === 'week'}
-          className={`rounded-xl py-2.5 text-sm font-bold transition ${scope === 'week' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}
-        >
-          週
-        </button>
+      <div className="grid grid-cols-3 rounded-2xl bg-gray-100 p-1" role="group" aria-label="分析期間">
+        {[
+          ['day', '日'],
+          ['week', '週'],
+          ['month', '月'],
+        ].map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setScope(value)}
+            aria-pressed={scope === value}
+            className={`rounded-xl py-2.5 text-sm font-bold transition ${scope === value ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {scope === 'day' ? (
-        <DailyAnalyticsContent stats={stats} />
-      ) : (
-        <WeeklyAnalyticsView insights={weeklyInsights} selectedDate={selectedDate} onChangeDate={onChangeDate} />
-      )}
+      {scope === 'day' && <DailyAnalyticsContent stats={stats} />}
+      {scope === 'week' && <WeeklyAnalyticsView insights={weeklyInsights} selectedDate={selectedDate} onChangeDate={onChangeDate} />}
+      {scope === 'month' && <MonthlyAnalyticsView insights={monthlyInsights} selectedDate={selectedDate} onChangeDate={onChangeDate} />}
     </div>
   );
 }
@@ -41,7 +39,7 @@ function DailyAnalyticsContent({ stats }) {
     return (
       <section className="rounded-3xl border border-dashed border-indigo-200 bg-white p-8 text-center shadow-sm">
         <h2 className="mb-2 text-lg font-extrabold text-gray-800">この日に分析する予定がまだありません</h2>
-        <p className="text-sm leading-relaxed text-gray-500">計画と実績がたまると、理想と現実の差や負荷の傾向がここに育っていきます。週タブには同じ週の他の日も含まれます。</p>
+        <p className="text-sm leading-relaxed text-gray-500">計画と実績がたまると、理想と現実の差や負荷の傾向がここに育っていきます。週・月タブには他の日の記録も含まれます。</p>
       </section>
     );
   }
@@ -83,20 +81,12 @@ function DailyAnalyticsContent({ stats }) {
 
       <section className="relative overflow-hidden rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
         <Heart className="absolute right-4 top-4 h-24 w-24 text-pink-500 opacity-10" aria-hidden="true" />
-        <div className="relative z-10"><h2 className="mb-2 text-lg font-extrabold text-gray-800">習慣のシナジー効果</h2><p className="mb-6 text-sm text-gray-600">記録を蓄積し、特定の習慣が他の活動に与える影響や、ストレス蓄積のパターンを分析します。</p><div className="flex flex-col items-center rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5 text-center"><div className="mb-3 rounded-full bg-white p-3 text-gray-400 shadow-sm"><Lock className="h-8 w-8" /></div><h3 className="mb-1 font-bold text-gray-700">データを蓄積中です</h3><p className="px-4 text-xs text-gray-500">相関を語るには、複数日ぶんの記録が必要です。</p></div></div>
+        <div className="relative z-10"><h2 className="mb-2 text-lg font-extrabold text-gray-800">習慣のシナジー効果</h2><p className="mb-6 text-sm text-gray-600">記録を蓄積し、特定の習慣が他の活動に与える影響や、ストレス蓄積のパターンを分析します。</p><div className="flex flex-col items-center rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5 text-center"><div className="mb-3 rounded-full bg-white p-3 text-gray-400 shadow-sm"><Lock className="h-8 w-8" /></div><h3 className="mb-1 font-bold text-gray-700">データを蓄積中です</h3><p className="px-4 text-xs text-gray-500">相関を語るには、複数週ぶんの記録が必要です。月タブではまず記述的な傾向を確認できます。</p></div></div>
       </section>
     </div>
   );
 }
 
-function Bar({ label, percent, value, barClass, labelClass, valueClass, strong = false }) {
-  return <div className="flex items-center gap-2"><span className={`w-6 text-[10px] ${strong ? 'font-bold' : ''} ${labelClass}`}>{label}</span><div className="h-3 flex-1 overflow-hidden rounded-full bg-gray-100"><div className={`h-full rounded-full transition-all duration-500 ${barClass}`} style={{ width: `${percent}%` }} /></div><span className={`w-12 text-right text-xs ${strong ? 'font-bold' : 'font-medium'} ${valueClass}`}>{value}</span></div>;
-}
-
-function Segment({ width, className, label, muted = false }) {
-  return <div style={{ width: `${width * 100}%` }} className={`flex h-full items-center justify-center transition-all ${className}`}>{label && <span className={`px-1 text-xs ${muted ? 'font-medium text-gray-400' : 'font-bold text-white'}`}>{label}</span>}</div>;
-}
-
-function SummaryCard({ label, value, tone }) {
-  return <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3 text-center"><div className="mb-1 text-xs font-medium text-gray-500">{label}</div><div className={`text-2xl font-black ${tone}`}>{value} <span className="text-sm font-medium text-gray-400">件</span></div></div>;
-}
+function Bar({ label, percent, value, barClass, labelClass, valueClass, strong = false }) { return <div className="flex items-center gap-2"><span className={`w-6 text-[10px] ${strong ? 'font-bold' : ''} ${labelClass}`}>{label}</span><div className="h-3 flex-1 overflow-hidden rounded-full bg-gray-100"><div className={`h-full rounded-full transition-all duration-500 ${barClass}`} style={{ width: `${percent}%` }} /></div><span className={`w-12 text-right text-xs ${strong ? 'font-bold' : 'font-medium'} ${valueClass}`}>{value}</span></div>; }
+function Segment({ width, className, label, muted = false }) { return <div style={{ width: `${width * 100}%` }} className={`flex h-full items-center justify-center transition-all ${className}`}>{label && <span className={`px-1 text-xs ${muted ? 'font-medium text-gray-400' : 'font-bold text-white'}`}>{label}</span>}</div>; }
+function SummaryCard({ label, value, tone }) { return <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3 text-center"><div className="mb-1 text-xs font-medium text-gray-500">{label}</div><div className={`text-2xl font-black ${tone}`}>{value} <span className="text-sm font-medium text-gray-400">件</span></div></div>; }
