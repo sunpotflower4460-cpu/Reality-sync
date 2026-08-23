@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, Clock, Frown, Meh, Smile, XCircle } from 'lucide-react';
 import { CATEGORIES, MOOD, STATUS } from '../constants.js';
-import { clampNumber, durationAfterStatusChange } from '../utils/schedule.js';
+import { clampNumber, durationAfterStatusChange, replacementTitleForEditing } from '../utils/schedule.js';
 
 export function RecordModal({ schedule, onClose, onSave }) {
   const [recordMode, setRecordMode] = useState(schedule.status !== STATUS.PENDING ? schedule.status : STATUS.AS_PLANNED);
-  const [actualTitle, setActualTitle] = useState(schedule.actualTitle || '');
+  const [actualTitle, setActualTitle] = useState(() => replacementTitleForEditing(schedule));
   const [actualCategory, setActualCategory] = useState(schedule.actualCategory || schedule.category || 'その他');
   const [mood, setMood] = useState(schedule.mood || MOOD.NORMAL);
   const [actualStress, setActualStress] = useState(schedule.actualStress ?? schedule.plannedStress);

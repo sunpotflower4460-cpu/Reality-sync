@@ -7,6 +7,7 @@ import {
   isValidTime,
   normalizeSchedule,
   normalizeSchedules,
+  replacementTitleForEditing,
   sortSchedulesByTime,
   timeToHours,
 } from '../src/utils/schedule.js';
@@ -109,6 +110,12 @@ test('changing a skipped record back to an active status restores the planned du
   assert.equal(durationAfterStatusChange(0, STATUS.SKIPPED, STATUS.AS_PLANNED, 90), 90);
   assert.equal(durationAfterStatusChange(0, STATUS.SKIPPED, STATUS.CHANGED, 90), 90);
   assert.equal(durationAfterStatusChange(45, STATUS.CHANGED, STATUS.SKIPPED, 90), 0);
+});
+
+test('replacement title is only reused when editing an existing changed record', () => {
+  assert.equal(replacementTitleForEditing({ status: STATUS.AS_PLANNED, actualTitle: 'Original title' }), '');
+  assert.equal(replacementTitleForEditing({ status: STATUS.SKIPPED, actualTitle: 'スキップ' }), '');
+  assert.equal(replacementTitleForEditing({ status: STATUS.CHANGED, actualTitle: '  Read a book  ' }), 'Read a book');
 });
 
 test('calculateStats keeps hostile category keys out of the aggregation object', () => {
