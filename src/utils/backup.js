@@ -7,6 +7,7 @@ import { normalizeTemplates } from './template.js';
 
 function countSchedules(store) { return Object.values(store.days).reduce((sum, schedules) => sum + schedules.length, 0); }
 function rawScheduleCount(days) { return Object.values(days).reduce((sum, schedules) => sum + schedules.length, 0); }
+function experimentTrialCount(experiments) { return experiments.reduce((sum, experiment) => sum + (Array.isArray(experiment.trials) ? experiment.trials.length : 0), 0); }
 
 export function createBackupPayload({ store, templates, experiments = [], reminderPreferences, exportedAt = new Date().toISOString() }) {
   return {
@@ -46,7 +47,9 @@ export function parseBackup(raw) {
   if (templates.length !== parsed.templates.length) return { ok: false, error: 'テンプレートデータに復元できない項目があります。' };
   const rawExperiments = parsed.experiments ?? [];
   const experiments = normalizeExperiments(rawExperiments);
-  if (experiments.length !== rawExperiments.length) return { ok: false, error: '実験履歴に復元できない項目があります。' };
+  if (experiments.length !== rawExperiments.length || experimentTrialCount(experiments) !== experimentTrialCount(rawExperiments)) {
+    return { ok: false, error: '実験履歴に復元できない項目があります。' };
+  }
   const reminderPreferences = normalizeReminderPreferences(parsed.reminderPreferences);
 
   return {
