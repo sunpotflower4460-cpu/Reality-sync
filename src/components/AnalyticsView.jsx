@@ -1,19 +1,21 @@
 import { useState } from 'react';
-import { Activity, Heart, Layers, Lock, Sparkles } from 'lucide-react';
+import { Activity, Layers, Sparkles } from 'lucide-react';
 import { formatTime } from '../utils/schedule.js';
+import { InsightCandidatesView } from './InsightCandidatesView.jsx';
 import { MonthlyAnalyticsView } from './MonthlyAnalyticsView.jsx';
 import { WeeklyAnalyticsView } from './WeeklyAnalyticsView.jsx';
 
-export function AnalyticsView({ stats, weeklyInsights, monthlyInsights, selectedDate, onChangeDate }) {
+export function AnalyticsView({ stats, weeklyInsights, monthlyInsights, longitudinalInsights, selectedDate, onChangeDate }) {
   const [scope, setScope] = useState('day');
 
   return (
     <div className="animate-fade-in space-y-4 pt-4">
-      <div className="grid grid-cols-3 rounded-2xl bg-gray-100 p-1" role="group" aria-label="分析期間">
+      <div className="grid grid-cols-4 rounded-2xl bg-gray-100 p-1" role="group" aria-label="分析期間">
         {[
           ['day', '日'],
           ['week', '週'],
           ['month', '月'],
+          ['insights', '傾向'],
         ].map(([value, label]) => (
           <button
             key={value}
@@ -30,6 +32,7 @@ export function AnalyticsView({ stats, weeklyInsights, monthlyInsights, selected
       {scope === 'day' && <DailyAnalyticsContent stats={stats} />}
       {scope === 'week' && <WeeklyAnalyticsView insights={weeklyInsights} selectedDate={selectedDate} onChangeDate={onChangeDate} />}
       {scope === 'month' && <MonthlyAnalyticsView insights={monthlyInsights} selectedDate={selectedDate} onChangeDate={onChangeDate} />}
+      {scope === 'insights' && <InsightCandidatesView insights={longitudinalInsights} />}
     </div>
   );
 }
@@ -39,7 +42,7 @@ function DailyAnalyticsContent({ stats }) {
     return (
       <section className="rounded-3xl border border-dashed border-indigo-200 bg-white p-8 text-center shadow-sm">
         <h2 className="mb-2 text-lg font-extrabold text-gray-800">この日に分析する予定がまだありません</h2>
-        <p className="text-sm leading-relaxed text-gray-500">計画と実績がたまると、理想と現実の差や負荷の傾向がここに育っていきます。週・月タブには他の日の記録も含まれます。</p>
+        <p className="text-sm leading-relaxed text-gray-500">計画と実績がたまると、理想と現実の差や負荷の傾向がここに育っていきます。週・月・傾向タブには他の日の記録も含まれます。</p>
       </section>
     );
   }
@@ -51,7 +54,7 @@ function DailyAnalyticsContent({ stats }) {
     <div className="space-y-6">
       <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
         <h2 className="mb-2 flex items-center gap-2 text-base font-bold text-gray-800"><Layers className="h-5 w-5 text-indigo-500" aria-hidden="true" />理想の軌跡 vs 現実の歩み</h2>
-        <p className="mb-5 text-xs leading-relaxed text-gray-500">予定外の行動も、実際に記録した時間だけを「現実の積み重ね」として可視化します。</p>
+        <p className="mb-5 text-xs leading-relaxed text-gray-500">予定外の行動も、実際に記録した時間だけを「現実の積み重ね」として可視化します。記録時の予定スナップショットがある実績は、その当時の理想を使います。</p>
         <div className="space-y-5">
           {Object.entries(stats.categories).map(([category, data]) => {
             const idealPercent = (data.ideal / maxTime) * 100;
@@ -77,11 +80,6 @@ function DailyAnalyticsContent({ stats }) {
           <Segment width={stats.pending / Math.max(stats.total, 1)} className="bg-gray-100" label={stats.pending > 0 ? '未定' : ''} muted />
         </div>
         <div className="grid grid-cols-2 gap-3 text-sm"><SummaryCard label="予定通り実行" value={stats.completed} tone="text-green-600" /><SummaryCard label="変更・スキップ" value={stats.changed + stats.skipped} tone="text-orange-600" /></div>
-      </section>
-
-      <section className="relative overflow-hidden rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-        <Heart className="absolute right-4 top-4 h-24 w-24 text-pink-500 opacity-10" aria-hidden="true" />
-        <div className="relative z-10"><h2 className="mb-2 text-lg font-extrabold text-gray-800">習慣のシナジー効果</h2><p className="mb-6 text-sm text-gray-600">記録を蓄積し、特定の習慣が他の活動に与える影響や、ストレス蓄積のパターンを分析します。</p><div className="flex flex-col items-center rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5 text-center"><div className="mb-3 rounded-full bg-white p-3 text-gray-400 shadow-sm"><Lock className="h-8 w-8" /></div><h3 className="mb-1 font-bold text-gray-700">データを蓄積中です</h3><p className="px-4 text-xs text-gray-500">相関を語るには、複数週ぶんの記録が必要です。月タブではまず記述的な傾向を確認できます。</p></div></div>
       </section>
     </div>
   );
