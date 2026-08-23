@@ -2,6 +2,17 @@ import { Activity, Heart, Layers, Lock, Sparkles } from 'lucide-react';
 import { formatTime } from '../utils/schedule.js';
 
 export function AnalyticsView({ stats }) {
+  if (stats.total === 0) {
+    return (
+      <div className="animate-fade-in pt-4">
+        <section className="rounded-3xl border border-dashed border-indigo-200 bg-white p-8 text-center shadow-sm">
+          <h2 className="mb-2 text-lg font-extrabold text-gray-800">分析する予定がまだありません</h2>
+          <p className="text-sm leading-relaxed text-gray-500">計画と実績がたまると、理想と現実の差や負荷の傾向がここに育っていきます。</p>
+        </section>
+      </div>
+    );
+  }
+
   const allTimes = Object.values(stats.categories).flatMap((category) => [category.ideal, category.actual]);
   const maxTime = Math.max(...allTimes, 1);
 

@@ -21,6 +21,11 @@ export function PlanView({ schedules, onOpenPlanModal }) {
       </div>
 
       <div className="space-y-3">
+        {orderedSchedules.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
+            予定はまだありません。最初のひとつを置いてみましょう。
+          </div>
+        )}
         {orderedSchedules.map((schedule) => (
           <article key={schedule.id} className="flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
             <time className="w-12 shrink-0 text-center font-bold text-indigo-600" dateTime={schedule.time}>{schedule.time}</time>

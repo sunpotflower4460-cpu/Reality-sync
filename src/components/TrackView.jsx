@@ -26,6 +26,17 @@ function dotClass(status) {
 export function TrackView({ schedules, onRecord }) {
   const orderedSchedules = sortSchedulesByTime(schedules);
 
+  if (orderedSchedules.length === 0) {
+    return (
+      <div className="animate-fade-in pt-4">
+        <section className="rounded-3xl border border-dashed border-indigo-200 bg-white p-8 text-center shadow-sm">
+          <h2 className="mb-2 text-lg font-extrabold text-gray-800">今日はまだ予定がありません</h2>
+          <p className="text-sm leading-relaxed text-gray-500">計画タブで予定を置くと、ここに実行タイムラインと負荷の波が表示されます。</p>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="animate-fade-in space-y-6 pt-4">
       <StressGraph schedules={orderedSchedules} />
