@@ -8,17 +8,24 @@ import {
   durationAfterStatusChange,
   isValidTime,
   parseActualDuration,
+  recordedPlanForSchedule,
   replacementTitleForEditing,
 } from '../utils/schedule.js';
 import { ModalDialog } from './ModalDialog.jsx';
 
 export function RecordModal({ schedule, dateKey, onClose, onSave }) {
+  const recordedPlan = recordedPlanForSchedule(schedule);
+  const planReferenceLabel = schedule.plannedSnapshot
+    ? '記録時の予定'
+    : schedule.status === STATUS.PENDING
+      ? '予定'
+      : '現在の予定（記録時は不明）';
   const [recordMode, setRecordMode] = useState(schedule.status !== STATUS.PENDING ? schedule.status : STATUS.AS_PLANNED);
   const [actualTitle, setActualTitle] = useState(() => replacementTitleForEditing(schedule));
-  const [actualCategory, setActualCategory] = useState(schedule.actualCategory || schedule.category || 'その他');
+  const [actualCategory, setActualCategory] = useState(schedule.actualCategory || recordedPlan.category || 'その他');
   const [mood, setMood] = useState(schedule.mood || MOOD.NORMAL);
-  const [actualStress, setActualStress] = useState(schedule.actualStress ?? schedule.plannedStress);
-  const [actualDuration, setActualDuration] = useState(schedule.actualDuration ?? (schedule.status === STATUS.SKIPPED ? 0 : schedule.duration));
+  const [actualStress, setActualStress] = useState(schedule.actualStress ?? recordedPlan.plannedStress);
+  const [actualDuration, setActualDuration] = useState(schedule.actualDuration ?? (schedule.status === STATUS.SKIPPED ? 0 : recordedPlan.duration));
   const [actualStartTime, setActualStartTime] = useState(schedule.actualStartTime || '');
   const [actualStartDateKey, setActualStartDateKey] = useState(schedule.actualStartDateKey || dateKey || '');
   const [deviationReason, setDeviationReason] = useState(schedule.deviationReason || '');
@@ -28,14 +35,14 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
     if (recordMode === STATUS.AS_PLANNED) {
       return schedule.status === STATUS.AS_PLANNED && schedule.actualTitle
         ? schedule.actualTitle
-        : schedule.title;
+        : recordedPlan.title;
     }
     if (recordMode === STATUS.SKIPPED) return 'スキップ';
     return actualTitle.trim();
-  }, [actualTitle, recordMode, schedule.actualTitle, schedule.status, schedule.title]);
+  }, [actualTitle, recordMode, recordedPlan.title, schedule.actualTitle, schedule.status]);
 
   const selectMode = (nextMode) => {
-    setActualDuration((current) => durationAfterStatusChange(current, recordMode, nextMode, schedule.duration));
+    setActualDuration((current) => durationAfterStatusChange(current, recordMode, nextMode, recordedPlan.duration));
     setRecordMode(nextMode);
     setError('');
   };
@@ -67,8 +74,8 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
       : recordMode === STATUS.CHANGED
         ? actualCategory
         : schedule.status === STATUS.AS_PLANNED
-          ? schedule.actualCategory || schedule.category
-          : schedule.category;
+          ? schedule.actualCategory || recordedPlan.category
+          : recordedPlan.category;
     const plannedSnapshot = schedule.plannedSnapshot
       ?? (schedule.status === STATUS.PENDING ? createPlannedSnapshot(schedule) : null);
 
@@ -100,7 +107,7 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
       </div>
 
       <div className="space-y-6 p-5">
-        <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm"><Clock className="h-5 w-5 text-indigo-400" aria-hidden="true" /><div><div className="font-medium text-gray-500">予定 {dateKey} {schedule.time}</div><div className="font-bold text-gray-800">{schedule.title}</div></div></div>
+        <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm"><Clock className="h-5 w-5 text-indigo-400" aria-hidden="true" /><div><div className="font-medium text-gray-500">{planReferenceLabel} {dateKey} {recordedPlan.time}</div><div className="font-bold text-gray-800">{recordedPlan.title}</div></div></div>
 
         <fieldset className="space-y-3">
           <legend className="text-sm font-bold text-gray-700">実際にはどうでしたか？</legend>
@@ -134,7 +141,7 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
             <label className="block">
               <span className="mb-2 flex items-center justify-between gap-2 text-xs font-bold text-gray-700"><span>実際に費やした時間</span><span className="text-indigo-600">{actualDuration === '' ? '—' : `${actualDuration}分`}</span></span>
               <input type="number" inputMode="numeric" min="0" max="1440" step="5" value={actualDuration} onChange={(event) => { setActualDuration(event.target.value); setError(''); }} className="w-full rounded-xl border border-gray-200 bg-white p-3 text-sm" />
-              <span className="mt-1 block text-[9px] leading-relaxed text-gray-400">予定は {schedule.duration}分</span>
+              <span className="mt-1 block text-[9px] leading-relaxed text-gray-400">記録時の予定は {recordedPlan.duration}分</span>
             </label>
           </div>
         )}
@@ -155,7 +162,7 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
 
         <div className="space-y-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
           <div className="flex items-end justify-between"><p className="text-sm font-bold text-gray-700">実際のストレス・負荷</p><span className={`text-lg font-black ${actualStress > 80 ? 'text-red-500' : 'text-indigo-600'}`}>{actualStress}</span></div>
-          <p className="text-[10px] text-gray-500">計画時の想定負荷は <b>{schedule.plannedStress}</b> でした。</p>
+          <p className="text-[10px] text-gray-500">記録時の想定負荷は <b>{recordedPlan.plannedStress}</b> です。</p>
           <input type="range" min="0" max="100" value={actualStress} onChange={(event) => setActualStress(Number(event.target.value))} className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-gray-200 accent-indigo-600" />
           <div className="flex justify-between text-[10px] font-bold text-gray-400"><span>0（楽勝）</span><span>100（限界）</span></div>
         </div>
