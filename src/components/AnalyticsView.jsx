@@ -1,15 +1,48 @@
+import { useState } from 'react';
 import { Activity, Heart, Layers, Lock, Sparkles } from 'lucide-react';
 import { formatTime } from '../utils/schedule.js';
+import { WeeklyAnalyticsView } from './WeeklyAnalyticsView.jsx';
 
-export function AnalyticsView({ stats }) {
+export function AnalyticsView({ stats, weeklyInsights, selectedDate, onChangeDate }) {
+  const [scope, setScope] = useState('day');
+
+  return (
+    <div className="animate-fade-in space-y-4 pt-4">
+      <div className="grid grid-cols-2 rounded-2xl bg-gray-100 p-1" role="group" aria-label="分析期間">
+        <button
+          type="button"
+          onClick={() => setScope('day')}
+          aria-pressed={scope === 'day'}
+          className={`rounded-xl py-2.5 text-sm font-bold transition ${scope === 'day' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}
+        >
+          日
+        </button>
+        <button
+          type="button"
+          onClick={() => setScope('week')}
+          aria-pressed={scope === 'week'}
+          className={`rounded-xl py-2.5 text-sm font-bold transition ${scope === 'week' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}
+        >
+          週
+        </button>
+      </div>
+
+      {scope === 'day' ? (
+        <DailyAnalyticsContent stats={stats} />
+      ) : (
+        <WeeklyAnalyticsView insights={weeklyInsights} selectedDate={selectedDate} onChangeDate={onChangeDate} />
+      )}
+    </div>
+  );
+}
+
+function DailyAnalyticsContent({ stats }) {
   if (stats.total === 0) {
     return (
-      <div className="animate-fade-in pt-4">
-        <section className="rounded-3xl border border-dashed border-indigo-200 bg-white p-8 text-center shadow-sm">
-          <h2 className="mb-2 text-lg font-extrabold text-gray-800">分析する予定がまだありません</h2>
-          <p className="text-sm leading-relaxed text-gray-500">計画と実績がたまると、理想と現実の差や負荷の傾向がここに育っていきます。</p>
-        </section>
-      </div>
+      <section className="rounded-3xl border border-dashed border-indigo-200 bg-white p-8 text-center shadow-sm">
+        <h2 className="mb-2 text-lg font-extrabold text-gray-800">この日に分析する予定がまだありません</h2>
+        <p className="text-sm leading-relaxed text-gray-500">計画と実績がたまると、理想と現実の差や負荷の傾向がここに育っていきます。週タブには同じ週の他の日も含まれます。</p>
+      </section>
     );
   }
 
@@ -17,7 +50,7 @@ export function AnalyticsView({ stats }) {
   const maxTime = Math.max(...allTimes, 1);
 
   return (
-    <div className="animate-fade-in space-y-6 pt-4">
+    <div className="space-y-6">
       <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
         <h2 className="mb-2 flex items-center gap-2 text-base font-bold text-gray-800"><Layers className="h-5 w-5 text-indigo-500" aria-hidden="true" />理想の軌跡 vs 現実の歩み</h2>
         <p className="mb-5 text-xs leading-relaxed text-gray-500">予定外の行動も、実際に記録した時間だけを「現実の積み重ね」として可視化します。</p>
