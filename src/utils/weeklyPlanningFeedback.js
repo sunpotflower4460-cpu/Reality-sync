@@ -7,8 +7,10 @@ function cloneDays(days) {
 }
 
 function improvementPoints(preview) {
-  const baseline = Number(preview?.baselineFailureRate);
-  const experiment = Number(preview?.experimentFailureRate);
+  if (preview?.baselineFailureRate === null || preview?.baselineFailureRate === undefined) return null;
+  if (preview?.experimentFailureRate === null || preview?.experimentFailureRate === undefined) return null;
+  const baseline = Number(preview.baselineFailureRate);
+  const experiment = Number(preview.experimentFailureRate);
   if (!Number.isFinite(baseline) || !Number.isFinite(experiment)) return null;
   return Math.round((baseline - experiment) * 1000) / 10;
 }
