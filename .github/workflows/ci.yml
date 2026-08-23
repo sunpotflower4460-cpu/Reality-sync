@@ -25,6 +25,12 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Emit generated lockfile for bootstrap
+        run: |
+          echo '===REALITYSYNC_PACKAGE_LOCK_BEGIN==='
+          cat package-lock.json
+          echo '===REALITYSYNC_PACKAGE_LOCK_END==='
+
       - name: Run tests
         run: npm test
 
