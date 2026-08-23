@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, Clock, Frown, Meh, Smile, XCircle } from 'lucide-react';
 import { CATEGORIES, MOOD, STATUS } from '../constants.js';
-import { clampNumber } from '../utils/schedule.js';
+import { clampNumber, durationAfterStatusChange } from '../utils/schedule.js';
 
 export function RecordModal({ schedule, onClose, onSave }) {
   const [recordMode, setRecordMode] = useState(schedule.status !== STATUS.PENDING ? schedule.status : STATUS.AS_PLANNED);
@@ -18,15 +18,17 @@ export function RecordModal({ schedule, onClose, onSave }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
-  useEffect(() => {
-    if (recordMode === STATUS.SKIPPED && schedule.status === STATUS.PENDING) setActualDuration(0);
-  }, [recordMode, schedule.status]);
-
   const title = useMemo(() => {
     if (recordMode === STATUS.AS_PLANNED) return schedule.title;
     if (recordMode === STATUS.SKIPPED) return 'スキップ';
     return actualTitle.trim();
   }, [actualTitle, recordMode, schedule.title]);
+
+  const selectMode = (nextMode) => {
+    setActualDuration((current) => durationAfterStatusChange(current, recordMode, nextMode, schedule.duration));
+    setRecordMode(nextMode);
+    setError('');
+  };
 
   const submit = () => {
     if (recordMode === STATUS.CHANGED && !actualTitle.trim()) {
@@ -57,9 +59,9 @@ export function RecordModal({ schedule, onClose, onSave }) {
           <fieldset className="space-y-3">
             <legend className="text-sm font-bold text-gray-700">実際にはどうでしたか？</legend>
             <div className="grid gap-2">
-              <ModeButton active={recordMode === STATUS.AS_PLANNED} onClick={() => { setRecordMode(STATUS.AS_PLANNED); setError(''); }} Icon={CheckCircle2} activeClass="border-green-500 bg-green-50 text-green-700" label="予定通り実行した" />
-              <ModeButton active={recordMode === STATUS.CHANGED} onClick={() => { setRecordMode(STATUS.CHANGED); setError(''); }} Icon={AlertCircle} activeClass="border-orange-500 bg-orange-50 text-orange-700" label="予定を変更して行動した" />
-              <ModeButton active={recordMode === STATUS.SKIPPED} onClick={() => { setRecordMode(STATUS.SKIPPED); setError(''); }} Icon={XCircle} activeClass="border-red-500 bg-red-50 text-red-700" label="スキップした（休んだ）" />
+              <ModeButton active={recordMode === STATUS.AS_PLANNED} onClick={() => selectMode(STATUS.AS_PLANNED)} Icon={CheckCircle2} activeClass="border-green-500 bg-green-50 text-green-700" label="予定通り実行した" />
+              <ModeButton active={recordMode === STATUS.CHANGED} onClick={() => selectMode(STATUS.CHANGED)} Icon={AlertCircle} activeClass="border-orange-500 bg-orange-50 text-orange-700" label="予定を変更して行動した" />
+              <ModeButton active={recordMode === STATUS.SKIPPED} onClick={() => selectMode(STATUS.SKIPPED)} Icon={XCircle} activeClass="border-red-500 bg-red-50 text-red-700" label="スキップした（休んだ）" />
             </div>
           </fieldset>
 
@@ -71,7 +73,7 @@ export function RecordModal({ schedule, onClose, onSave }) {
           )}
 
           {recordMode !== STATUS.SKIPPED && (
-            <label className="block space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-4"><span className="flex items-end justify-between"><span className="text-sm font-bold text-gray-700">実際に費やした時間</span><span className="text-lg font-black text-indigo-600">{actualDuration}分</span></span><input type="number" min="0" max="1440" step="5" value={actualDuration} onChange={(event) => setActualDuration(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-white p-3" /><span className="block text-[10px] text-gray-500">予定は {schedule.duration}分。変更した場合も、実際の時間を記録します。</span></label>
+            <label className="block space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-4"><span className="flex items-end justify-between"><span className="text-sm font-bold text-gray-700">実際に費やした時間</span><span className="text-lg font-black text-indigo-600">{actualDuration}分</span></span><input type="number" inputMode="numeric" min="0" max="1440" step="5" value={actualDuration} onChange={(event) => setActualDuration(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-white p-3" /><span className="block text-[10px] text-gray-500">予定は {schedule.duration}分。変更した場合も、実際の時間を記録します。</span></label>
           )}
 
           <div className="space-y-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
