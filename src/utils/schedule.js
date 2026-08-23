@@ -26,6 +26,14 @@ export function clampNumber(value, min, max) {
   return Math.min(max, Math.max(min, parsed));
 }
 
+export function parseActualDuration(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1440) return null;
+  return parsed;
+}
+
 function normalizeText(value, fallback = '') {
   if (typeof value !== 'string') return fallback;
   const trimmed = value.trim();
@@ -110,13 +118,18 @@ export function normalizeSchedules(schedules, fallbacks = []) {
     return fallbackList.map((schedule, index) => normalizeSchedule(schedule, schedule, `schedule-${index + 1}`));
   }
 
+  // An explicit empty list is valid application state. This matters once users
+  // can delete every schedule; only malformed/non-array payloads should restore
+  // fallback demo data.
+  if (schedules.length === 0) return [];
+
   const fallbackById = new Map(fallbackList.map((schedule) => [String(schedule.id), schedule]));
   const normalized = [];
   const seenIds = new Set();
 
   schedules.forEach((schedule, index) => {
     if (!schedule || typeof schedule !== 'object' || Array.isArray(schedule)) return;
-    const fallback = fallbackById.get(String(schedule.id)) ?? fallbackList[index] ?? {};
+    const fallback = fallbackById.get(String(schedule.id)) ?? {};
     const item = normalizeSchedule(schedule, fallback, `schedule-${index + 1}`);
     const idKey = String(item.id);
     if (seenIds.has(idKey)) return;
