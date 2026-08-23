@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Bell, BellOff, Download, HardDriveDownload, Smartphone, Upload, XCircle } from 'lucide-react';
+import { AlertTriangle, Bell, BellOff, Download, HardDriveDownload, Smartphone, Upload, XCircle } from 'lucide-react';
 import { serializeBackup, parseBackup } from '../utils/backup.js';
 import { REMINDER_DELAY_OPTIONS } from '../utils/reminder.js';
 import { ModalDialog } from './ModalDialog.jsx';
@@ -16,6 +16,7 @@ export function SettingsModal({
   store,
   templates,
   reminderPreferences,
+  storageProtection,
   onChangeReminderPreferences,
   onRestoreBackup,
   canInstall,
@@ -29,8 +30,14 @@ export function SettingsModal({
   const [notificationPermission, setNotificationPermission] = useState(() => (
     typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
   ));
+  const storageBlocked = Boolean(storageProtection?.persistenceBlocked);
 
   const exportBackup = () => {
+    if (storageBlocked) {
+      setMessage('');
+      setError('保存済みデータを安全に読み込めていないため、空の状態をバックアップとして書き出す操作を停止しています。対応版で開くか、互換バックアップを復元してください。');
+      return;
+    }
     const text = serializeBackup({ store, templates, reminderPreferences });
     const blob = new Blob([text], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -117,6 +124,13 @@ export function SettingsModal({
       </div>
 
       <div className="space-y-5 p-5">
+        {storageBlocked && (
+          <section className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 p-4 text-xs leading-relaxed text-red-700">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div><div className="font-extrabold">保存データ保護モード</div><p className="mt-1">現在の保存データを安全に解釈できないため、自動保存とバックアップ書き出しを止めています。localStorageの元データは上書きしていません。{storageProtection.unsupportedVersion !== null ? ` 検出した保存版: ${String(storageProtection.unsupportedVersion)}` : ''}</p></div>
+          </section>
+        )}
+
         <section className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
           <div className="mb-3 flex items-center gap-2"><Bell className="h-5 w-5 text-indigo-500" /><h3 className="font-bold text-gray-800">記録リマインダー</h3></div>
           <label className="flex items-center justify-between gap-4 rounded-xl bg-white p-3">
@@ -154,9 +168,9 @@ export function SettingsModal({
 
         <section className="rounded-2xl border border-gray-100 p-4">
           <div className="mb-3 flex items-center gap-2"><HardDriveDownload className="h-5 w-5 text-indigo-500" /><h3 className="font-bold text-gray-800">バックアップ</h3></div>
-          <p className="mb-3 text-[10px] leading-relaxed text-gray-500">予定・実績・テンプレート・リマインダー設定を1つのJSONに保存します。クラウド同期前のデータ保全として使えます。</p>
+          <p className="mb-3 text-[10px] leading-relaxed text-gray-500">予定・実績・テンプレート・リマインダー設定を1つのJSONに保存します。クラウド同期前のデータ保全として使えます。JSON自体は暗号化されません。</p>
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={exportBackup} className="flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 py-3 text-xs font-bold text-white"><Download className="h-4 w-4" />書き出す</button>
+            <button type="button" onClick={exportBackup} disabled={storageBlocked} className="flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 py-3 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-gray-300"><Download className="h-4 w-4" />書き出す</button>
             <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-white py-3 text-xs font-bold text-indigo-600"><Upload className="h-4 w-4" />復元する</button>
           </div>
           <input ref={fileInputRef} type="file" accept="application/json,.json" onChange={importBackup} className="hidden" />
