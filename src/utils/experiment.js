@@ -6,16 +6,37 @@ import { normalizeSchedules, recordedPlanForSchedule } from './schedule.js';
 export const EXPERIMENT_STATUS = Object.freeze({ ACTIVE: 'active', COMPLETED: 'completed', ABANDONED: 'abandoned' });
 export const EXPERIMENT_DECISION = Object.freeze({ ADOPT: 'adopt', HOLD: 'hold', REJECT: 'reject' });
 export const EXPERIMENT_METRIC = Object.freeze({ DEVIATION: 'deviation', LATE_START: 'late-start' });
+export const PLAN_ADJUSTMENT_KIND = Object.freeze({
+  BUFFER_BEFORE: 'buffer-before',
+  SHORTEN_DURATION: 'shorten-duration',
+  SHIFT_START_LATER: 'shift-start-later',
+});
 
 const VALID_STATUSES = new Set(Object.values(EXPERIMENT_STATUS));
 const VALID_DECISIONS = new Set(Object.values(EXPERIMENT_DECISION));
 const VALID_METRICS = new Set(Object.values(EXPERIMENT_METRIC));
 const VALID_CONDITIONS = new Set(['weekday', 'planned-stress-min', 'planned-category']);
+const VALID_ADJUSTMENTS = new Set(Object.values(PLAN_ADJUSTMENT_KIND));
 const BASELINE_WINDOW_DAYS = 180;
 
 function text(value, fallback = '') { if (typeof value !== 'string') return fallback; return value.trim() || fallback; }
 function clampInteger(value, min, max, fallback) { const parsed = Number(value); return Number.isFinite(parsed) ? Math.min(max, Math.max(min, Math.round(parsed))) : fallback; }
 function normalizeRate(value) { if (value === null || value === undefined || value === '') return null; const parsed = Number(value); return Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : null; }
+
+export function normalizePlanAdjustment(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !VALID_ADJUSTMENTS.has(value.kind)) return null;
+  const minutes = Number(value.minutes);
+  if (!Number.isInteger(minutes) || minutes < 5 || minutes > 120) return null;
+  return { kind: value.kind, minutes };
+}
+
+export function planAdjustmentLabel(value) {
+  const adjustment = normalizePlanAdjustment(value);
+  if (!adjustment) return '計画は自動変更せず、対策文だけを再提示';
+  if (adjustment.kind === PLAN_ADJUSTMENT_KIND.BUFFER_BEFORE) return `対象予定の前に${adjustment.minutes}分の余白を追加`;
+  if (adjustment.kind === PLAN_ADJUSTMENT_KIND.SHORTEN_DURATION) return `対象予定を${adjustment.minutes}分短くする`;
+  return `対象予定の開始を${adjustment.minutes}分後ろへずらす`;
+}
 
 function normalizeCondition(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value) || !VALID_CONDITIONS.has(value.kind)) return null;
@@ -63,8 +84,13 @@ export function normalizeExperiment(value, generatedId = 'experiment') {
     condition, startDateKey, targetRuns: clampInteger(value.targetRuns, 3, 10, 3),
     baselineFailureRate: normalizeRate(value.baselineFailureRate),
     baselineSampleCount: clampInteger(value.baselineSampleCount, 0, 100000, 0),
-    status, decision: status === EXPERIMENT_STATUS.COMPLETED ? decision : null, trials,
-    createdAt: text(value.createdAt), completedAt: status === EXPERIMENT_STATUS.COMPLETED || status === EXPERIMENT_STATUS.ABANDONED ? text(value.completedAt) : '',
+    planAdjustment: normalizePlanAdjustment(value.planAdjustment),
+    status,
+    decision: status === EXPERIMENT_STATUS.COMPLETED ? decision : null,
+    decisionDateKey: status === EXPERIMENT_STATUS.COMPLETED && isValidDateKey(value.decisionDateKey) ? value.decisionDateKey : null,
+    trials,
+    createdAt: text(value.createdAt),
+    completedAt: status === EXPERIMENT_STATUS.COMPLETED || status === EXPERIMENT_STATUS.ABANDONED ? text(value.completedAt) : '',
   };
 }
 
@@ -90,29 +116,39 @@ export function experimentBlueprintForCandidate(candidate) {
       condition: { kind: 'weekday', value: index },
       metricKind: candidate.type === 'weekday-late-start' ? EXPERIMENT_METRIC.LATE_START : EXPERIMENT_METRIC.DEVIATION,
       metricLabel: candidate.type === 'weekday-late-start' ? '20分以上の開始遅れ' : '変更・スキップ',
-      actionSuggestion: '対象日の予定の前後に15分の余白を置く',
+      actionSuggestion: '対象日の予定の前に15分の余白を置く',
+      planAdjustmentSuggestion: { kind: PLAN_ADJUSTMENT_KIND.BUFFER_BEFORE, minutes: 15 },
     };
   }
   if (candidate.type === 'planned-stress-outcome') return {
     condition: { kind: 'planned-stress-min', value: 70 }, metricKind: EXPERIMENT_METRIC.DEVIATION,
-    metricLabel: '変更・スキップ', actionSuggestion: '想定負荷70以上の予定を少し短くするか、前後に15分の休憩を置く',
+    metricLabel: '変更・スキップ', actionSuggestion: '想定負荷70以上の予定を15分短くして試す',
+    planAdjustmentSuggestion: { kind: PLAN_ADJUSTMENT_KIND.SHORTEN_DURATION, minutes: 15 },
   };
   if (candidate.type === 'category-outcome') {
     const category = String(candidate.id).replace(/^category-outcome-/, '');
     if (!category) return null;
-    return { condition: { kind: 'planned-category', value: category }, metricKind: EXPERIMENT_METRIC.DEVIATION, metricLabel: '変更・スキップ', actionSuggestion: `${category}予定の前後に15分の余白を置く` };
+    return {
+      condition: { kind: 'planned-category', value: category }, metricKind: EXPERIMENT_METRIC.DEVIATION,
+      metricLabel: '変更・スキップ', actionSuggestion: `${category}予定の前に15分の余白を置く`,
+      planAdjustmentSuggestion: { kind: PLAN_ADJUSTMENT_KIND.BUFFER_BEFORE, minutes: 15 },
+    };
   }
   return null;
 }
 export function canCreateExperiment(candidate) { return Boolean(experimentBlueprintForCandidate(candidate)); }
 
-function matchesCondition(experiment, dateKey, schedule) {
+export function experimentMatchesSchedule(experimentValue, dateKey, schedule) {
+  const experiment = normalizeExperiment(experimentValue);
+  if (!experiment || !isValidDateKey(dateKey) || !schedule) return false;
   const { condition } = experiment;
   if (condition.kind === 'weekday') return weekdayIndexMondayFirst(dateKey) === condition.value;
-  if (!schedule.plannedSnapshot) return false;
-  if (condition.kind === 'planned-stress-min') return schedule.plannedSnapshot.plannedStress >= condition.value;
-  return condition.kind === 'planned-category' && schedule.plannedSnapshot.category === condition.value;
+  const plan = schedule.status === STATUS.PENDING ? schedule : schedule.plannedSnapshot;
+  if (!plan) return false;
+  if (condition.kind === 'planned-stress-min') return plan.plannedStress >= condition.value;
+  return condition.kind === 'planned-category' && plan.category === condition.value;
 }
+
 function recordKey(dateKey, scheduleId) { return `${dateKey}::${String(scheduleId)}`; }
 function experimentObservation(experiment, dateKey, schedule) {
   if (experiment.metricKind === EXPERIMENT_METRIC.DEVIATION) {
@@ -136,7 +172,7 @@ function historicalBaseline(days, anchorDateKey, blueprint) {
     const distance = differenceInCalendarDays(dateKey, anchorDateKey);
     if (distance === null || distance < 0 || distance >= BASELINE_WINDOW_DAYS) continue;
     for (const schedule of normalizeSchedules(rawSchedules, [])) {
-      if (schedule.status === STATUS.PENDING || !matchesCondition(probe, dateKey, schedule)) continue;
+      if (schedule.status === STATUS.PENDING || !experimentMatchesSchedule(probe, dateKey, schedule)) continue;
       const observation = experimentObservation(probe, dateKey, schedule);
       if (!observation) continue;
       count += 1; if (observation.outcome === 'failure') failures += 1;
@@ -145,7 +181,7 @@ function historicalBaseline(days, anchorDateKey, blueprint) {
   return { rate: count > 0 ? failures / count : null, count };
 }
 
-export function createExperimentFromCandidate(candidate, { id, startDateKey, action, targetRuns = 3, createdAt = new Date().toISOString(), days = {}, anchorDateKey = startDateKey } = {}) {
+export function createExperimentFromCandidate(candidate, { id, startDateKey, action, planAdjustment, targetRuns = 3, createdAt = new Date().toISOString(), days = {}, anchorDateKey = startDateKey } = {}) {
   const blueprint = experimentBlueprintForCandidate(candidate);
   if (!blueprint || !isValidDateKey(startDateKey)) return null;
   const baseline = historicalBaseline(days, anchorDateKey, blueprint);
@@ -153,7 +189,8 @@ export function createExperimentFromCandidate(candidate, { id, startDateKey, act
     id, candidateId: candidate.id, candidateType: candidate.type, title: candidate.title, hypothesis: candidate.hypothesis,
     action: text(action, blueprint.actionSuggestion), metricKind: blueprint.metricKind, metricLabel: blueprint.metricLabel,
     condition: blueprint.condition, startDateKey, targetRuns, baselineFailureRate: baseline.rate, baselineSampleCount: baseline.count,
-    status: EXPERIMENT_STATUS.ACTIVE, decision: null, trials: [], createdAt, completedAt: '',
+    planAdjustment: planAdjustment === undefined ? blueprint.planAdjustmentSuggestion : planAdjustment,
+    status: EXPERIMENT_STATUS.ACTIVE, decision: null, decisionDateKey: null, trials: [], createdAt, completedAt: '',
   }, id || 'experiment');
 }
 
@@ -167,7 +204,7 @@ export function listEligibleExperimentRecords(experimentValue, days, throughDate
     const fromStart = differenceInCalendarDays(experiment.startDateKey, dateKey); const toAnchor = differenceInCalendarDays(dateKey, throughDateKey);
     if (fromStart === null || toAnchor === null || fromStart < 0 || toAnchor < 0) continue;
     for (const schedule of normalizeSchedules(rawSchedules, [])) {
-      if (schedule.status === STATUS.PENDING || !matchesCondition(experiment, dateKey, schedule)) continue;
+      if (schedule.status === STATUS.PENDING || !experimentMatchesSchedule(experiment, dateKey, schedule)) continue;
       const key = recordKey(dateKey, schedule.id); if (captured.has(key)) continue;
       const observation = experimentObservation(experiment, dateKey, schedule); if (!observation) continue;
       const plan = recordedPlanForSchedule(schedule);
@@ -196,8 +233,10 @@ export function calculateExperimentResult(experimentValue) {
   return { trialCount, successes, failures, failureRate, baselineFailureRate: baseline, baselineSampleCount: experiment.baselineSampleCount, differencePoints, targetMet, signal };
 }
 
-export function finishExperiment(experimentValue, decision, completedAt = new Date().toISOString()) {
+export function finishExperiment(experimentValue, decision, completedAt = new Date().toISOString(), decisionDateKey = null) {
   const experiment = normalizeExperiment(experimentValue); const result = calculateExperimentResult(experiment);
-  return !experiment || !result?.targetMet || !VALID_DECISIONS.has(decision) ? experiment : { ...experiment, status: EXPERIMENT_STATUS.COMPLETED, decision, completedAt };
+  return !experiment || !result?.targetMet || !VALID_DECISIONS.has(decision)
+    ? experiment
+    : { ...experiment, status: EXPERIMENT_STATUS.COMPLETED, decision, decisionDateKey: isValidDateKey(decisionDateKey) ? decisionDateKey : null, completedAt };
 }
-export function abandonExperiment(experimentValue, completedAt = new Date().toISOString()) { const experiment = normalizeExperiment(experimentValue); return experiment ? { ...experiment, status: EXPERIMENT_STATUS.ABANDONED, decision: null, completedAt } : null; }
+export function abandonExperiment(experimentValue, completedAt = new Date().toISOString()) { const experiment = normalizeExperiment(experimentValue); return experiment ? { ...experiment, status: EXPERIMENT_STATUS.ABANDONED, decision: null, decisionDateKey: null, completedAt } : null; }

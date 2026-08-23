@@ -9,6 +9,7 @@ function normalizeTemplateItem(value) {
     category: schedule.category,
     duration: schedule.duration,
     plannedStress: schedule.plannedStress,
+    appliedExperimentIds: [...schedule.appliedExperimentIds],
   };
 }
 
@@ -54,6 +55,7 @@ export function createTemplateFromSchedules(name, schedules, id) {
     category: schedule.category,
     duration: schedule.duration,
     plannedStress: schedule.plannedStress,
+    appliedExperimentIds: [...schedule.appliedExperimentIds],
   }));
   if (planItems.length === 0) return null;
   return { id, name: normalizedName, schedules: planItems };

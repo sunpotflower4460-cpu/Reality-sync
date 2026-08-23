@@ -1,4 +1,4 @@
-import { Copy, LayoutTemplate, Pencil, Plus } from 'lucide-react';
+import { Copy, FlaskConical, LayoutTemplate, Pencil, Plus } from 'lucide-react';
 import { STATUS } from '../constants.js';
 import { sortSchedulesByTime } from '../utils/schedule.js';
 
@@ -16,8 +16,15 @@ export function PlanView({
   hasPreviousSchedules,
   onOpenTemplates,
   templateCount = 0,
+  planFeedbackSuggestions = [],
+  onReviewPlanFeedback,
 }) {
   const orderedSchedules = sortSchedulesByTime(schedules);
+  const feedbackCountBySchedule = new Map();
+  for (const suggestion of planFeedbackSuggestions) {
+    const key = String(suggestion.scheduleId);
+    feedbackCountBySchedule.set(key, (feedbackCountBySchedule.get(key) ?? 0) + 1);
+  }
 
   return (
     <div className="animate-fade-in space-y-6 pt-4">
@@ -49,6 +56,23 @@ export function PlanView({
         </button>
       </div>
 
+      {planFeedbackSuggestions.length > 0 && (
+        <section className="rounded-3xl border border-indigo-100 bg-indigo-50/50 p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div><h3 className="flex items-center gap-2 text-sm font-extrabold text-indigo-900"><FlaskConical className="h-4 w-4" />実験から学んだ計画の工夫</h3><p className="mt-1 text-[10px] leading-relaxed text-indigo-600">採用した実験が今日の未記録予定に一致しています。自動変更せず、1件ずつプレビューします。</p></div>
+            <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-indigo-600">{planFeedbackSuggestions.length}件</span>
+          </div>
+          <div className="mt-3 space-y-2">
+            {planFeedbackSuggestions.slice(0, 6).map((suggestion) => (
+              <button key={suggestion.id} type="button" onClick={() => onReviewPlanFeedback?.(suggestion)} className="flex w-full items-center gap-3 rounded-2xl border border-indigo-100 bg-white p-3 text-left transition hover:border-indigo-200">
+                <div className="min-w-0 flex-1"><div className="truncate text-xs font-extrabold text-gray-800">{suggestion.preview.before.time} {suggestion.preview.before.title}</div><div className="mt-1 truncate text-[10px] text-indigo-600">{suggestion.preview.adjustmentLabel}</div></div>
+                <span className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-[10px] font-bold text-white">確認</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       <div className="space-y-3">
         {orderedSchedules.length === 0 && (
           <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-7 text-center shadow-sm">
@@ -58,18 +82,21 @@ export function PlanView({
         )}
         {orderedSchedules.map((schedule) => {
           const recorded = schedule.status !== STATUS.PENDING;
+          const feedbackCount = feedbackCountBySchedule.get(String(schedule.id)) ?? 0;
           return (
             <article key={schedule.id} className="rounded-2xl border border-gray-100 bg-white shadow-sm">
               <button type="button" onClick={() => onEdit(schedule.id)} className="flex w-full items-center gap-4 p-4 text-left transition hover:bg-gray-50/70" aria-label={`${schedule.time} ${schedule.title} を編集`}>
                 <time className="w-12 shrink-0 text-center font-bold text-indigo-600" dateTime={schedule.time}>{schedule.time}</time>
                 <div className="min-w-0 flex-1">
-                  <div className="mb-1 flex items-center gap-2">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
                     <div className="truncate text-sm font-bold text-gray-800">{schedule.title}</div>
                     {recorded && <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-[9px] font-bold text-indigo-500">実績あり</span>}
+                    {feedbackCount > 0 && <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-bold text-amber-600">学習提案 {feedbackCount}</span>}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600">{schedule.category}</span>
                     <span className="text-[10px] text-gray-400">{schedule.duration}分</span>
+                    {schedule.appliedExperimentIds?.length > 0 && <span className="text-[10px] font-bold text-green-600">採用済みの工夫を反映</span>}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">

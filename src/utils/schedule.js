@@ -60,6 +60,20 @@ function normalizeId(value, fallback) {
   return fallback;
 }
 
+function normalizeAppliedExperimentIds(value, fallback = []) {
+  const source = Array.isArray(value) ? value : (Array.isArray(fallback) ? fallback : []);
+  const seen = new Set();
+  const ids = [];
+  for (const item of source) {
+    const id = typeof item === 'string' ? item.trim() : '';
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+    if (ids.length >= 50) break;
+  }
+  return ids;
+}
+
 function normalizeActualStartTime(value, fallback = null) {
   if (isValidTime(value)) return value;
   return isValidTime(fallback) ? fallback : null;
@@ -126,6 +140,7 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
     category: normalizeCategory(source.category, base.category),
     duration,
     plannedStress,
+    appliedExperimentIds: normalizeAppliedExperimentIds(source.appliedExperimentIds, base.appliedExperimentIds),
     status,
     plannedSnapshot: null,
     actualTitle: '',
@@ -231,6 +246,7 @@ export function createPendingScheduleCopy(schedule, id) {
     category: normalized.category,
     duration: normalized.duration,
     plannedStress: normalized.plannedStress,
+    appliedExperimentIds: [...normalized.appliedExperimentIds],
     status: STATUS.PENDING,
     plannedSnapshot: null,
     actualTitle: '',

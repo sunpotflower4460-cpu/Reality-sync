@@ -1,19 +1,46 @@
 import { useState } from 'react';
 import { FlaskConical, ShieldCheck, XCircle } from 'lucide-react';
 import { formatShortDateLabel, shiftDateKey } from '../utils/date.js';
-import { experimentBlueprintForCandidate } from '../utils/experiment.js';
+import {
+  experimentBlueprintForCandidate,
+  PLAN_ADJUSTMENT_KIND,
+  planAdjustmentLabel,
+} from '../utils/experiment.js';
 import { ModalDialog } from './ModalDialog.jsx';
+
+const ADJUSTMENT_OPTIONS = [
+  { value: 'buffer-15', adjustment: { kind: PLAN_ADJUSTMENT_KIND.BUFFER_BEFORE, minutes: 15 } },
+  { value: 'buffer-30', adjustment: { kind: PLAN_ADJUSTMENT_KIND.BUFFER_BEFORE, minutes: 30 } },
+  { value: 'shorten-15', adjustment: { kind: PLAN_ADJUSTMENT_KIND.SHORTEN_DURATION, minutes: 15 } },
+  { value: 'shift-15', adjustment: { kind: PLAN_ADJUSTMENT_KIND.SHIFT_START_LATER, minutes: 15 } },
+  { value: 'none', adjustment: null },
+];
+
+function optionValue(adjustment) {
+  if (!adjustment) return 'none';
+  const found = ADJUSTMENT_OPTIONS.find((option) => option.adjustment?.kind === adjustment.kind && option.adjustment?.minutes === adjustment.minutes);
+  return found?.value ?? 'none';
+}
 
 export function ExperimentSetupModal({ candidate, dateKey, days, onStart, onClose }) {
   const blueprint = experimentBlueprintForCandidate(candidate);
   const effectiveStartDate = shiftDateKey(dateKey, 1);
   const [action, setAction] = useState(blueprint?.actionSuggestion ?? '');
   const [targetRuns, setTargetRuns] = useState(3);
+  const [adjustmentValue, setAdjustmentValue] = useState(() => optionValue(blueprint?.planAdjustmentSuggestion));
   const [error, setError] = useState('');
+  const planAdjustment = ADJUSTMENT_OPTIONS.find((option) => option.value === adjustmentValue)?.adjustment ?? null;
 
   const submit = () => {
     if (!action.trim()) { setError('今回試す対策を入力してください。'); return; }
-    const ok = onStart(candidate, { startDateKey: effectiveStartDate, anchorDateKey: dateKey, days, action: action.trim(), targetRuns });
+    const ok = onStart(candidate, {
+      startDateKey: effectiveStartDate,
+      anchorDateKey: dateKey,
+      days,
+      action: action.trim(),
+      planAdjustment,
+      targetRuns,
+    });
     if (!ok) { setError('この候補からは安全に実験を作成できませんでした。'); return; }
     onClose();
   };
@@ -27,7 +54,21 @@ export function ExperimentSetupModal({ candidate, dateKey, days, onStart, onClos
       <div className="space-y-5 p-5">
         <section className="rounded-2xl bg-indigo-50 p-4"><div className="text-[10px] font-black text-indigo-500">元の候補</div><h3 className="mt-1 text-sm font-extrabold leading-relaxed text-indigo-900">{candidate.title}</h3><p className="mt-2 text-xs leading-relaxed text-indigo-700">{candidate.hypothesis}</p></section>
         <section className="rounded-2xl border border-gray-100 bg-gray-50 p-3"><div className="text-[10px] font-black text-gray-400">実験の有効開始日</div><div className="mt-1 text-sm font-extrabold text-gray-700">{formatShortDateLabel(effectiveStartDate)}</div><p className="mt-1 text-[9px] leading-relaxed text-gray-400">作成日の既存実績を後付けで実験に混ぜないため、翌日以降の記録だけを対象にします。</p></section>
-        <label className="block"><span className="mb-2 block text-sm font-bold text-gray-700">今回だけ試す対策</span><textarea rows={4} value={action} onChange={(event) => { setAction(event.target.value); setError(''); }} className="w-full resize-none rounded-2xl border border-gray-200 p-3 text-sm outline-none focus:border-indigo-400" /><span className="mt-1 block text-[10px] leading-relaxed text-gray-400">自動で予定を書き換えません。実際にこの対策を試した回だけ、あとで実験へ登録します。</span></label>
+
+        <label className="block">
+          <span className="mb-2 block text-sm font-bold text-gray-700">今回試す対策</span>
+          <textarea rows={4} value={action} onChange={(event) => { setAction(event.target.value); setError(''); }} className="w-full resize-none rounded-2xl border border-gray-200 p-3 text-sm outline-none focus:border-indigo-400" />
+          <span className="mt-1 block text-[10px] leading-relaxed text-gray-400">実際にこの対策を試した回だけ、あとで実験へ登録します。この文章自体から予定変更を推測することはありません。</span>
+        </label>
+
+        <label className="block rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
+          <span className="mb-2 block text-sm font-bold text-gray-700">採用後に再利用できる計画変更</span>
+          <select value={adjustmentValue} onChange={(event) => setAdjustmentValue(event.target.value)} className="w-full rounded-xl border border-indigo-100 bg-white p-3 text-sm text-gray-700">
+            {ADJUSTMENT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{planAdjustmentLabel(option.adjustment)}</option>)}
+          </select>
+          <span className="mt-2 block text-[10px] leading-relaxed text-gray-500">実験を「採用」にした後、この構造化変更だけを将来の対象予定へ再提案できます。自由記述の対策文とは別に保存し、勝手に予定へ適用しません。</span>
+        </label>
+
         <label className="block"><span className="mb-2 block text-sm font-bold text-gray-700">まず何回試すか</span><select value={targetRuns} onChange={(event) => setTargetRuns(Number(event.target.value))} className="w-full rounded-xl border border-gray-200 bg-white p-3 text-sm">{[3,4,5,6,8,10].map((value) => <option key={value} value={value}>{value}回</option>)}</select></label>
         <section className="flex items-start gap-2 rounded-2xl border border-amber-100 bg-amber-50 p-3 text-[11px] leading-relaxed text-amber-800"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /><p>数回の小実験だけで因果を証明しません。結果は「改善方向 / はっきりしない / 悪化方向」の観測として出し、採用・保留・見送りは明示的に決めます。</p></section>
         {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-xs font-medium text-red-600">{error}</p>}

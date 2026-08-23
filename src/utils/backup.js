@@ -1,6 +1,6 @@
 import { BACKUP_FORMAT, BACKUP_VERSION } from '../constants.js';
 import { isValidDateKey } from './date.js';
-import { normalizeExperiments } from './experiment.js';
+import { normalizeExperiments, normalizePlanAdjustment } from './experiment.js';
 import { normalizeReminderPreferences } from './reminder.js';
 import { normalizeScheduleStore } from './storage.js';
 import { normalizeTemplates } from './template.js';
@@ -8,6 +8,24 @@ import { normalizeTemplates } from './template.js';
 function countSchedules(store) { return Object.values(store.days).reduce((sum, schedules) => sum + schedules.length, 0); }
 function rawScheduleCount(days) { return Object.values(days).reduce((sum, schedules) => sum + schedules.length, 0); }
 function experimentTrialCount(experiments) { return experiments.reduce((sum, experiment) => sum + (Array.isArray(experiment.trials) ? experiment.trials.length : 0), 0); }
+
+function experimentMetadataPreserved(rawExperiments, experiments) {
+  for (let index = 0; index < rawExperiments.length; index += 1) {
+    const raw = rawExperiments[index];
+    const normalized = experiments[index];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !normalized) return false;
+
+    if (raw.planAdjustment !== undefined && raw.planAdjustment !== null) {
+      const validatedAdjustment = normalizePlanAdjustment(raw.planAdjustment);
+      if (!validatedAdjustment || JSON.stringify(validatedAdjustment) !== JSON.stringify(normalized.planAdjustment)) return false;
+    }
+
+    if (raw.decisionDateKey !== undefined && raw.decisionDateKey !== null) {
+      if (!isValidDateKey(raw.decisionDateKey) || normalized.decisionDateKey !== raw.decisionDateKey) return false;
+    }
+  }
+  return true;
+}
 
 export function createBackupPayload({ store, templates, experiments = [], reminderPreferences, exportedAt = new Date().toISOString() }) {
   return {
@@ -47,7 +65,11 @@ export function parseBackup(raw) {
   if (templates.length !== parsed.templates.length) return { ok: false, error: 'テンプレートデータに復元できない項目があります。' };
   const rawExperiments = parsed.experiments ?? [];
   const experiments = normalizeExperiments(rawExperiments);
-  if (experiments.length !== rawExperiments.length || experimentTrialCount(experiments) !== experimentTrialCount(rawExperiments)) {
+  if (
+    experiments.length !== rawExperiments.length
+    || experimentTrialCount(experiments) !== experimentTrialCount(rawExperiments)
+    || !experimentMetadataPreserved(rawExperiments, experiments)
+  ) {
     return { ok: false, error: '実験履歴に復元できない項目があります。' };
   }
   const reminderPreferences = normalizeReminderPreferences(parsed.reminderPreferences);

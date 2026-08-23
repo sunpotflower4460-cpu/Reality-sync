@@ -37,6 +37,30 @@ test('backup round-trip preserves normalized product data and reports a summary'
   assert.deepEqual(parsed.data.reminderPreferences, { enabled: true, delayMinutes: 30, browserNotifications: true });
 });
 
+test('structured adopted experiment metadata survives backup round-trip', () => {
+  const text = serializeBackup({
+    store: { version: 2, days: {} },
+    templates: [],
+    experiments: [{
+      id: 'adopted', title: 'Monday buffer', action: '余白を置く', metricKind: 'deviation', metricLabel: '変更',
+      condition: { kind: 'weekday', value: 0 }, startDateKey: '2026-08-24', targetRuns: 3,
+      baselineFailureRate: 0.7, baselineSampleCount: 10,
+      planAdjustment: { kind: 'buffer-before', minutes: 15 },
+      status: 'completed', decision: 'adopt', decisionDateKey: '2026-09-01', completedAt: '2026-08-31T15:00:00Z',
+      trials: [
+        { recordKey: 'a', dateKey: '2026-08-24', scheduleId: 'a', planTitle: 'A', outcome: 'success' },
+        { recordKey: 'b', dateKey: '2026-08-31', scheduleId: 'b', planTitle: 'B', outcome: 'success' },
+        { recordKey: 'c', dateKey: '2026-08-31', scheduleId: 'c', planTitle: 'C', outcome: 'failure' },
+      ],
+    }],
+    reminderPreferences: {},
+  });
+  const parsed = parseBackup(text);
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.data.experiments[0].planAdjustment, { kind: 'buffer-before', minutes: 15 });
+  assert.equal(parsed.data.experiments[0].decisionDateKey, '2026-09-01');
+});
+
 test('older v1 backups without experiment history remain readable as an empty experiment list', () => {
   const parsed = parseBackup(JSON.stringify({
     format: 'reality-sync-backup', version: 1, exportedAt: '2026-08-23T00:00:00Z',
@@ -59,6 +83,34 @@ test('backup parser rejects an experiment whose trial would be silently lost dur
   }));
   assert.equal(parsed.ok, false);
   assert.match(parsed.error, /実験履歴/);
+});
+
+test('backup parser rejects invalid structured experiment metadata instead of silently dropping it', () => {
+  const base = {
+    format: 'reality-sync-backup', version: 1,
+    scheduleStore: { version: 2, days: {} }, templates: [], reminderPreferences: {},
+  };
+  const invalidAdjustment = parseBackup(JSON.stringify({
+    ...base,
+    experiments: [{
+      id: 'exp', title: 'Test', action: '余白', metricKind: 'deviation', condition: { kind: 'weekday', value: 0 },
+      startDateKey: '2026-08-24', targetRuns: 3, status: 'completed', decision: 'adopt', decisionDateKey: '2026-09-01',
+      planAdjustment: { kind: 'not-supported', minutes: 15 }, trials: [],
+    }],
+  }));
+  assert.equal(invalidAdjustment.ok, false);
+  assert.match(invalidAdjustment.error, /実験履歴/);
+
+  const invalidDecisionDate = parseBackup(JSON.stringify({
+    ...base,
+    experiments: [{
+      id: 'exp', title: 'Test', action: '余白', metricKind: 'deviation', condition: { kind: 'weekday', value: 0 },
+      startDateKey: '2026-08-24', targetRuns: 3, status: 'completed', decision: 'adopt', decisionDateKey: '2026-02-30',
+      planAdjustment: { kind: 'buffer-before', minutes: 15 }, trials: [],
+    }],
+  }));
+  assert.equal(invalidDecisionDate.ok, false);
+  assert.match(invalidDecisionDate.error, /実験履歴/);
 });
 
 test('backup parser rejects malformed, foreign and future backup formats', () => {
