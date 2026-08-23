@@ -20,10 +20,6 @@ export function normalizeScheduleStore(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return createEmptyScheduleStore();
   }
-
-  // Future storage versions must be migrated explicitly. Silently coercing an
-  // unknown schema into the current one risks destroying information when the
-  // normalized value is written back to localStorage.
   if (value.version !== STORAGE_VERSION) return createEmptyScheduleStore();
 
   const sourceDays = value.days && typeof value.days === 'object' && !Array.isArray(value.days)
@@ -39,14 +35,32 @@ export function normalizeScheduleStore(value) {
   return { version: STORAGE_VERSION, days };
 }
 
-export function parseStoredScheduleStore(raw) {
-  if (!raw) return createEmptyScheduleStore();
+export function parseStoredScheduleStoreResult(raw) {
+  if (!raw) return { ok: true, store: createEmptyScheduleStore(), unsupportedVersion: null };
 
+  let parsed;
   try {
-    return normalizeScheduleStore(JSON.parse(raw));
+    parsed = JSON.parse(raw);
   } catch {
-    return createEmptyScheduleStore();
+    return { ok: false, store: createEmptyScheduleStore(), unsupportedVersion: null };
   }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { ok: false, store: createEmptyScheduleStore(), unsupportedVersion: null };
+  }
+  if (parsed.version !== STORAGE_VERSION) {
+    return {
+      ok: false,
+      store: createEmptyScheduleStore(),
+      unsupportedVersion: parsed.version ?? 'unknown',
+    };
+  }
+
+  return { ok: true, store: normalizeScheduleStore(parsed), unsupportedVersion: null };
+}
+
+export function parseStoredScheduleStore(raw) {
+  return parseStoredScheduleStoreResult(raw).store;
 }
 
 function stableSchedules(schedules) {
