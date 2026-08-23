@@ -1,4 +1,5 @@
 import { Plus } from 'lucide-react';
+import { sortSchedulesByTime } from '../utils/schedule.js';
 
 function stressTone(value) {
   if (value > 70) return { borderColor: '#fca5a5', color: '#ef4444' };
@@ -7,6 +8,8 @@ function stressTone(value) {
 }
 
 export function PlanView({ schedules, onOpenPlanModal }) {
+  const orderedSchedules = sortSchedulesByTime(schedules);
+
   return (
     <div className="animate-fade-in space-y-6 pt-4">
       <div className="mb-2 flex items-end justify-between">
@@ -18,7 +21,7 @@ export function PlanView({ schedules, onOpenPlanModal }) {
       </div>
 
       <div className="space-y-3">
-        {schedules.map((schedule) => (
+        {orderedSchedules.map((schedule) => (
           <article key={schedule.id} className="flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
             <time className="w-12 shrink-0 text-center font-bold text-indigo-600" dateTime={schedule.time}>{schedule.time}</time>
             <div className="min-w-0 flex-1">
