@@ -5,7 +5,9 @@ import { simulateWeeklyPlanFeedback } from '../utils/weeklyPlanningFeedback.js';
 import { ModalDialog } from './ModalDialog.jsx';
 
 function percent(rate) {
-  return Number.isFinite(Number(rate)) ? `${Math.round(Number(rate) * 100)}%` : '—';
+  if (rate === null || rate === undefined || rate === '') return '—';
+  const numeric = Number(rate);
+  return Number.isFinite(numeric) ? `${Math.round(numeric * 100)}%` : '—';
 }
 
 export function WeeklyPlanFeedbackModal({ weeklyPlan, experiments, days, onApply, onClose }) {
