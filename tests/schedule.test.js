@@ -7,6 +7,7 @@ import {
   isValidTime,
   normalizeSchedule,
   normalizeSchedules,
+  parseActualDuration,
   replacementTitleForEditing,
   sortSchedulesByTime,
   timeToHours,
@@ -94,7 +95,12 @@ test('malformed changed records return to pending instead of keeping inconsisten
   assert.equal(normalized.mood, null);
 });
 
-test('normalization drops duplicate ids and falls back when stored entries are unusable', () => {
+test('normalization preserves an intentional empty schedule list', () => {
+  const fallback = [{ id: 1, time: '07:00', title: 'Run', category: '運動', duration: 30, plannedStress: 40, status: STATUS.PENDING }];
+  assert.deepEqual(normalizeSchedules([], fallback), []);
+});
+
+test('normalization drops duplicate ids and falls back when non-empty stored entries are unusable', () => {
   const fallback = [{ id: 1, time: '07:00', title: 'Run', category: '運動', duration: 30, plannedStress: 40, status: STATUS.PENDING }];
   assert.equal(normalizeSchedules([null], fallback).length, 1);
 
@@ -104,6 +110,25 @@ test('normalization drops duplicate ids and falls back when stored entries are u
   ], fallback);
   assert.equal(duplicate.length, 1);
   assert.equal(duplicate[0].title, 'Run');
+});
+
+test('unknown ids never inherit unrelated demo schedule fields by array position', () => {
+  const fallback = [{ id: 1, time: '07:00', title: 'Run', category: '運動', duration: 30, plannedStress: 40, status: STATUS.PENDING }];
+  const [normalized] = normalizeSchedules([{ id: 'custom', title: 'Custom' }], fallback);
+  assert.equal(normalized.id, 'custom');
+  assert.equal(normalized.title, 'Custom');
+  assert.equal(normalized.time, '00:00');
+  assert.equal(normalized.category, 'その他');
+  assert.equal(normalized.duration, 0);
+});
+
+test('actual duration parser rejects blank and out-of-range input instead of silently coercing it', () => {
+  assert.equal(parseActualDuration(''), null);
+  assert.equal(parseActualDuration('   '), null);
+  assert.equal(parseActualDuration(-1), null);
+  assert.equal(parseActualDuration(1441), null);
+  assert.equal(parseActualDuration('45'), 45);
+  assert.equal(parseActualDuration(0), 0);
 });
 
 test('changing a skipped record back to an active status restores the planned duration', () => {
