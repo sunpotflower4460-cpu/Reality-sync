@@ -10,6 +10,11 @@ test('malformed JSON falls back to clean demo schedules', () => {
   assert.equal(schedules.every((schedule) => schedule.status === STATUS.PENDING), true);
 });
 
+test('an explicitly empty stored list remains empty instead of restoring demo schedules', () => {
+  const schedules = parseStoredSchedules('[]', INITIAL_SCHEDULES);
+  assert.deepEqual(schedules, []);
+});
+
 test('stored records are normalized before they reach the UI', () => {
   const raw = JSON.stringify([{
     id: 1,
