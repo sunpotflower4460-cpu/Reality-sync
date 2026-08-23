@@ -1,5 +1,9 @@
+import { useState } from 'react';
 import { AlertTriangle, BarChart3, CheckCircle2, FlaskConical, History, Info, Lock, ShieldCheck } from 'lucide-react';
 import { formatShortDateLabel } from '../utils/date.js';
+import { canCreateExperiment, EXPERIMENT_STATUS } from '../utils/experiment.js';
+import { ExperimentPanel } from './ExperimentPanel.jsx';
+import { ExperimentSetupModal } from './ExperimentSetupModal.jsx';
 
 const EVIDENCE_STYLE = {
   stable: 'border-green-200 bg-green-50 text-green-700',
@@ -13,11 +17,24 @@ function stageCopy(stage) {
   return '観測を始めた段階';
 }
 
-export function InsightCandidatesView({ insights }) {
+export function InsightCandidatesView({
+  insights,
+  experiments = [],
+  days = {},
+  selectedDate,
+  onStartExperiment,
+  onCaptureTrial,
+  onRemoveTrial,
+  onFinishExperiment,
+  onAbandonExperiment,
+  onDeleteExperiment,
+}) {
+  const [setupCandidate, setSetupCandidate] = useState(null);
   const { readiness, candidates, screenedCandidateCount } = insights;
   const period = readiness.firstDate && readiness.lastDate
     ? `${formatShortDateLabel(readiness.firstDate)} – ${formatShortDateLabel(readiness.lastDate)}`
     : 'まだ記録期間がありません';
+  const activeCandidateIds = new Set(experiments.filter((experiment) => experiment.status === EXPERIMENT_STATUS.ACTIVE).map((experiment) => experiment.candidateId));
 
   return (
     <div className="space-y-6">
@@ -41,6 +58,17 @@ export function InsightCandidatesView({ insights }) {
         </div>
       </section>
 
+      <ExperimentPanel
+        experiments={experiments}
+        days={days}
+        throughDateKey={selectedDate}
+        onCaptureTrial={onCaptureTrial}
+        onRemoveTrial={onRemoveTrial}
+        onFinish={onFinishExperiment}
+        onAbandon={onAbandonExperiment}
+        onDelete={onDeleteExperiment}
+      />
+
       {candidates.length === 0 ? (
         <section className="rounded-3xl border border-dashed border-indigo-200 bg-white p-8 text-center shadow-sm">
           <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-indigo-50 text-indigo-500"><BarChart3 className="h-5 w-5" /></div>
@@ -50,7 +78,7 @@ export function InsightCandidatesView({ insights }) {
       ) : (
         <section className="space-y-3">
           <div className="flex items-end justify-between gap-3 px-1"><div><h2 className="font-extrabold text-gray-800">今見る価値がある候補</h2><p className="mt-1 text-[11px] text-gray-400">最大6件を、反復性と差の大きさで並べています</p></div><span className="text-xs font-bold text-gray-400">候補 {screenedCandidateCount}件</span></div>
-          {candidates.map((candidate) => <CandidateCard key={candidate.id} candidate={candidate} />)}
+          {candidates.map((candidate) => <CandidateCard key={candidate.id} candidate={candidate} experimentActive={activeCandidateIds.has(candidate.id)} onExperiment={() => setSetupCandidate(candidate)} />)}
         </section>
       )}
 
@@ -59,19 +87,30 @@ export function InsightCandidatesView({ insights }) {
         <div className="mt-4 space-y-3 text-xs leading-relaxed text-gray-500">
           <Rule Icon={CheckCircle2}>率の比較は最低サンプル数を満たし、15ポイント未満の差は候補にしません。</Rule>
           <Rule Icon={Info}>95% Wilson区間は率の不確実性を見る補助です。「有意差」や因果を保証するものではありません。</Rule>
-          <Rule Icon={AlertTriangle}>複数の曜日・カテゴリ等を同時に探索するため、偶然大きく見える差が混ざる可能性があります。候補は次の観測・実験で再確認します。</Rule>
+          <Rule Icon={AlertTriangle}>複数の曜日・カテゴリ等を同時に探索するため、偶然大きく見える差が混ざる可能性があります。小実験も因果証明ではなく、次の判断材料として扱います。</Rule>
         </div>
       </section>
 
       <section className="relative overflow-hidden rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
         <Lock className="absolute right-4 top-4 h-20 w-20 text-indigo-500 opacity-5" />
-        <div className="relative"><h2 className="font-extrabold text-gray-800">習慣シナジーはまだ自動断定しません</h2><p className="mt-2 text-xs leading-relaxed text-gray-500">「運動したから仕事が良くなった」のような順序・因果を語るには、同日内の前後関係、十分な反復、交絡条件への配慮が必要です。Phase 6ではまず、そこへ進む前の候補層だけを開放しています。</p></div>
+        <div className="relative"><h2 className="font-extrabold text-gray-800">習慣シナジーはまだ自動断定しません</h2><p className="mt-2 text-xs leading-relaxed text-gray-500">Phase 7では候補を小さく試す検証ループまで開放しましたが、「運動したから仕事が良くなった」のような習慣間の因果はまだ別扱いです。同日内の順序・反復・交絡条件を扱える設計が整うまでは自動断定しません。</p></div>
       </section>
+
+      {setupCandidate && (
+        <ExperimentSetupModal
+          candidate={setupCandidate}
+          dateKey={selectedDate}
+          days={days}
+          onStart={onStartExperiment}
+          onClose={() => setSetupCandidate(null)}
+        />
+      )}
     </div>
   );
 }
 
-function CandidateCard({ candidate }) {
+function CandidateCard({ candidate, experimentActive, onExperiment }) {
+  const experimentable = canCreateExperiment(candidate);
   return (
     <article className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
@@ -83,19 +122,11 @@ function CandidateCard({ candidate }) {
         <EvidenceBlock label="差と不確実性" text={candidate.comparison} />
         <EvidenceBlock label="仮説" text={candidate.hypothesis} emphasis />
       </div>
+      {experimentable && <button type="button" disabled={experimentActive} onClick={onExperiment} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3 text-xs font-bold text-white disabled:bg-gray-300"><FlaskConical className="h-4 w-4" />{experimentActive ? 'この候補を実験中' : 'この候補を小さく試す'}</button>}
       <p className="mt-4 border-t border-gray-100 pt-3 text-[10px] leading-relaxed text-gray-400">{candidate.caution}</p>
     </article>
   );
 }
-
-function EvidenceBlock({ label, text, emphasis = false }) {
-  return <div className={`rounded-2xl p-3 ${emphasis ? 'bg-indigo-50' : 'bg-gray-50'}`}><div className={`text-[10px] font-black ${emphasis ? 'text-indigo-500' : 'text-gray-400'}`}>{label}</div><p className={`mt-1 text-xs leading-relaxed ${emphasis ? 'font-medium text-indigo-800' : 'text-gray-600'}`}>{text}</p></div>;
-}
-
-function ReadinessMetric({ label, value, detail }) {
-  return <div className="rounded-2xl bg-gray-50 p-3"><div className="text-[10px] font-bold text-gray-400">{label}</div><div className="mt-1 text-xl font-black text-gray-800">{value}</div><div className="mt-1 text-[9px] leading-relaxed text-gray-400">{detail}</div></div>;
-}
-
-function Rule({ Icon, children }) {
-  return <div className="flex items-start gap-2"><Icon className="mt-0.5 h-4 w-4 shrink-0 text-indigo-400" /><p>{children}</p></div>;
-}
+function EvidenceBlock({ label, text, emphasis = false }) { return <div className={`rounded-2xl p-3 ${emphasis ? 'bg-indigo-50' : 'bg-gray-50'}`}><div className={`text-[10px] font-black ${emphasis ? 'text-indigo-500' : 'text-gray-400'}`}>{label}</div><p className={`mt-1 text-xs leading-relaxed ${emphasis ? 'font-medium text-indigo-800' : 'text-gray-600'}`}>{text}</p></div>; }
+function ReadinessMetric({ label, value, detail }) { return <div className="rounded-2xl bg-gray-50 p-3"><div className="text-[10px] font-bold text-gray-400">{label}</div><div className="mt-1 text-xl font-black text-gray-800">{value}</div><div className="mt-1 text-[9px] leading-relaxed text-gray-400">{detail}</div></div>; }
+function Rule({ Icon, children }) { return <div className="flex items-start gap-2"><Icon className="mt-0.5 h-4 w-4 shrink-0 text-indigo-400" /><p>{children}</p></div>; }
