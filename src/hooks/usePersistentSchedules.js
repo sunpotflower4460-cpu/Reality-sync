@@ -72,6 +72,7 @@ export function usePersistentSchedules(dateKey) {
 
   const setSchedules = useCallback((nextValue) => {
     setState((currentState) => {
+      if (currentState.persistenceBlocked) return currentState;
       const currentDay = currentState.store.days[dateKey] ?? [];
       const nextDay = typeof nextValue === 'function' ? nextValue(currentDay) : nextValue;
       return {
@@ -89,7 +90,7 @@ export function usePersistentSchedules(dateKey) {
 
   const clearDay = useCallback(() => {
     setState((currentState) => {
-      if (!(dateKey in currentState.store.days)) return currentState;
+      if (currentState.persistenceBlocked || !(dateKey in currentState.store.days)) return currentState;
       const days = { ...currentState.store.days };
       delete days[dateKey];
       return { ...currentState, store: { ...currentState.store, days } };
