@@ -22,6 +22,7 @@ const BASELINE_WINDOW_DAYS = 180;
 function text(value, fallback = '') { if (typeof value !== 'string') return fallback; return value.trim() || fallback; }
 function clampInteger(value, min, max, fallback) { const parsed = Number(value); return Number.isFinite(parsed) ? Math.min(max, Math.max(min, Math.round(parsed))) : fallback; }
 function normalizeRate(value) { if (value === null || value === undefined || value === '') return null; const parsed = Number(value); return Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : null; }
+function optionalId(value) { const normalized = text(value); return normalized || null; }
 
 export function normalizePlanAdjustment(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value) || !VALID_ADJUSTMENTS.has(value.kind)) return null;
@@ -66,6 +67,27 @@ function normalizeTrial(value, index) {
   };
 }
 
+export function normalizeRetentionSnapshot(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const throughDateKey = isValidDateKey(value.throughDateKey) ? value.throughDateKey : null;
+  const failureRate = normalizeRate(value.failureRate);
+  const experimentFailureRate = normalizeRate(value.experimentFailureRate);
+  const assessmentCount = clampInteger(value.assessmentCount, 0, 100000, 0);
+  const weekCount = clampInteger(value.weekCount, 0, 100000, 0);
+  const difference = Number(value.differenceFromExperimentPoints);
+  if (!throughDateKey || failureRate === null || experimentFailureRate === null || assessmentCount <= 0 || weekCount <= 0 || !Number.isFinite(difference)) return null;
+  return {
+    experimentId: text(value.experimentId),
+    throughDateKey,
+    assessmentCount,
+    weekCount,
+    failureRate,
+    experimentFailureRate,
+    differenceFromExperimentPoints: Math.max(-100, Math.min(100, Math.round(difference))),
+    capturedAt: text(value.capturedAt),
+  };
+}
+
 export function normalizeExperiment(value, generatedId = 'experiment') {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const condition = normalizeCondition(value.condition);
@@ -77,14 +99,23 @@ export function normalizeExperiment(value, generatedId = 'experiment') {
   if (Array.isArray(value.trials)) value.trials.forEach((trial, index) => { const normalized = normalizeTrial(trial, index); if (normalized && !seen.has(normalized.recordKey)) { seen.add(normalized.recordKey); trials.push(normalized); } });
   const status = VALID_STATUSES.has(value.status) ? value.status : EXPERIMENT_STATUS.ACTIVE;
   const decision = VALID_DECISIONS.has(value.decision) ? value.decision : null;
+  const id = text(value.id, generatedId);
+  const parentExperimentId = optionalId(value.parentExperimentId);
+  const learningRootId = text(value.learningRootId, id);
+  const learningVersion = clampInteger(value.learningVersion, 1, 999, parentExperimentId ? 2 : 1);
   return {
-    id: text(value.id, generatedId), candidateId: text(value.candidateId), candidateType: text(value.candidateType),
+    id, candidateId: text(value.candidateId), candidateType: text(value.candidateType),
     title, hypothesis: text(value.hypothesis), action, metricKind,
     metricLabel: text(value.metricLabel, metricKind === EXPERIMENT_METRIC.LATE_START ? '20分以上の開始遅れ' : '変更・スキップ'),
     condition, startDateKey, targetRuns: clampInteger(value.targetRuns, 3, 10, 3),
     baselineFailureRate: normalizeRate(value.baselineFailureRate),
     baselineSampleCount: clampInteger(value.baselineSampleCount, 0, 100000, 0),
     planAdjustment: normalizePlanAdjustment(value.planAdjustment),
+    learningRootId,
+    parentExperimentId,
+    learningVersion,
+    revalidationReason: text(value.revalidationReason),
+    sourceRetention: normalizeRetentionSnapshot(value.sourceRetention),
     status,
     decision: status === EXPERIMENT_STATUS.COMPLETED ? decision : null,
     decisionDateKey: status === EXPERIMENT_STATUS.COMPLETED && isValidDateKey(value.decisionDateKey) ? value.decisionDateKey : null,
@@ -190,8 +221,106 @@ export function createExperimentFromCandidate(candidate, { id, startDateKey, act
     action: text(action, blueprint.actionSuggestion), metricKind: blueprint.metricKind, metricLabel: blueprint.metricLabel,
     condition: blueprint.condition, startDateKey, targetRuns, baselineFailureRate: baseline.rate, baselineSampleCount: baseline.count,
     planAdjustment: planAdjustment === undefined ? blueprint.planAdjustmentSuggestion : planAdjustment,
+    learningRootId: id, parentExperimentId: null, learningVersion: 1, revalidationReason: '', sourceRetention: null,
     status: EXPERIMENT_STATUS.ACTIVE, decision: null, decisionDateKey: null, trials: [], createdAt, completedAt: '',
   }, id || 'experiment');
+}
+
+export function nextLearningVersion(experiments, sourceValue) {
+  const source = normalizeExperiment(sourceValue);
+  if (!source) return 1;
+  const rootId = source.learningRootId || source.id;
+  const versions = normalizeExperiments(experiments)
+    .filter((experiment) => (experiment.learningRootId || experiment.id) === rootId)
+    .map((experiment) => experiment.learningVersion || 1);
+  return Math.max(source.learningVersion || 1, ...versions, 0) + 1;
+}
+
+export function buildLearningLineages(experiments) {
+  const groups = new Map();
+  for (const experiment of normalizeExperiments(experiments)) {
+    const rootId = experiment.learningRootId || experiment.id;
+    const group = groups.get(rootId) ?? { rootId, title: experiment.title, versions: [] };
+    group.versions.push(experiment);
+    if ((experiment.learningVersion || 1) === 1) group.title = experiment.title;
+    groups.set(rootId, group);
+  }
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      versions: group.versions.sort((a, b) => (a.learningVersion || 1) - (b.learningVersion || 1) || a.createdAt.localeCompare(b.createdAt)),
+    }))
+    .sort((a, b) => {
+      const aLast = a.versions.at(-1)?.createdAt ?? '';
+      const bLast = b.versions.at(-1)?.createdAt ?? '';
+      return bLast.localeCompare(aLast) || a.title.localeCompare(b.title, 'ja');
+    });
+}
+
+export function createRevalidationExperiment(sourceValue, retentionSummary, {
+  id,
+  startDateKey,
+  action,
+  planAdjustment,
+  targetRuns = 3,
+  learningVersion,
+  createdAt = new Date().toISOString(),
+} = {}) {
+  const source = normalizeExperiment(sourceValue);
+  if (
+    !source
+    || source.status !== EXPERIMENT_STATUS.COMPLETED
+    || source.decision !== EXPERIMENT_DECISION.ADOPT
+    || !source.decisionDateKey
+    || !retentionSummary?.reviewCandidate
+    || retentionSummary.experimentId !== source.id
+    || !isValidDateKey(retentionSummary.throughDateKey)
+    || !isValidDateKey(startDateKey)
+    || startDateKey <= retentionSummary.throughDateKey
+  ) return null;
+
+  const snapshot = normalizeRetentionSnapshot({
+    experimentId: source.id,
+    throughDateKey: retentionSummary.throughDateKey,
+    assessmentCount: retentionSummary.assessmentCount,
+    weekCount: retentionSummary.weekCount,
+    failureRate: retentionSummary.failureRate,
+    experimentFailureRate: retentionSummary.experimentFailureRate,
+    differenceFromExperimentPoints: retentionSummary.differenceFromExperimentPoints,
+    capturedAt: createdAt,
+  });
+  if (!snapshot) return null;
+
+  const version = clampInteger(learningVersion, 2, 999, (source.learningVersion || 1) + 1);
+  const rootId = source.learningRootId || source.id;
+  const reason = `通常運用で実験中より${snapshot.differenceFromExperimentPoints > 0 ? '+' : ''}${snapshot.differenceFromExperimentPoints}ptの悪化を観測したため再検証`;
+  return normalizeExperiment({
+    id,
+    candidateId: source.candidateId,
+    candidateType: source.candidateType,
+    title: source.title,
+    hypothesis: text(source.hypothesis, source.title),
+    action: text(action, source.action),
+    metricKind: source.metricKind,
+    metricLabel: source.metricLabel,
+    condition: source.condition,
+    startDateKey,
+    targetRuns,
+    baselineFailureRate: snapshot.failureRate,
+    baselineSampleCount: snapshot.assessmentCount,
+    planAdjustment: planAdjustment === undefined ? source.planAdjustment : planAdjustment,
+    learningRootId: rootId,
+    parentExperimentId: source.id,
+    learningVersion: version,
+    revalidationReason: reason,
+    sourceRetention: snapshot,
+    status: EXPERIMENT_STATUS.ACTIVE,
+    decision: null,
+    decisionDateKey: null,
+    trials: [],
+    createdAt,
+    completedAt: '',
+  }, id || `revalidation-${source.id}`);
 }
 
 export function listEligibleExperimentRecords(experimentValue, days, throughDateKey) {
