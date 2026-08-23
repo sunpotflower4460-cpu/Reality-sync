@@ -21,6 +21,11 @@ export function normalizeScheduleStore(value) {
     return createEmptyScheduleStore();
   }
 
+  // Future storage versions must be migrated explicitly. Silently coercing an
+  // unknown schema into the current one risks destroying information when the
+  // normalized value is written back to localStorage.
+  if (value.version !== STORAGE_VERSION) return createEmptyScheduleStore();
+
   const sourceDays = value.days && typeof value.days === 'object' && !Array.isArray(value.days)
     ? value.days
     : {};
