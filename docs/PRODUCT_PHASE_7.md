@@ -12,15 +12,17 @@ The core product rule is:
 
 1. A candidate appears in **分析 → 傾向** after the Phase 6 evidence gates.
 2. Only candidates with a measurable elevated failure outcome can start an objective experiment.
-3. RealitySync proposes a small intervention. The user can edit it.
-4. The user chooses a target of 3–10 trials.
-5. RealitySync snapshots the previous 180-day failure rate for the same condition.
-6. Future matching recorded activities become **eligible**, but they are not experiments yet.
-7. The user presses **対策を試した** only for a run where the intervention was actually attempted.
-8. RealitySync snapshots that run's observed outcome.
-9. After the target count, RealitySync compares the experiment failure rate with the frozen historical baseline.
-10. The UI describes the direction as improving / unclear / worsening.
-11. The user explicitly chooses **採用 / 保留 / 見送り**.
+3. Experiment creation is allowed only from **today's** longitudinal view. Historical/future views are read-only for experiment creation.
+4. RealitySync proposes a small intervention. The user can edit it.
+5. The user chooses a target of 3–10 trials.
+6. RealitySync snapshots the previous 180-day failure rate for the same condition.
+7. The experiment becomes effective on the **next calendar day**, so records that already existed when the experiment was created cannot be enrolled retroactively.
+8. Future matching recorded activities become **eligible**, but they are not experiments yet.
+9. The user presses **対策を試した** only for a run where the intervention was actually attempted.
+10. RealitySync snapshots that run's observed outcome.
+11. After the target count, RealitySync compares the experiment failure rate with the frozen historical baseline.
+12. The UI describes the direction as improving / unclear / worsening.
+13. The user explicitly chooses **採用 / 保留 / 見送り**.
 
 No future schedule is modified automatically.
 
@@ -72,9 +74,19 @@ These remain observational in Phase 7. A repeated reason such as `眠気` does n
 
 The baseline is calculated at experiment creation and stored inside the experiment.
 
-It uses the trailing 180 days ending at the selected anchor date and the same condition/metric as the experiment.
+It uses the trailing 180 days ending on the creation-day anchor and the same condition/metric as the experiment.
 
 This matters because historical source data may later be edited. The experiment baseline must not silently drift after the experiment has started.
+
+## Non-retroactive start boundary
+
+RealitySync deliberately separates the **baseline day** from the **effective experiment start**.
+
+- candidate and baseline are evaluated as of today
+- the experiment becomes effective tomorrow
+- records from today or earlier cannot be added as new experiment trials
+
+This prevents a user from navigating to an old date and reconstructing an intervention group after seeing the outcomes.
 
 ## Explicit exposure boundary
 
