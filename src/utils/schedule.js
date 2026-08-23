@@ -70,6 +70,47 @@ function normalizeActualStartDateKey(value, fallback = null) {
   return isValidDateKey(fallback) ? fallback : null;
 }
 
+function normalizePlannedSnapshot(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (!isValidTime(value.time)) return null;
+  const title = normalizeText(value.title);
+  if (!title || !VALID_CATEGORIES.has(value.category)) return null;
+  const duration = Number(value.duration);
+  const plannedStress = Number(value.plannedStress);
+  if (!Number.isFinite(duration) || duration < 0 || duration > 1440) return null;
+  if (!Number.isFinite(plannedStress) || plannedStress < 0 || plannedStress > 100) return null;
+  return {
+    time: value.time,
+    title,
+    category: value.category,
+    duration,
+    plannedStress,
+  };
+}
+
+export function createPlannedSnapshot(schedule) {
+  if (!schedule || typeof schedule !== 'object' || Array.isArray(schedule)) return null;
+  return normalizePlannedSnapshot({
+    time: schedule.time,
+    title: schedule.title,
+    category: schedule.category,
+    duration: schedule.duration,
+    plannedStress: schedule.plannedStress,
+  });
+}
+
+export function recordedPlanForSchedule(schedule) {
+  if (!schedule || typeof schedule !== 'object') return null;
+  if (schedule.status !== STATUS.PENDING && schedule.plannedSnapshot) return schedule.plannedSnapshot;
+  return {
+    time: schedule.time,
+    title: schedule.title,
+    category: schedule.category,
+    duration: schedule.duration,
+    plannedStress: schedule.plannedStress,
+  };
+}
+
 export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedule') {
   const source = schedule && typeof schedule === 'object' && !Array.isArray(schedule) ? schedule : {};
   const base = fallback && typeof fallback === 'object' && !Array.isArray(fallback) ? fallback : {};
@@ -86,6 +127,7 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
     duration,
     plannedStress,
     status,
+    plannedSnapshot: null,
     actualTitle: '',
     actualCategory: null,
     actualDuration: null,
@@ -98,6 +140,8 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
 
   if (status === STATUS.PENDING) return normalized;
 
+  normalized.plannedSnapshot = normalizePlannedSnapshot(source.plannedSnapshot)
+    ?? normalizePlannedSnapshot(base.plannedSnapshot);
   normalized.actualStress = clampNumber(source.actualStress ?? base.actualStress ?? plannedStress, 0, 100);
   normalized.mood = VALID_MOODS.has(source.mood)
     ? source.mood
@@ -118,8 +162,6 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
     : null;
 
   if (status === STATUS.AS_PLANNED) {
-    // Snapshot what was actually recorded. A later edit to the plan must not
-    // rewrite historical reality such as the activity title/category.
     normalized.actualTitle = normalizeText(source.actualTitle, normalizeText(base.actualTitle, normalized.title));
     normalized.actualCategory = normalizeCategory(source.actualCategory, base.actualCategory ?? normalized.category);
     normalized.actualDuration = clampNumber(source.actualDuration ?? base.actualDuration ?? duration, 0, 1440);
@@ -132,6 +174,7 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
     return {
       ...normalized,
       status: STATUS.PENDING,
+      plannedSnapshot: null,
       actualTitle: '',
       actualCategory: null,
       actualDuration: null,
@@ -189,6 +232,7 @@ export function createPendingScheduleCopy(schedule, id) {
     duration: normalized.duration,
     plannedStress: normalized.plannedStress,
     status: STATUS.PENDING,
+    plannedSnapshot: null,
     actualTitle: '',
     actualCategory: null,
     actualDuration: null,
@@ -238,11 +282,12 @@ export function calculateStats(schedules) {
   };
 
   for (const schedule of list) {
-    ensureCategory(schedule.category);
-    categories[schedule.category].ideal += schedule.duration;
+    const planned = recordedPlanForSchedule(schedule);
+    ensureCategory(planned.category);
+    categories[planned.category].ideal += planned.duration;
 
     if (schedule.status === STATUS.AS_PLANNED) {
-      const category = schedule.actualCategory || schedule.category;
+      const category = schedule.actualCategory || planned.category;
       ensureCategory(category);
       categories[category].actual += schedule.actualDuration ?? 0;
       continue;

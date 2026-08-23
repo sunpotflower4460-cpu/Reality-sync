@@ -6,7 +6,11 @@ import {
   startOfWeekDateKey,
   weekdayIndexMondayFirst,
 } from './date.js';
-import { calculateStats, isValidTime, normalizeSchedules } from './schedule.js';
+import {
+  calculateStats,
+  isValidTime,
+  normalizeSchedules,
+} from './schedule.js';
 
 const WEEKDAY_LABELS = ['月', '火', '水', '木', '金', '土', '日'];
 
@@ -85,6 +89,7 @@ function createOutcomeState() {
     daysWithRecords: 0,
     untimedStartCount: 0,
     undatedStartCount: 0,
+    legacyPlannedCount: 0,
     startDeltas: [],
   };
 }
@@ -100,6 +105,7 @@ function mergeCategoryTotals(target, categories) {
 function recordScheduleObservations(state, schedule, plannedDateKey, dayDeltas) {
   if (schedule.status === STATUS.PENDING) return;
 
+  if (!schedule.plannedSnapshot) state.legacyPlannedCount += 1;
   if (schedule.mood in state.moodCounts) state.moodCounts[schedule.mood] += 1;
   if (state.stressByStatus[schedule.status]) addStress(state.stressByStatus[schedule.status], schedule.actualStress);
 
@@ -114,6 +120,12 @@ function recordScheduleObservations(state, schedule, plannedDateKey, dayDeltas) 
 
   if (schedule.status !== STATUS.AS_PLANNED && schedule.status !== STATUS.CHANGED) return;
 
+  // Exact historical timing needs both sides of history. A legacy record may
+  // have an explicit actual timestamp, but without the original planned time a
+  // later plan edit could change the apparent delta. Do not use today's plan as
+  // a substitute for the missing historical plan.
+  if (!schedule.plannedSnapshot) return;
+
   if (!schedule.actualStartTime) {
     state.untimedStartCount += 1;
     return;
@@ -125,7 +137,7 @@ function recordScheduleObservations(state, schedule, plannedDateKey, dayDeltas) 
 
   const delta = exactStartDeltaMinutes(
     plannedDateKey,
-    schedule.time,
+    schedule.plannedSnapshot.time,
     schedule.actualStartDateKey,
     schedule.actualStartTime,
   );
@@ -147,6 +159,7 @@ function calculateRangeInsights(days, dateKeys) {
     const dayDeltas = [];
     const beforeUntimed = state.untimedStartCount;
     const beforeUndated = state.undatedStartCount;
+    const beforeLegacyPlanned = state.legacyPlannedCount;
 
     if (stats.total > 0) state.daysWithPlans += 1;
     if (dayRecorded > 0) state.daysWithRecords += 1;
@@ -180,6 +193,7 @@ function calculateRangeInsights(days, dateKeys) {
       startSampleCount: dayDeltas.length,
       untimedStartCount: state.untimedStartCount - beforeUntimed,
       undatedStartCount: state.undatedStartCount - beforeUndated,
+      legacyPlannedCount: state.legacyPlannedCount - beforeLegacyPlanned,
     };
   });
 
@@ -215,6 +229,7 @@ function calculateRangeInsights(days, dateKeys) {
     startSampleCount: state.startDeltas.length,
     untimedStartCount: state.untimedStartCount,
     undatedStartCount: state.undatedStartCount,
+    legacyPlannedCount: state.legacyPlannedCount,
   };
 }
 
@@ -288,10 +303,11 @@ export function calculateMonthlyInsights(days, anchorDateKey) {
       for (const schedule of schedules) {
         if (
           (schedule.status === STATUS.AS_PLANNED || schedule.status === STATUS.CHANGED)
+          && schedule.plannedSnapshot
           && schedule.actualStartTime
           && schedule.actualStartDateKey
         ) {
-          const delta = exactStartDeltaMinutes(day.dateKey, schedule.time, schedule.actualStartDateKey, schedule.actualStartTime);
+          const delta = exactStartDeltaMinutes(day.dateKey, schedule.plannedSnapshot.time, schedule.actualStartDateKey, schedule.actualStartTime);
           if (delta !== null) bucket.startDeltas.push(delta);
         }
       }
