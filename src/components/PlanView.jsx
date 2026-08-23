@@ -1,4 +1,5 @@
-import { Plus } from 'lucide-react';
+import { Pencil, Plus } from 'lucide-react';
+import { STATUS } from '../constants.js';
 import { sortSchedulesByTime } from '../utils/schedule.js';
 
 function stressTone(value) {
@@ -7,7 +8,7 @@ function stressTone(value) {
   return { borderColor: '#bbf7d0', color: '#16a34a' };
 }
 
-export function PlanView({ schedules, onOpenPlanModal }) {
+export function PlanView({ schedules, onCreate, onEdit }) {
   const orderedSchedules = sortSchedulesByTime(schedules);
 
   return (
@@ -17,34 +18,46 @@ export function PlanView({ schedules, onOpenPlanModal }) {
           <h2 className="text-lg font-extrabold text-gray-800">理想のスケジュール</h2>
           <p className="mt-1 text-xs text-gray-500">まずは「こう過ごしたい」を置いてみる</p>
         </div>
-        <span className="text-xs text-gray-500">計画モード</span>
+        <span className="text-xs text-gray-500">{orderedSchedules.length}件</span>
       </div>
 
       <div className="space-y-3">
         {orderedSchedules.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
-            予定はまだありません。最初のひとつを置いてみましょう。
+          <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-7 text-center shadow-sm">
+            <div className="mb-2 text-sm font-bold text-gray-700">この日の予定はまだありません</div>
+            <p className="text-xs leading-relaxed text-gray-500">最初から完璧に埋めなくて大丈夫です。まずはひとつだけ置いてみましょう。</p>
           </div>
         )}
-        {orderedSchedules.map((schedule) => (
-          <article key={schedule.id} className="flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-            <time className="w-12 shrink-0 text-center font-bold text-indigo-600" dateTime={schedule.time}>{schedule.time}</time>
-            <div className="min-w-0 flex-1">
-              <div className="mb-1 truncate text-sm font-bold text-gray-800">{schedule.title}</div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600">{schedule.category}</span>
-                <span className="text-[10px] text-gray-400">{schedule.duration}分</span>
-              </div>
-            </div>
-            <div className="flex shrink-0 flex-col items-end">
-              <span className="mb-1 text-[10px] font-bold text-gray-400">想定負荷</span>
-              <div className="flex h-10 w-10 items-center justify-center rounded-full border-4 text-xs font-bold" style={stressTone(schedule.plannedStress)} aria-label={`想定負荷 ${schedule.plannedStress}`}>{schedule.plannedStress}</div>
-            </div>
-          </article>
-        ))}
+        {orderedSchedules.map((schedule) => {
+          const recorded = schedule.status !== STATUS.PENDING;
+          return (
+            <article key={schedule.id} className="rounded-2xl border border-gray-100 bg-white shadow-sm">
+              <button type="button" onClick={() => onEdit(schedule.id)} className="flex w-full items-center gap-4 p-4 text-left transition hover:bg-gray-50/70" aria-label={`${schedule.time} ${schedule.title} を編集`}>
+                <time className="w-12 shrink-0 text-center font-bold text-indigo-600" dateTime={schedule.time}>{schedule.time}</time>
+                <div className="min-w-0 flex-1">
+                  <div className="mb-1 flex items-center gap-2">
+                    <div className="truncate text-sm font-bold text-gray-800">{schedule.title}</div>
+                    {recorded && <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-[9px] font-bold text-indigo-500">実績あり</span>}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600">{schedule.category}</span>
+                    <span className="text-[10px] text-gray-400">{schedule.duration}分</span>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <div className="flex flex-col items-end">
+                    <span className="mb-1 text-[10px] font-bold text-gray-400">想定負荷</span>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full border-4 text-xs font-bold" style={stressTone(schedule.plannedStress)} aria-label={`想定負荷 ${schedule.plannedStress}`}>{schedule.plannedStress}</div>
+                  </div>
+                  <Pencil className="h-4 w-4 text-gray-300" aria-hidden="true" />
+                </div>
+              </button>
+            </article>
+          );
+        })}
       </div>
 
-      <button type="button" onClick={onOpenPlanModal} className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-indigo-200 py-4 font-bold text-indigo-500 transition-colors hover:bg-indigo-50">
+      <button type="button" onClick={onCreate} className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-indigo-200 py-4 font-bold text-indigo-500 transition-colors hover:bg-indigo-50">
         <Plus className="h-5 w-5" aria-hidden="true" />予定を追加する
       </button>
     </div>
