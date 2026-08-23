@@ -1,17 +1,22 @@
 import { Zap } from 'lucide-react';
 import { STATUS } from '../constants.js';
-import { timeToHours } from '../utils/schedule.js';
+import { sortSchedulesByTime, timeToHours } from '../utils/schedule.js';
 
 const WIDTH = 900;
 const HEIGHT = 300;
 const PADDING_X = 42;
 const PADDING_Y = 52;
-const START_HOUR = 6;
+const DEFAULT_START_HOUR = 6;
 const END_HOUR = 24;
-const GRID_HOURS = [6, 9, 12, 15, 18, 21, 24];
 
-function getX(time) {
-  return PADDING_X + ((timeToHours(time) - START_HOUR) / (END_HOUR - START_HOUR)) * (WIDTH - PADDING_X * 2);
+function createTimeScale(schedules) {
+  const hasEarlySchedule = schedules.some((schedule) => timeToHours(schedule.time) < DEFAULT_START_HOUR);
+  const startHour = hasEarlySchedule ? 0 : DEFAULT_START_HOUR;
+  const gridHours = [];
+  for (let hour = startHour; hour <= END_HOUR; hour += 3) gridHours.push(hour);
+
+  const getX = (time) => PADDING_X + ((timeToHours(time) - startHour) / (END_HOUR - startHour)) * (WIDTH - PADDING_X * 2);
+  return { startHour, gridHours, getX };
 }
 
 function getY(value) {
@@ -31,7 +36,8 @@ function generateSmoothPath(points) {
 }
 
 export function StressGraph({ schedules }) {
-  const sorted = [...schedules].sort((a, b) => timeToHours(a.time) - timeToHours(b.time));
+  const sorted = sortSchedulesByTime(schedules);
+  const { startHour, gridHours, getX } = createTimeScale(sorted);
   const plannedPoints = sorted.map((schedule) => ({ x: getX(schedule.time), y: getY(schedule.plannedStress) }));
   const recorded = sorted.filter((schedule) => schedule.status !== STATUS.PENDING && Number.isFinite(schedule.actualStress));
   const actualPoints = recorded.map((schedule) => ({ x: getX(schedule.time), y: getY(schedule.actualStress) }));
@@ -57,8 +63,8 @@ export function StressGraph({ schedules }) {
             <linearGradient id="actualAreaGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ec4899" stopOpacity="0.2" /><stop offset="100%" stopColor="#ec4899" stopOpacity="0" /></linearGradient>
           </defs>
           {[25, 50, 75].map((percent) => <line key={percent} x1={PADDING_X} y1={getY(percent)} x2={WIDTH - PADDING_X} y2={getY(percent)} stroke="#f3f4f6" strokeWidth="2" />)}
-          {GRID_HOURS.map((hour) => {
-            const x = PADDING_X + ((hour - START_HOUR) / (END_HOUR - START_HOUR)) * (WIDTH - PADDING_X * 2);
+          {gridHours.map((hour) => {
+            const x = PADDING_X + ((hour - startHour) / (END_HOUR - startHour)) * (WIDTH - PADDING_X * 2);
             return <g key={hour}><line x1={x} y1={PADDING_Y - 10} x2={x} y2={HEIGHT - PADDING_Y + 10} stroke="#f3f4f6" strokeWidth="2" strokeDasharray="4 4" /><text x={x} y={HEIGHT - 18} textAnchor="middle" fill="#9ca3af" fontSize="20" fontWeight="700">{hour === 24 ? '0' : hour}</text></g>;
           })}
           {plannedPoints.length > 0 && <path d={plannedPath} fill="none" stroke="#cbd5e1" strokeWidth="4" strokeDasharray="8 8" strokeLinecap="round" />}

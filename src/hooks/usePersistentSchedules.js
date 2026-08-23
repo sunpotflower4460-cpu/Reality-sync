@@ -1,19 +1,17 @@
 import { useEffect, useState } from 'react';
 import { INITIAL_SCHEDULES } from '../data/demoSchedules.js';
 import { STORAGE_KEY } from '../constants.js';
+import { parseStoredSchedules } from '../utils/storage.js';
 
 function cloneDemoSchedules() {
-  return INITIAL_SCHEDULES.map((item) => ({ ...item }));
+  return parseStoredSchedules(null, INITIAL_SCHEDULES);
 }
 
 function loadSchedules() {
   if (typeof window === 'undefined') return cloneDemoSchedules();
 
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return cloneDemoSchedules();
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : cloneDemoSchedules();
+    return parseStoredSchedules(window.localStorage.getItem(STORAGE_KEY), INITIAL_SCHEDULES);
   } catch {
     return cloneDemoSchedules();
   }
@@ -29,6 +27,16 @@ export function usePersistentSchedules() {
       // Restricted/private browsing can reject storage. In-memory mode remains usable.
     }
   }, [schedules]);
+
+  useEffect(() => {
+    const syncFromStorage = (event) => {
+      if (event.key !== STORAGE_KEY) return;
+      setSchedules(parseStoredSchedules(event.newValue, INITIAL_SCHEDULES));
+    };
+
+    window.addEventListener('storage', syncFromStorage);
+    return () => window.removeEventListener('storage', syncFromStorage);
+  }, []);
 
   const resetSchedules = () => setSchedules(cloneDemoSchedules());
 

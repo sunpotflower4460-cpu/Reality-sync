@@ -1,5 +1,6 @@
 import { AlertCircle, CheckCircle2, Frown, Meh, Smile, XCircle } from 'lucide-react';
 import { MOOD, STATUS } from '../constants.js';
+import { sortSchedulesByTime } from '../utils/schedule.js';
 import { StressGraph } from './StressGraph.jsx';
 
 function MoodIcon({ mood }) {
@@ -23,13 +24,15 @@ function dotClass(status) {
 }
 
 export function TrackView({ schedules, onRecord }) {
+  const orderedSchedules = sortSchedulesByTime(schedules);
+
   return (
     <div className="animate-fade-in space-y-6 pt-4">
-      <StressGraph schedules={schedules} />
+      <StressGraph schedules={orderedSchedules} />
       <section className="space-y-4" aria-labelledby="timeline-title">
         <h2 id="timeline-title" className="pl-1 text-lg font-bold text-gray-800">実行タイムライン</h2>
         <div className="relative ml-4 space-y-5 border-l-[3px] border-indigo-100 pb-4">
-          {schedules.map((schedule) => {
+          {orderedSchedules.map((schedule) => {
             const recorded = schedule.status !== STATUS.PENDING;
             return (
               <article key={schedule.id} className="relative pl-6">
@@ -44,13 +47,13 @@ export function TrackView({ schedules, onRecord }) {
                     </div>
                     {recorded && <span className="shrink-0 rounded-full border border-gray-100 bg-white px-2 py-0.5 shadow-sm"><MoodIcon mood={schedule.mood} /></span>}
                   </div>
-                  <div className="mt-3 flex items-center justify-between border-t border-black/5 pt-3">
-                    <div className="flex items-center gap-4">
+                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-black/5 pt-3">
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
                       <div className="flex flex-col"><span className="text-[9px] font-bold uppercase text-gray-400">想定負荷</span><span className="text-sm font-black text-gray-400">{schedule.plannedStress}</span></div>
                       {recorded && <div className="flex flex-col"><span className="text-[9px] font-bold uppercase text-indigo-500">実際の負荷</span><span className={`text-sm font-black ${schedule.actualStress > 80 ? 'text-red-500' : 'text-indigo-600'}`}>{schedule.actualStress}</span></div>}
                       {recorded && <div className="flex flex-col"><span className="text-[9px] font-bold uppercase text-gray-400">実時間</span><span className="text-sm font-black text-gray-600">{schedule.actualDuration ?? 0}分</span></div>}
                     </div>
-                    {!recorded ? <span className="rounded-xl bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-600">記録する</span> : <span className="rounded-lg border border-gray-100 bg-white p-1.5 shadow-sm" aria-hidden="true">{schedule.status === STATUS.AS_PLANNED && <CheckCircle2 className="h-4 w-4 text-green-500" />}{schedule.status === STATUS.CHANGED && <AlertCircle className="h-4 w-4 text-orange-500" />}{schedule.status === STATUS.SKIPPED && <XCircle className="h-4 w-4 text-red-500" />}</span>}
+                    {!recorded ? <span className="shrink-0 rounded-xl bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-600">記録する</span> : <span className="shrink-0 rounded-lg border border-gray-100 bg-white p-1.5 shadow-sm" aria-hidden="true">{schedule.status === STATUS.AS_PLANNED && <CheckCircle2 className="h-4 w-4 text-green-500" />}{schedule.status === STATUS.CHANGED && <AlertCircle className="h-4 w-4 text-orange-500" />}{schedule.status === STATUS.SKIPPED && <XCircle className="h-4 w-4 text-red-500" />}</span>}
                   </div>
                 </button>
               </article>
