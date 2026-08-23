@@ -1,12 +1,12 @@
 import { STATUS } from '../constants.js';
 import { isValidDateKey } from './date.js';
 import {
+  buildLearningLineages,
   calculateExperimentResult,
   EXPERIMENT_DECISION,
   EXPERIMENT_STATUS,
   experimentMatchesSchedule,
   normalizeExperiment,
-  normalizeExperiments,
   PLAN_ADJUSTMENT_KIND,
   planAdjustmentLabel,
 } from './experiment.js';
@@ -81,10 +81,13 @@ function feedbackAllowedOnDate(experiment, dateKey) {
 }
 
 export function adoptedExperiments(experiments) {
-  return normalizeExperiments(experiments).filter((experiment) => (
-    experiment.status === EXPERIMENT_STATUS.COMPLETED
-    && experiment.decision === EXPERIMENT_DECISION.ADOPT
-  ));
+  return buildLearningLineages(experiments).flatMap((lineage) => {
+    const current = [...lineage.versions].reverse().find((experiment) => (
+      experiment.status === EXPERIMENT_STATUS.COMPLETED
+      && experiment.decision === EXPERIMENT_DECISION.ADOPT
+    ));
+    return current ? [current] : [];
+  });
 }
 
 export function createPlanFeedbackPreview(experimentValue, dateKey, schedulesValue, scheduleId) {

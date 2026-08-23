@@ -12,7 +12,7 @@ const EVIDENCE_STYLE = {
 };
 function stageCopy(stage) { if (stage === 'screening') return '候補スクリーニング可能'; if (stage === 'collecting') return '反復データを収集中'; return '観測を始めた段階'; }
 
-export function InsightCandidatesView({ insights, experiments = [], days = {}, selectedDate, onStartExperiment, onCaptureTrial, onRemoveTrial, onFinishExperiment, onAbandonExperiment, onDeleteExperiment }) {
+export function InsightCandidatesView({ insights, experiments = [], days = {}, selectedDate, onStartExperiment, onStartRevalidation, onCaptureTrial, onRemoveTrial, onFinishExperiment, onAbandonExperiment, onDeleteExperiment }) {
   const [setupCandidate, setSetupCandidate] = useState(null);
   const { readiness, candidates, screenedCandidateCount } = insights;
   const period = readiness.firstDate && readiness.lastDate ? `${formatShortDateLabel(readiness.firstDate)} – ${formatShortDateLabel(readiness.lastDate)}` : 'まだ記録期間がありません';
@@ -27,11 +27,11 @@ export function InsightCandidatesView({ insights, experiments = [], days = {}, s
           <div className="mb-4 flex items-center justify-between gap-3"><div><div className="text-xs font-bold text-gray-400">現在の段階</div><div className="mt-1 font-extrabold text-gray-800">{stageCopy(readiness.stage)}</div></div><span className="rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-black text-indigo-600">直近{readiness.windowDays}日</span></div>
           <div className="grid grid-cols-2 gap-3"><ReadinessMetric label="記録済み" value={`${readiness.recordedCount}件`} detail={`${readiness.monthCount}か月で観測`} /><ReadinessMetric label="記録時の予定保存" value={`${readiness.snapshotCoverage}%`} detail={`${readiness.snapshotCount}/${readiness.recordedCount || 0}件`} /><ReadinessMetric label="正確な開始日時" value={`${readiness.exactTimingCount}件`} detail="予定スナップショット付き" /><ReadinessMetric label="理由付きのズレ" value={`${readiness.reasonCount}件`} detail="変更・スキップのみ" /></div>
           <div className="mt-4 flex items-start gap-2 rounded-2xl bg-gray-50 p-3 text-[11px] leading-relaxed text-gray-500"><History className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" /><span>観測期間: {period}。古い実績に記録時の予定スナップショットがない場合、予定内容や想定負荷を使う候補分析からは除外します。</span></div>
-          {!canStartToday && <div className="mt-3 flex items-start gap-2 rounded-2xl bg-amber-50 p-3 text-[11px] leading-relaxed text-amber-800"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>過去・未来の分析は閲覧専用です。後付けの介入群を作らないため、小実験は「今日」に戻って最新の傾向を再確認してから開始できます。</span></div>}
+          {!canStartToday && <div className="mt-3 flex items-start gap-2 rounded-2xl bg-amber-50 p-3 text-[11px] leading-relaxed text-amber-800"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>過去・未来の分析は閲覧専用です。後付けの介入群を作らないため、小実験や再検証は「今日」に戻って最新の傾向を再確認してから開始できます。</span></div>}
         </div>
       </section>
 
-      <ExperimentPanel experiments={experiments} days={days} throughDateKey={selectedDate} onCaptureTrial={onCaptureTrial} onRemoveTrial={onRemoveTrial} onFinish={onFinishExperiment} onAbandon={onAbandonExperiment} onDelete={onDeleteExperiment} />
+      <ExperimentPanel experiments={experiments} days={days} throughDateKey={selectedDate} onCaptureTrial={onCaptureTrial} onRemoveTrial={onRemoveTrial} onFinish={onFinishExperiment} onAbandon={onAbandonExperiment} onDelete={onDeleteExperiment} onStartRevalidation={onStartRevalidation} />
 
       {candidates.length === 0 ? (
         <section className="rounded-3xl border border-dashed border-indigo-200 bg-white p-8 text-center shadow-sm"><div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-indigo-50 text-indigo-500"><BarChart3 className="h-5 w-5" /></div><h2 className="font-extrabold text-gray-800">まだ十分に分かれた候補はありません</h2><p className="mt-2 text-sm leading-relaxed text-gray-500">これは「何も起きていない」という意味ではありません。比較群の最低件数と15pt以上の差を満たすまでは、偶然の揺れをインサイトとして昇格させません。</p></section>
@@ -39,8 +39,8 @@ export function InsightCandidatesView({ insights, experiments = [], days = {}, s
         <section className="space-y-3"><div className="flex items-end justify-between gap-3 px-1"><div><h2 className="font-extrabold text-gray-800">今見る価値がある候補</h2><p className="mt-1 text-[11px] text-gray-400">最大6件を、反復性と差の大きさで並べています</p></div><span className="text-xs font-bold text-gray-400">候補 {screenedCandidateCount}件</span></div>{candidates.map((candidate) => <CandidateCard key={candidate.id} candidate={candidate} experimentActive={activeCandidateIds.has(candidate.id)} canStartToday={canStartToday} onExperiment={() => setSetupCandidate(candidate)} />)}</section>
       )}
 
-      <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><h2 className="flex items-center gap-2 font-extrabold text-gray-800"><ShieldCheck className="h-5 w-5 text-indigo-500" />この画面が断定しないこと</h2><div className="mt-4 space-y-3 text-xs leading-relaxed text-gray-500"><Rule Icon={CheckCircle2}>率の比較は最低サンプル数を満たし、15ポイント未満の差は候補にしません。</Rule><Rule Icon={Info}>95% Wilson区間は率の不確実性を見る補助です。「有意差」や因果を保証するものではありません。</Rule><Rule Icon={AlertTriangle}>複数の曜日・カテゴリ等を同時に探索するため、偶然大きく見える差が混ざる可能性があります。小実験も因果証明ではなく、次の判断材料として扱います。</Rule></div></section>
-      <section className="relative overflow-hidden rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><Lock className="absolute right-4 top-4 h-20 w-20 text-indigo-500 opacity-5" /><div className="relative"><h2 className="font-extrabold text-gray-800">習慣シナジーはまだ自動断定しません</h2><p className="mt-2 text-xs leading-relaxed text-gray-500">Phase 7では候補を小さく試す検証ループまで開放しましたが、「運動したから仕事が良くなった」のような習慣間の因果はまだ別扱いです。同日内の順序・反復・交絡条件を扱える設計が整うまでは自動断定しません。</p></div></section>
+      <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><h2 className="flex items-center gap-2 font-extrabold text-gray-800"><ShieldCheck className="h-5 w-5 text-indigo-500" />この画面が断定しないこと</h2><div className="mt-4 space-y-3 text-xs leading-relaxed text-gray-500"><Rule Icon={CheckCircle2}>率の比較は最低サンプル数を満たし、15ポイント未満の差は候補にしません。</Rule><Rule Icon={Info}>95% Wilson区間は率の不確実性を見る補助です。「有意差」や因果を保証するものではありません。</Rule><Rule Icon={AlertTriangle}>複数の曜日・カテゴリ等を同時に探索するため、偶然大きく見える差が混ざる可能性があります。小実験も再検証も因果証明ではなく、次の判断材料として扱います。</Rule></div></section>
+      <section className="relative overflow-hidden rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><Lock className="absolute right-4 top-4 h-20 w-20 text-indigo-500 opacity-5" /><div className="relative"><h2 className="font-extrabold text-gray-800">習慣シナジーはまだ自動断定しません</h2><p className="mt-2 text-xs leading-relaxed text-gray-500">「運動したから仕事が良くなった」のような習慣間の因果は別扱いです。同日内の順序・反復・交絡条件を扱える設計が整うまでは自動断定しません。</p></div></section>
       {setupCandidate && <ExperimentSetupModal candidate={setupCandidate} dateKey={selectedDate} days={days} onStart={onStartExperiment} onClose={() => setSetupCandidate(null)} />}
     </div>
   );

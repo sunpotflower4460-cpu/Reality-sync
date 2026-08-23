@@ -2,6 +2,7 @@ import { STATUS } from '../constants.js';
 import { exactStartDeltaMinutes } from './analytics.js';
 import { isValidDateKey, startOfWeekDateKey } from './date.js';
 import {
+  buildLearningLineages,
   calculateExperimentResult,
   EXPERIMENT_DECISION,
   EXPERIMENT_METRIC,
@@ -120,6 +121,7 @@ export function calculateRetentionSummary(experimentValue, days, throughDateKey)
   if (!experiment.decisionDateKey) {
     return {
       experimentId: experiment.id,
+      throughDateKey: isValidDateKey(throughDateKey) ? throughDateKey : null,
       signal: RETENTION_SIGNAL.UNAVAILABLE,
       reviewCandidate: false,
       totalUsageCount: 0,
@@ -171,6 +173,7 @@ export function calculateRetentionSummary(experimentValue, days, throughDateKey)
 
   return {
     experimentId: experiment.id,
+    throughDateKey: isValidDateKey(throughDateKey) ? throughDateKey : null,
     signal,
     reviewCandidate: signal === RETENTION_SIGNAL.REVIEW,
     totalUsageCount: usages.length,
@@ -190,7 +193,14 @@ export function calculateRetentionSummary(experimentValue, days, throughDateKey)
 
 export function calculateRetentionSummaries(experiments, days, throughDateKey) {
   if (!Array.isArray(experiments)) return [];
-  return experiments
+  const currentAdopted = buildLearningLineages(experiments).flatMap((lineage) => {
+    const current = [...lineage.versions].reverse().find((experiment) => (
+      experiment.status === EXPERIMENT_STATUS.COMPLETED
+      && experiment.decision === EXPERIMENT_DECISION.ADOPT
+    ));
+    return current ? [current] : [];
+  });
+  return currentAdopted
     .map((experiment) => calculateRetentionSummary(experiment, days, throughDateKey))
     .filter(Boolean)
     .sort((a, b) => {
