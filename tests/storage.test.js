@@ -5,6 +5,7 @@ import { STATUS } from '../src/constants.js';
 import {
   migrateLegacySchedules,
   parseStoredScheduleStore,
+  parseStoredScheduleStoreResult,
   parseStoredSchedules,
 } from '../src/utils/storage.js';
 
@@ -56,17 +57,28 @@ test('v2 storage preserves independent days and ignores invalid date keys', () =
   assert.deepEqual(store.days['2026-08-24'], []);
 });
 
-test('unknown future storage versions are rejected instead of rewritten as v2', () => {
-  const store = parseStoredScheduleStore(JSON.stringify({
+test('unknown future storage versions are detected so persistence can be blocked', () => {
+  const raw = JSON.stringify({
     version: 3,
     days: {
       '2026-08-23': [{ id: 'future', time: '09:00', title: 'Future field data', category: '仕事', duration: 60, plannedStress: 40, status: STATUS.PENDING, futureField: 'keep-me' }],
     },
-  }));
-  assert.deepEqual(store, { version: 2, days: {} });
+  });
+  const result = parseStoredScheduleStoreResult(raw);
+  assert.equal(result.ok, false);
+  assert.equal(result.unsupportedVersion, 3);
+  assert.deepEqual(result.store, { version: 2, days: {} });
+  assert.deepEqual(parseStoredScheduleStore(raw), { version: 2, days: {} });
 });
 
-test('malformed v2 storage starts from an empty real-product store', () => {
+test('malformed current storage is detected rather than treated as safely writable', () => {
+  const result = parseStoredScheduleStoreResult('{broken');
+  assert.equal(result.ok, false);
+  assert.equal(result.unsupportedVersion, null);
+  assert.deepEqual(result.store, { version: 2, days: {} });
+});
+
+test('malformed v2 storage starts from an empty real-product store for read callers', () => {
   assert.deepEqual(parseStoredScheduleStore('{broken'), { version: 2, days: {} });
 });
 
