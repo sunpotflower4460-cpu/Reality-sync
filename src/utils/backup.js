@@ -1,6 +1,6 @@
 import { BACKUP_FORMAT, BACKUP_VERSION } from '../constants.js';
 import { isValidDateKey } from './date.js';
-import { normalizeExperiments, normalizePlanAdjustment } from './experiment.js';
+import { normalizeExperiments, normalizePlanAdjustment, normalizeRetentionSnapshot } from './experiment.js';
 import { normalizeReminderPreferences } from './reminder.js';
 import { normalizeScheduleStore } from './storage.js';
 import { normalizeTemplates } from './template.js';
@@ -23,6 +23,39 @@ function experimentMetadataPreserved(rawExperiments, experiments) {
     if (raw.decisionDateKey !== undefined && raw.decisionDateKey !== null) {
       if (!isValidDateKey(raw.decisionDateKey) || normalized.decisionDateKey !== raw.decisionDateKey) return false;
     }
+
+    if (raw.learningRootId !== undefined) {
+      if (typeof raw.learningRootId !== 'string' || !raw.learningRootId.trim() || normalized.learningRootId !== raw.learningRootId.trim()) return false;
+    }
+    if (raw.parentExperimentId !== undefined) {
+      const parent = raw.parentExperimentId === null ? null : (typeof raw.parentExperimentId === 'string' ? raw.parentExperimentId.trim() : null);
+      if (raw.parentExperimentId !== null && !parent) return false;
+      if (normalized.parentExperimentId !== parent) return false;
+    }
+    if (raw.learningVersion !== undefined) {
+      const version = Number(raw.learningVersion);
+      if (!Number.isInteger(version) || version < 1 || version > 999 || normalized.learningVersion !== version) return false;
+    }
+    if (raw.revalidationReason !== undefined) {
+      if (typeof raw.revalidationReason !== 'string' || normalized.revalidationReason !== raw.revalidationReason.trim()) return false;
+    }
+    if (raw.sourceRetention !== undefined && raw.sourceRetention !== null) {
+      const snapshot = normalizeRetentionSnapshot(raw.sourceRetention);
+      if (!snapshot || JSON.stringify(snapshot) !== JSON.stringify(normalized.sourceRetention)) return false;
+    }
+    if (raw.sourceRetention === null && normalized.sourceRetention !== null) return false;
+  }
+  return true;
+}
+
+function experimentLineageValid(experiments) {
+  const byId = new Map(experiments.map((experiment) => [experiment.id, experiment]));
+  for (const experiment of experiments) {
+    if (!experiment.parentExperimentId) continue;
+    const parent = byId.get(experiment.parentExperimentId);
+    if (!parent) return false;
+    if ((parent.learningRootId || parent.id) !== (experiment.learningRootId || experiment.id)) return false;
+    if ((experiment.learningVersion || 1) <= (parent.learningVersion || 1)) return false;
   }
   return true;
 }
@@ -69,6 +102,7 @@ export function parseBackup(raw) {
     experiments.length !== rawExperiments.length
     || experimentTrialCount(experiments) !== experimentTrialCount(rawExperiments)
     || !experimentMetadataPreserved(rawExperiments, experiments)
+    || !experimentLineageValid(experiments)
   ) {
     return { ok: false, error: '実験履歴に復元できない項目があります。' };
   }
