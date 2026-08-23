@@ -1,4 +1,4 @@
-import { Pencil, Plus } from 'lucide-react';
+import { Copy, LayoutTemplate, Pencil, Plus } from 'lucide-react';
 import { STATUS } from '../constants.js';
 import { sortSchedulesByTime } from '../utils/schedule.js';
 
@@ -8,7 +8,15 @@ function stressTone(value) {
   return { borderColor: '#bbf7d0', color: '#16a34a' };
 }
 
-export function PlanView({ schedules, onCreate, onEdit }) {
+export function PlanView({
+  schedules,
+  onCreate,
+  onEdit,
+  onCopyPrevious,
+  hasPreviousSchedules,
+  onOpenTemplates,
+  templateCount = 0,
+}) {
   const orderedSchedules = sortSchedulesByTime(schedules);
 
   return (
@@ -21,11 +29,31 @@ export function PlanView({ schedules, onCreate, onEdit }) {
         <span className="text-xs text-gray-500">{orderedSchedules.length}件</span>
       </div>
 
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={onCopyPrevious}
+          disabled={!hasPreviousSchedules}
+          className="flex min-h-20 flex-col items-start justify-between rounded-2xl border border-gray-100 bg-white p-3 text-left shadow-sm transition hover:border-indigo-100 hover:bg-indigo-50/50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Copy className="h-5 w-5 text-indigo-500" aria-hidden="true" />
+          <span><span className="block text-xs font-bold text-gray-700">前日からコピー</span><span className="mt-0.5 block text-[9px] leading-relaxed text-gray-400">実績はコピーしません</span></span>
+        </button>
+        <button
+          type="button"
+          onClick={onOpenTemplates}
+          className="flex min-h-20 flex-col items-start justify-between rounded-2xl border border-gray-100 bg-white p-3 text-left shadow-sm transition hover:border-indigo-100 hover:bg-indigo-50/50"
+        >
+          <div className="flex w-full items-center justify-between"><LayoutTemplate className="h-5 w-5 text-indigo-500" aria-hidden="true" /><span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[9px] font-bold text-indigo-500">{templateCount}</span></div>
+          <span><span className="block text-xs font-bold text-gray-700">テンプレート</span><span className="mt-0.5 block text-[9px] leading-relaxed text-gray-400">平日・休日などを再利用</span></span>
+        </button>
+      </div>
+
       <div className="space-y-3">
         {orderedSchedules.length === 0 && (
           <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-7 text-center shadow-sm">
             <div className="mb-2 text-sm font-bold text-gray-700">この日の予定はまだありません</div>
-            <p className="text-xs leading-relaxed text-gray-500">最初から完璧に埋めなくて大丈夫です。まずはひとつだけ置いてみましょう。</p>
+            <p className="text-xs leading-relaxed text-gray-500">最初から完璧に埋めなくて大丈夫です。前日の予定やテンプレートを使うこともできます。</p>
           </div>
         )}
         {orderedSchedules.map((schedule) => {
