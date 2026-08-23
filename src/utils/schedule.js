@@ -82,7 +82,15 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
 
   const actualTitle = normalizeText(source.actualTitle, normalizeText(base.actualTitle));
   if (!actualTitle) {
-    return { ...normalized, status: STATUS.PENDING };
+    return {
+      ...normalized,
+      status: STATUS.PENDING,
+      actualTitle: '',
+      actualCategory: null,
+      actualDuration: null,
+      mood: null,
+      actualStress: null,
+    };
   }
 
   normalized.actualTitle = actualTitle;
@@ -102,8 +110,8 @@ export function normalizeSchedules(schedules, fallbacks = []) {
   const seenIds = new Set();
 
   schedules.forEach((schedule, index) => {
-    const sourceId = schedule && typeof schedule === 'object' ? schedule.id : undefined;
-    const fallback = fallbackById.get(String(sourceId)) ?? fallbackList[index] ?? {};
+    if (!schedule || typeof schedule !== 'object' || Array.isArray(schedule)) return;
+    const fallback = fallbackById.get(String(schedule.id)) ?? fallbackList[index] ?? {};
     const item = normalizeSchedule(schedule, fallback, `schedule-${index + 1}`);
     const idKey = String(item.id);
     if (seenIds.has(idKey)) return;
