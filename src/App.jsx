@@ -3,6 +3,7 @@ import { AlertTriangle, Plus, Settings } from 'lucide-react';
 import { STATUS, TABS } from './constants.js';
 import { calculateMonthlyInsights, calculateWeeklyInsights } from './utils/analytics.js';
 import { dateKeyFromDate, shiftDateKey } from './utils/date.js';
+import { calculateLongitudinalInsights } from './utils/insights.js';
 import { calculateStats, createPendingScheduleCopy } from './utils/schedule.js';
 import { useDueRecordReminders } from './hooks/useDueRecordReminders.js';
 import { usePersistentSchedules } from './hooks/usePersistentSchedules.js';
@@ -43,6 +44,7 @@ export default function App() {
   const stats = useMemo(() => calculateStats(schedules), [schedules]);
   const weeklyInsights = useMemo(() => calculateWeeklyInsights(store.days, selectedDate), [selectedDate, store.days]);
   const monthlyInsights = useMemo(() => calculateMonthlyInsights(store.days, selectedDate), [selectedDate, store.days]);
+  const longitudinalInsights = useMemo(() => calculateLongitudinalInsights(store.days, selectedDate), [selectedDate, store.days]);
   const previousDate = useMemo(() => shiftDateKey(selectedDate, -1), [selectedDate]);
   const previousSchedules = store.days[previousDate] ?? [];
   const protectedMode = storageProtection.persistenceBlocked;
@@ -82,6 +84,7 @@ export default function App() {
           id: createScheduleId(),
           ...draft,
           status: STATUS.PENDING,
+          plannedSnapshot: null,
           actualTitle: '',
           actualCategory: null,
           actualDuration: null,
@@ -180,6 +183,7 @@ export default function App() {
                 stats={stats}
                 weeklyInsights={weeklyInsights}
                 monthlyInsights={monthlyInsights}
+                longitudinalInsights={longitudinalInsights}
                 selectedDate={selectedDate}
                 onChangeDate={changeDate}
               />
