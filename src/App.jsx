@@ -45,6 +45,7 @@ export default function App() {
   const monthlyInsights = useMemo(() => calculateMonthlyInsights(store.days, selectedDate), [selectedDate, store.days]);
   const previousDate = useMemo(() => shiftDateKey(selectedDate, -1), [selectedDate]);
   const previousSchedules = store.days[previousDate] ?? [];
+  const protectedMode = storageProtection.persistenceBlocked;
 
   const selectedSchedule = useMemo(
     () => schedules.find((schedule) => schedule.id === selectedScheduleId) ?? null,
@@ -65,12 +66,13 @@ export default function App() {
   };
 
   const saveRecord = (record) => {
-    if (selectedScheduleId === null) return;
+    if (selectedScheduleId === null || protectedMode) return;
     setSchedules((current) => current.map((schedule) => schedule.id === selectedScheduleId ? { ...schedule, ...record } : schedule));
     setSelectedScheduleId(null);
   };
 
   const saveSchedule = (draft) => {
+    if (protectedMode) return;
     if (editorState?.type === 'edit') {
       setSchedules((current) => current.map((schedule) => schedule.id === editorState.id ? { ...schedule, ...draft } : schedule));
     } else {
@@ -95,6 +97,7 @@ export default function App() {
   };
 
   const deleteSchedule = (scheduleId) => {
+    if (protectedMode) return;
     setSchedules((current) => current.filter((schedule) => schedule.id !== scheduleId));
     if (selectedScheduleId === scheduleId) setSelectedScheduleId(null);
     setEditorState(null);
@@ -110,12 +113,12 @@ export default function App() {
   };
 
   const copyPreviousDay = () => {
-    if (previousSchedules.length === 0 || !confirmReplaceDay('前日の予定')) return;
+    if (protectedMode || previousSchedules.length === 0 || !confirmReplaceDay('前日の予定')) return;
     setSchedules(instantiatePlans(previousSchedules));
   };
 
   const applyTemplate = (template) => {
-    if (!template?.schedules?.length || !confirmReplaceDay(`テンプレート「${template.name}」`)) return;
+    if (protectedMode || !template?.schedules?.length || !confirmReplaceDay(`テンプレート「${template.name}」`)) return;
     setSchedules(instantiatePlans(template.schedules));
     setIsTemplateModalOpen(false);
   };
@@ -138,7 +141,7 @@ export default function App() {
           <div className="flex items-end justify-between gap-4">
             <div><h1 className="mb-1 text-3xl font-extrabold tracking-tight">RealitySync</h1><p className="text-sm font-medium text-indigo-200">理想と現実のギャップを力に変える</p></div>
             <div className="flex items-center gap-2">
-              {activeTab === TABS.PLAN && (
+              {activeTab === TABS.PLAN && !protectedMode && (
                 <button type="button" onClick={() => setEditorState({ type: 'create' })} aria-label="予定を追加" className="rounded-full bg-white/20 p-2 text-white backdrop-blur-sm transition hover:bg-white/30"><Plus className="h-5 w-5" /></button>
               )}
               <button type="button" onClick={() => setIsSettingsOpen(true)} aria-label="設定とデータを開く" className="rounded-full bg-white/20 p-2 text-white backdrop-blur-sm transition hover:bg-white/30"><Settings className="h-5 w-5" /></button>
@@ -148,42 +151,46 @@ export default function App() {
         </div>
       </header>
 
-      {storageProtection.persistenceBlocked && (
-        <div className="mx-auto mt-3 max-w-md px-4">
-          <div className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 p-3 text-xs leading-relaxed text-red-700">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>保存済みデータを安全に解釈できないため、自動保存を停止しています。既存のlocalStorageは上書きしていません。{storageProtection.unsupportedVersion !== null ? ` 保存版: ${String(storageProtection.unsupportedVersion)}` : ''}</span>
-          </div>
-        </div>
-      )}
-
       <main className="mx-auto -mt-2 max-w-md p-4">
-        {activeTab === TABS.PLAN && (
-          <PlanView
-            schedules={schedules}
-            onCreate={() => setEditorState({ type: 'create' })}
-            onEdit={(id) => setEditorState({ type: 'edit', id })}
-            onCopyPrevious={copyPreviousDay}
-            hasPreviousSchedules={previousSchedules.length > 0}
-            onOpenTemplates={() => setIsTemplateModalOpen(true)}
-            templateCount={templates.length}
-          />
-        )}
-        {activeTab === TABS.TRACK && <TrackView schedules={schedules} dueSchedules={dueSchedules} dateKey={selectedDate} onRecord={(schedule) => setSelectedScheduleId(schedule.id)} />}
-        {activeTab === TABS.ANALYTICS && (
-          <AnalyticsView
-            stats={stats}
-            weeklyInsights={weeklyInsights}
-            monthlyInsights={monthlyInsights}
-            selectedDate={selectedDate}
-            onChangeDate={changeDate}
-          />
+        {protectedMode ? (
+          <section className="mt-6 rounded-3xl border border-red-200 bg-white p-6 text-center shadow-sm">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-500"><AlertTriangle className="h-6 w-6" /></div>
+            <h2 className="text-lg font-extrabold text-gray-800">保存データを保護しています</h2>
+            <p className="mt-2 text-sm leading-relaxed text-gray-500">現在版では保存済みデータを安全に解釈できないため、編集と自動保存を停止しました。元のlocalStorageは上書きしていません。</p>
+            {storageProtection.unsupportedVersion !== null && <p className="mt-2 text-xs font-bold text-red-600">検出した保存版: {String(storageProtection.unsupportedVersion)}</p>}
+            <p className="mt-3 text-xs leading-relaxed text-gray-400">対応する新しいRealitySyncで開くか、互換性のあるバックアップを設定画面から復元してください。</p>
+            <button type="button" onClick={() => setIsSettingsOpen(true)} className="mt-5 w-full rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white">設定とデータを開く</button>
+          </section>
+        ) : (
+          <>
+            {activeTab === TABS.PLAN && (
+              <PlanView
+                schedules={schedules}
+                onCreate={() => setEditorState({ type: 'create' })}
+                onEdit={(id) => setEditorState({ type: 'edit', id })}
+                onCopyPrevious={copyPreviousDay}
+                hasPreviousSchedules={previousSchedules.length > 0}
+                onOpenTemplates={() => setIsTemplateModalOpen(true)}
+                templateCount={templates.length}
+              />
+            )}
+            {activeTab === TABS.TRACK && <TrackView schedules={schedules} dueSchedules={dueSchedules} dateKey={selectedDate} onRecord={(schedule) => setSelectedScheduleId(schedule.id)} />}
+            {activeTab === TABS.ANALYTICS && (
+              <AnalyticsView
+                stats={stats}
+                weeklyInsights={weeklyInsights}
+                monthlyInsights={monthlyInsights}
+                selectedDate={selectedDate}
+                onChangeDate={changeDate}
+              />
+            )}
+          </>
         )}
       </main>
 
-      <BottomNav activeTab={activeTab} onChange={setActiveTab} />
-      {selectedSchedule && <RecordModal schedule={selectedSchedule} dateKey={selectedDate} onClose={() => setSelectedScheduleId(null)} onSave={saveRecord} />}
-      {editorState && (editorState.type !== 'edit' || editingSchedule) && (
+      {!protectedMode && <BottomNav activeTab={activeTab} onChange={setActiveTab} />}
+      {!protectedMode && selectedSchedule && <RecordModal schedule={selectedSchedule} dateKey={selectedDate} onClose={() => setSelectedScheduleId(null)} onSave={saveRecord} />}
+      {!protectedMode && editorState && (editorState.type !== 'edit' || editingSchedule) && (
         <ScheduleEditorModal
           schedule={editingSchedule}
           onClose={() => setEditorState(null)}
@@ -191,7 +198,7 @@ export default function App() {
           onDelete={editorState.type === 'edit' ? deleteSchedule : undefined}
         />
       )}
-      {isTemplateModalOpen && (
+      {!protectedMode && isTemplateModalOpen && (
         <TemplateModal
           templates={templates}
           currentSchedules={schedules}
