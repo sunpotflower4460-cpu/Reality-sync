@@ -47,6 +47,20 @@ test('older v1 backups without experiment history remain readable as an empty ex
   assert.equal(parsed.summary.experimentCount, 0);
 });
 
+test('backup parser rejects an experiment whose trial would be silently lost during normalization', () => {
+  const parsed = parseBackup(JSON.stringify({
+    format: 'reality-sync-backup', version: 1,
+    scheduleStore: { version: 2, days: {} }, templates: [], reminderPreferences: {},
+    experiments: [{
+      id: 'exp', title: 'Monday', action: '余白', metricKind: 'deviation', metricLabel: '変更',
+      condition: { kind: 'weekday', value: 0 }, startDateKey: '2026-08-24', targetRuns: 3, status: 'active',
+      trials: [{ recordKey: 'bad', dateKey: 'not-a-date', outcome: 'success' }],
+    }],
+  }));
+  assert.equal(parsed.ok, false);
+  assert.match(parsed.error, /実験履歴/);
+});
+
 test('backup parser rejects malformed, foreign and future backup formats', () => {
   assert.equal(parseBackup('{broken').ok, false);
   assert.equal(parseBackup(JSON.stringify({ format: 'other-app', version: 1 })).ok, false);
