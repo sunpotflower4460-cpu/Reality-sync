@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { STATUS, TABS } from './constants.js';
-import { calculateWeeklyInsights } from './utils/analytics.js';
+import { calculateMonthlyInsights, calculateWeeklyInsights } from './utils/analytics.js';
 import { dateKeyFromDate, shiftDateKey } from './utils/date.js';
 import { calculateStats, createPendingScheduleCopy } from './utils/schedule.js';
 import { usePersistentSchedules } from './hooks/usePersistentSchedules.js';
@@ -34,6 +34,7 @@ export default function App() {
   const { templates, saveTemplate, deleteTemplate } = useScheduleTemplates();
   const stats = useMemo(() => calculateStats(schedules), [schedules]);
   const weeklyInsights = useMemo(() => calculateWeeklyInsights(store.days, selectedDate), [selectedDate, store.days]);
+  const monthlyInsights = useMemo(() => calculateMonthlyInsights(store.days, selectedDate), [selectedDate, store.days]);
   const previousDate = useMemo(() => shiftDateKey(selectedDate, -1), [selectedDate]);
   const previousSchedules = store.days[previousDate] ?? [];
 
@@ -75,6 +76,7 @@ export default function App() {
           actualCategory: null,
           actualDuration: null,
           actualStartTime: null,
+          actualStartDateKey: null,
           deviationReason: null,
           mood: null,
           actualStress: null,
@@ -136,11 +138,12 @@ export default function App() {
             templateCount={templates.length}
           />
         )}
-        {activeTab === TABS.TRACK && <TrackView schedules={schedules} onRecord={(schedule) => setSelectedScheduleId(schedule.id)} />}
+        {activeTab === TABS.TRACK && <TrackView schedules={schedules} dateKey={selectedDate} onRecord={(schedule) => setSelectedScheduleId(schedule.id)} />}
         {activeTab === TABS.ANALYTICS && (
           <AnalyticsView
             stats={stats}
             weeklyInsights={weeklyInsights}
+            monthlyInsights={monthlyInsights}
             selectedDate={selectedDate}
             onChangeDate={changeDate}
           />
@@ -148,7 +151,7 @@ export default function App() {
       </main>
 
       <BottomNav activeTab={activeTab} onChange={setActiveTab} />
-      {selectedSchedule && <RecordModal schedule={selectedSchedule} onClose={() => setSelectedScheduleId(null)} onSave={saveRecord} />}
+      {selectedSchedule && <RecordModal schedule={selectedSchedule} dateKey={selectedDate} onClose={() => setSelectedScheduleId(null)} onSave={saveRecord} />}
       {editorState && (
         <ScheduleEditorModal
           schedule={editingSchedule}
