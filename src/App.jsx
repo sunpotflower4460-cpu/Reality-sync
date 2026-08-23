@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { STATUS, TABS } from './constants.js';
+import { calculateWeeklyInsights } from './utils/analytics.js';
 import { dateKeyFromDate, shiftDateKey } from './utils/date.js';
 import { calculateStats, createPendingScheduleCopy } from './utils/schedule.js';
 import { usePersistentSchedules } from './hooks/usePersistentSchedules.js';
@@ -32,6 +33,7 @@ export default function App() {
   const { schedules, setSchedules, store } = usePersistentSchedules(selectedDate);
   const { templates, saveTemplate, deleteTemplate } = useScheduleTemplates();
   const stats = useMemo(() => calculateStats(schedules), [schedules]);
+  const weeklyInsights = useMemo(() => calculateWeeklyInsights(store.days, selectedDate), [selectedDate, store.days]);
   const previousDate = useMemo(() => shiftDateKey(selectedDate, -1), [selectedDate]);
   const previousSchedules = store.days[previousDate] ?? [];
 
@@ -135,7 +137,14 @@ export default function App() {
           />
         )}
         {activeTab === TABS.TRACK && <TrackView schedules={schedules} onRecord={(schedule) => setSelectedScheduleId(schedule.id)} />}
-        {activeTab === TABS.ANALYTICS && <AnalyticsView stats={stats} />}
+        {activeTab === TABS.ANALYTICS && (
+          <AnalyticsView
+            stats={stats}
+            weeklyInsights={weeklyInsights}
+            selectedDate={selectedDate}
+            onChangeDate={changeDate}
+          />
+        )}
       </main>
 
       <BottomNav activeTab={activeTab} onChange={setActiveTab} />
