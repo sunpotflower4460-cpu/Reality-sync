@@ -4,6 +4,7 @@ import { CATEGORIES, MOOD, STATUS } from '../constants.js';
 import {
   clampNumber,
   durationAfterStatusChange,
+  isValidTime,
   parseActualDuration,
   replacementTitleForEditing,
 } from '../utils/schedule.js';
@@ -16,6 +17,8 @@ export function RecordModal({ schedule, onClose, onSave }) {
   const [mood, setMood] = useState(schedule.mood || MOOD.NORMAL);
   const [actualStress, setActualStress] = useState(schedule.actualStress ?? schedule.plannedStress);
   const [actualDuration, setActualDuration] = useState(schedule.actualDuration ?? (schedule.status === STATUS.SKIPPED ? 0 : schedule.duration));
+  const [actualStartTime, setActualStartTime] = useState(schedule.actualStartTime || '');
+  const [deviationReason, setDeviationReason] = useState(schedule.deviationReason || '');
   const [error, setError] = useState('');
 
   const title = useMemo(() => {
@@ -46,6 +49,11 @@ export function RecordModal({ schedule, onClose, onSave }) {
       return;
     }
 
+    if (recordMode !== STATUS.SKIPPED && actualStartTime && !isValidTime(actualStartTime)) {
+      setError('実際の開始時刻を正しい時刻で入力してください。');
+      return;
+    }
+
     const recordedCategory = recordMode === STATUS.SKIPPED
       ? null
       : recordMode === STATUS.CHANGED
@@ -61,6 +69,10 @@ export function RecordModal({ schedule, onClose, onSave }) {
       mood,
       actualStress: clampNumber(actualStress, 0, 100),
       actualDuration: parsedDuration,
+      actualStartTime: recordMode === STATUS.SKIPPED ? null : (actualStartTime || null),
+      deviationReason: recordMode === STATUS.CHANGED || recordMode === STATUS.SKIPPED
+        ? deviationReason.trim() || null
+        : null,
     });
   };
 
@@ -76,7 +88,7 @@ export function RecordModal({ schedule, onClose, onSave }) {
       </div>
 
       <div className="space-y-6 p-5">
-        <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm"><Clock className="h-5 w-5 text-indigo-400" aria-hidden="true" /><div><div className="font-medium text-gray-500">{schedule.time}</div><div className="font-bold text-gray-800">{schedule.title}</div></div></div>
+        <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm"><Clock className="h-5 w-5 text-indigo-400" aria-hidden="true" /><div><div className="font-medium text-gray-500">予定 {schedule.time}</div><div className="font-bold text-gray-800">{schedule.title}</div></div></div>
 
         <fieldset className="space-y-3">
           <legend className="text-sm font-bold text-gray-700">実際にはどうでしたか？</legend>
@@ -95,10 +107,31 @@ export function RecordModal({ schedule, onClose, onSave }) {
         )}
 
         {recordMode !== STATUS.SKIPPED && (
-          <label className="block space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-4">
-            <span className="flex items-end justify-between"><span className="text-sm font-bold text-gray-700">実際に費やした時間</span><span className="text-lg font-black text-indigo-600">{actualDuration === '' ? '—' : actualDuration}分</span></span>
-            <input type="number" inputMode="numeric" min="0" max="1440" step="5" value={actualDuration} onChange={(event) => { setActualDuration(event.target.value); setError(''); }} className="w-full rounded-xl border border-gray-200 bg-white p-3" />
-            <span className="block text-[10px] text-gray-500">予定は {schedule.duration}分。変更した場合も、実際の時間を記録します。</span>
+          <div className="grid grid-cols-[1fr_1.4fr] gap-3 rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <label className="block">
+              <span className="mb-2 block text-xs font-bold text-gray-700">実際の開始時刻</span>
+              <input type="time" value={actualStartTime} onChange={(event) => { setActualStartTime(event.target.value); setError(''); }} className="w-full rounded-xl border border-gray-200 bg-white p-3 text-sm" />
+              <span className="mt-1 block text-[9px] leading-relaxed text-gray-400">覚えていなければ空欄のままでOK</span>
+            </label>
+            <label className="block">
+              <span className="mb-2 flex items-center justify-between gap-2 text-xs font-bold text-gray-700"><span>実際に費やした時間</span><span className="text-indigo-600">{actualDuration === '' ? '—' : `${actualDuration}分`}</span></span>
+              <input type="number" inputMode="numeric" min="0" max="1440" step="5" value={actualDuration} onChange={(event) => { setActualDuration(event.target.value); setError(''); }} className="w-full rounded-xl border border-gray-200 bg-white p-3 text-sm" />
+              <span className="mt-1 block text-[9px] leading-relaxed text-gray-400">予定は {schedule.duration}分</span>
+            </label>
+          </div>
+        )}
+
+        {(recordMode === STATUS.CHANGED || recordMode === STATUS.SKIPPED) && (
+          <label className="block rounded-xl border border-orange-100 bg-orange-50/60 p-4">
+            <span className="mb-2 block text-sm font-bold text-orange-800">{recordMode === STATUS.SKIPPED ? 'スキップした理由' : '変更した理由'} <span className="font-normal text-orange-500">（任意）</span></span>
+            <textarea
+              value={deviationReason}
+              onChange={(event) => setDeviationReason(event.target.value)}
+              rows={3}
+              placeholder="例: 眠気が強かった / 急な連絡が入った / 気分が乗らなかった"
+              className="w-full resize-none rounded-xl border border-orange-200 bg-white p-3 text-sm outline-none focus:border-orange-400"
+            />
+            <span className="mt-1 block text-[9px] leading-relaxed text-orange-500">理由は評価せず、あとで傾向を見つけるための観測データとして使います。</span>
           </label>
         )}
 

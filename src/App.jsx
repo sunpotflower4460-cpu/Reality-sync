@@ -1,15 +1,17 @@
 import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { STATUS, TABS } from './constants.js';
-import { dateKeyFromDate } from './utils/date.js';
-import { calculateStats } from './utils/schedule.js';
+import { dateKeyFromDate, shiftDateKey } from './utils/date.js';
+import { calculateStats, createPendingScheduleCopy } from './utils/schedule.js';
 import { usePersistentSchedules } from './hooks/usePersistentSchedules.js';
+import { useScheduleTemplates } from './hooks/useScheduleTemplates.js';
 import { AnalyticsView } from './components/AnalyticsView.jsx';
 import { BottomNav } from './components/BottomNav.jsx';
 import { DateNavigator } from './components/DateNavigator.jsx';
 import { PlanView } from './components/PlanView.jsx';
 import { RecordModal } from './components/RecordModal.jsx';
 import { ScheduleEditorModal } from './components/ScheduleEditorModal.jsx';
+import { TemplateModal } from './components/TemplateModal.jsx';
 import { TrackView } from './components/TrackView.jsx';
 
 function createScheduleId() {
@@ -17,13 +19,21 @@ function createScheduleId() {
   return `schedule-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function instantiatePlans(source) {
+  return source.map((schedule) => createPendingScheduleCopy(schedule, createScheduleId()));
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState(TABS.TRACK);
   const [selectedDate, setSelectedDate] = useState(() => dateKeyFromDate());
   const [selectedScheduleId, setSelectedScheduleId] = useState(null);
   const [editorState, setEditorState] = useState(null);
-  const { schedules, setSchedules } = usePersistentSchedules(selectedDate);
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const { schedules, setSchedules, store } = usePersistentSchedules(selectedDate);
+  const { templates, saveTemplate, deleteTemplate } = useScheduleTemplates();
   const stats = useMemo(() => calculateStats(schedules), [schedules]);
+  const previousDate = useMemo(() => shiftDateKey(selectedDate, -1), [selectedDate]);
+  const previousSchedules = store.days[previousDate] ?? [];
 
   const selectedSchedule = useMemo(
     () => schedules.find((schedule) => schedule.id === selectedScheduleId) ?? null,
@@ -39,6 +49,7 @@ export default function App() {
   const changeDate = (dateKey) => {
     setSelectedScheduleId(null);
     setEditorState(null);
+    setIsTemplateModalOpen(false);
     setSelectedDate(dateKey);
   };
 
@@ -61,6 +72,8 @@ export default function App() {
           actualTitle: '',
           actualCategory: null,
           actualDuration: null,
+          actualStartTime: null,
+          deviationReason: null,
           mood: null,
           actualStress: null,
         },
@@ -73,6 +86,26 @@ export default function App() {
     setSchedules((current) => current.filter((schedule) => schedule.id !== scheduleId));
     if (selectedScheduleId === scheduleId) setSelectedScheduleId(null);
     setEditorState(null);
+  };
+
+  const confirmReplaceDay = (sourceLabel) => {
+    if (schedules.length === 0) return true;
+    const hasReality = schedules.some((schedule) => schedule.status !== STATUS.PENDING);
+    const detail = hasReality
+      ? '現在の予定と、この日に記録済みの実績も削除されます。'
+      : '現在の予定は削除されます。';
+    return window.confirm(`${sourceLabel}でこの日の予定を置き換えますか？\n${detail}`);
+  };
+
+  const copyPreviousDay = () => {
+    if (previousSchedules.length === 0 || !confirmReplaceDay('前日の予定')) return;
+    setSchedules(instantiatePlans(previousSchedules));
+  };
+
+  const applyTemplate = (template) => {
+    if (!template?.schedules?.length || !confirmReplaceDay(`テンプレート「${template.name}」`)) return;
+    setSchedules(instantiatePlans(template.schedules));
+    setIsTemplateModalOpen(false);
   };
 
   return (
@@ -95,6 +128,10 @@ export default function App() {
             schedules={schedules}
             onCreate={() => setEditorState({ type: 'create' })}
             onEdit={(id) => setEditorState({ type: 'edit', id })}
+            onCopyPrevious={copyPreviousDay}
+            hasPreviousSchedules={previousSchedules.length > 0}
+            onOpenTemplates={() => setIsTemplateModalOpen(true)}
+            templateCount={templates.length}
           />
         )}
         {activeTab === TABS.TRACK && <TrackView schedules={schedules} onRecord={(schedule) => setSelectedScheduleId(schedule.id)} />}
@@ -109,6 +146,16 @@ export default function App() {
           onClose={() => setEditorState(null)}
           onSave={saveSchedule}
           onDelete={editorState.type === 'edit' ? deleteSchedule : undefined}
+        />
+      )}
+      {isTemplateModalOpen && (
+        <TemplateModal
+          templates={templates}
+          currentSchedules={schedules}
+          onClose={() => setIsTemplateModalOpen(false)}
+          onSaveTemplate={(name) => saveTemplate(name, schedules)}
+          onApplyTemplate={applyTemplate}
+          onDeleteTemplate={deleteTemplate}
         />
       )}
     </div>

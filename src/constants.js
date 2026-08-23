@@ -30,3 +30,4 @@ export const CATEGORIES = Object.freeze([
 export const STORAGE_VERSION = 2;
 export const STORAGE_KEY = 'reality-sync:days:v2';
 export const LEGACY_STORAGE_KEY = 'reality-sync:schedules:v1';
+export const TEMPLATE_STORAGE_KEY = 'reality-sync:templates:v1';

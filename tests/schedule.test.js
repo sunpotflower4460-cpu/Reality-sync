@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   calculateStats,
+  createPendingScheduleCopy,
   durationAfterStatusChange,
   formatTime,
   isValidTime,
@@ -23,11 +24,7 @@ test('timeToHours converts valid HH:mm and rejects invalid clock values', () => 
 });
 
 test('sortSchedulesByTime returns a chronological copy without mutating input', () => {
-  const input = [
-    { id: 2, time: '18:00' },
-    { id: 1, time: '07:00' },
-    { id: 3, time: '12:30' },
-  ];
+  const input = [{ id: 2, time: '18:00' }, { id: 1, time: '07:00' }, { id: 3, time: '12:30' }];
   const ordered = sortSchedulesByTime(input);
   assert.deepEqual(ordered.map((schedule) => schedule.id), [1, 3, 2]);
   assert.deepEqual(input.map((schedule) => schedule.id), [2, 1, 3]);
@@ -48,44 +45,48 @@ test('changed schedules use the recorded actual category and duration', () => {
 });
 
 test('as-planned records keep their actual snapshot when the plan is edited later', () => {
-  const normalized = normalizeSchedule({
-    id: 'recorded',
-    time: '10:00',
-    title: 'Edited plan title',
-    category: '仕事',
-    duration: 60,
-    plannedStress: 40,
-    status: STATUS.AS_PLANNED,
-    actualTitle: 'Original recorded title',
-    actualCategory: '運動',
-    actualDuration: 30,
-    actualStress: 35,
-    mood: MOOD.GOOD,
-  });
-
+  const normalized = normalizeSchedule({ id: 'recorded', time: '10:00', title: 'Edited plan title', category: '仕事', duration: 60, plannedStress: 40, status: STATUS.AS_PLANNED, actualTitle: 'Original recorded title', actualCategory: '運動', actualDuration: 30, actualStress: 35, mood: MOOD.GOOD });
   assert.equal(normalized.actualTitle, 'Original recorded title');
   assert.equal(normalized.actualCategory, '運動');
-
   const stats = calculateStats([normalized]);
   assert.equal(stats.categories['仕事'].ideal, 60);
   assert.equal(stats.categories['仕事'].actual, 0);
   assert.equal(stats.categories['運動'].actual, 30);
 });
 
-test('normalization clamps corrupted numeric values and rejects unknown categories', () => {
-  const normalized = normalizeSchedule({
-    id: 7,
-    time: '27:80',
-    title: '  Test  ',
-    category: '__proto__',
-    duration: 99999,
-    plannedStress: -20,
-    status: STATUS.AS_PLANNED,
-    actualDuration: 99999,
-    actualStress: 500,
-    mood: 'unknown',
-  });
+test('actual start time stays unknown unless a valid time was explicitly recorded', () => {
+  const valid = normalizeSchedule({ id: 1, time: '09:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 50, status: STATUS.AS_PLANNED, actualDuration: 55, actualStartTime: '09:17' });
+  const invalid = normalizeSchedule({ id: 2, time: '10:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 50, status: STATUS.AS_PLANNED, actualDuration: 55, actualStartTime: '99:99' });
+  assert.equal(valid.actualStartTime, '09:17');
+  assert.equal(invalid.actualStartTime, null);
+});
 
+test('deviation reasons are only retained for changed or skipped reality', () => {
+  const changed = normalizeSchedule({ id: 1, time: '09:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 50, status: STATUS.CHANGED, actualTitle: 'Rest', actualCategory: '休憩', actualDuration: 20, deviationReason: '  sudden fatigue  ' });
+  const skipped = normalizeSchedule({ id: 2, time: '10:00', title: 'Run', category: '運動', duration: 30, plannedStress: 40, status: STATUS.SKIPPED, deviationReason: 'rain' });
+  const planned = normalizeSchedule({ id: 3, time: '11:00', title: 'Read', category: '自己啓発', duration: 30, plannedStress: 20, status: STATUS.AS_PLANNED, actualDuration: 30, deviationReason: 'should disappear' });
+  assert.equal(changed.deviationReason, 'sudden fatigue');
+  assert.equal(skipped.deviationReason, 'rain');
+  assert.equal(skipped.actualStartTime, null);
+  assert.equal(planned.deviationReason, null);
+});
+
+test('pending plan copies strip all historical reality fields and receive a fresh id', () => {
+  const copied = createPendingScheduleCopy({ id: 'old', time: '09:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 50, status: STATUS.CHANGED, actualTitle: 'Nap', actualCategory: '休憩', actualDuration: 30, actualStartTime: '09:20', deviationReason: 'tired', mood: MOOD.BAD, actualStress: 90 }, 'fresh');
+  assert.equal(copied.id, 'fresh');
+  assert.equal(copied.status, STATUS.PENDING);
+  assert.equal(copied.title, 'Work');
+  assert.equal(copied.actualTitle, '');
+  assert.equal(copied.actualCategory, null);
+  assert.equal(copied.actualDuration, null);
+  assert.equal(copied.actualStartTime, null);
+  assert.equal(copied.deviationReason, null);
+  assert.equal(copied.mood, null);
+  assert.equal(copied.actualStress, null);
+});
+
+test('normalization clamps corrupted numeric values and rejects unknown categories', () => {
+  const normalized = normalizeSchedule({ id: 7, time: '27:80', title: '  Test  ', category: '__proto__', duration: 99999, plannedStress: -20, status: STATUS.AS_PLANNED, actualDuration: 99999, actualStress: 500, mood: 'unknown' });
   assert.equal(normalized.time, '00:00');
   assert.equal(normalized.title, 'Test');
   assert.equal(normalized.category, 'その他');
@@ -97,25 +98,13 @@ test('normalization clamps corrupted numeric values and rejects unknown categori
 });
 
 test('malformed changed records return to pending instead of keeping inconsistent actual fields', () => {
-  const normalized = normalizeSchedule({
-    id: 3,
-    time: '12:00',
-    title: 'Lunch',
-    category: '休憩',
-    duration: 60,
-    plannedStress: 10,
-    status: STATUS.CHANGED,
-    actualTitle: '   ',
-    actualCategory: '趣味',
-    actualDuration: 30,
-    actualStress: 80,
-    mood: MOOD.BAD,
-  });
-
+  const normalized = normalizeSchedule({ id: 3, time: '12:00', title: 'Lunch', category: '休憩', duration: 60, plannedStress: 10, status: STATUS.CHANGED, actualTitle: '   ', actualCategory: '趣味', actualDuration: 30, actualStartTime: '12:10', deviationReason: 'busy', actualStress: 80, mood: MOOD.BAD });
   assert.equal(normalized.status, STATUS.PENDING);
   assert.equal(normalized.actualTitle, '');
   assert.equal(normalized.actualCategory, null);
   assert.equal(normalized.actualDuration, null);
+  assert.equal(normalized.actualStartTime, null);
+  assert.equal(normalized.deviationReason, null);
   assert.equal(normalized.actualStress, null);
   assert.equal(normalized.mood, null);
 });
@@ -128,11 +117,7 @@ test('normalization preserves an intentional empty schedule list', () => {
 test('normalization drops duplicate ids and falls back when non-empty stored entries are unusable', () => {
   const fallback = [{ id: 1, time: '07:00', title: 'Run', category: '運動', duration: 30, plannedStress: 40, status: STATUS.PENDING }];
   assert.equal(normalizeSchedules([null], fallback).length, 1);
-
-  const duplicate = normalizeSchedules([
-    { ...fallback[0] },
-    { ...fallback[0], title: 'Duplicate' },
-  ], fallback);
+  const duplicate = normalizeSchedules([{ ...fallback[0] }, { ...fallback[0], title: 'Duplicate' }], fallback);
   assert.equal(duplicate.length, 1);
   assert.equal(duplicate[0].title, 'Run');
 });
