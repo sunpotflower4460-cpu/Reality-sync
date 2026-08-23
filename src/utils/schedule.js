@@ -15,6 +15,11 @@ export function timeToHours(time) {
   return hours + minutes / 60;
 }
 
+export function sortSchedulesByTime(schedules) {
+  const list = Array.isArray(schedules) ? schedules : [];
+  return [...list].sort((a, b) => timeToHours(a?.time) - timeToHours(b?.time));
+}
+
 export function clampNumber(value, min, max) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return min;
