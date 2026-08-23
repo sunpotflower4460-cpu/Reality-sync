@@ -31,3 +31,7 @@ export const STORAGE_VERSION = 2;
 export const STORAGE_KEY = 'reality-sync:days:v2';
 export const LEGACY_STORAGE_KEY = 'reality-sync:schedules:v1';
 export const TEMPLATE_STORAGE_KEY = 'reality-sync:templates:v1';
+export const REMINDER_STORAGE_KEY = 'reality-sync:reminders:v1';
+export const REMINDER_NOTIFIED_STORAGE_KEY = 'reality-sync:reminder-notified:v1';
+export const BACKUP_FORMAT = 'reality-sync-backup';
+export const BACKUP_VERSION = 1;

@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle2, Clock3, Frown, Meh, Smile, XCircle } from 'lucide-react';
+import { AlertCircle, BellRing, CheckCircle2, Clock3, Frown, Meh, Smile, XCircle } from 'lucide-react';
 import { MOOD, STATUS } from '../constants.js';
 import { formatShortDateLabel } from '../utils/date.js';
 import { sortSchedulesByTime } from '../utils/schedule.js';
@@ -37,7 +37,7 @@ function TimelineTitle({ schedule, recorded }) {
   return <span className="flex flex-col"><span className="text-[10px] font-normal text-gray-400">現在の予定: {schedule.title}</span><span className="break-words">記録時: {recordedTitle}<span className="ml-1 text-[10px] font-normal text-green-700">({recordedCategory})</span></span></span>;
 }
 
-export function TrackView({ schedules, dateKey, onRecord }) {
+export function TrackView({ schedules, dueSchedules = [], dateKey, onRecord }) {
   const orderedSchedules = sortSchedulesByTime(schedules);
 
   if (orderedSchedules.length === 0) {
@@ -46,6 +46,27 @@ export function TrackView({ schedules, dateKey, onRecord }) {
 
   return (
     <div className="animate-fade-in space-y-6 pt-4">
+      {dueSchedules.length > 0 && (
+        <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4 shadow-sm" aria-labelledby="due-reminders-title">
+          <div className="flex items-start gap-3">
+            <div className="rounded-full bg-white p-2 text-amber-600 shadow-sm"><BellRing className="h-5 w-5" /></div>
+            <div className="min-w-0 flex-1">
+              <h2 id="due-reminders-title" className="text-sm font-extrabold text-amber-900">記録待ちが {dueSchedules.length}件あります</h2>
+              <p className="mt-1 text-[10px] leading-relaxed text-amber-700">予定時刻を過ぎても未記録の今日の予定です。実際にどうだったかを残すと、後の分析に反映されます。</p>
+              <div className="mt-3 space-y-2">
+                {dueSchedules.slice(0, 3).map((schedule) => (
+                  <button key={schedule.id} type="button" onClick={() => onRecord(schedule)} className="flex w-full items-center justify-between gap-3 rounded-xl bg-white px-3 py-2.5 text-left shadow-sm">
+                    <span className="min-w-0"><span className="mr-2 text-xs font-black text-amber-600">{schedule.time}</span><span className="truncate text-xs font-bold text-gray-700">{schedule.title}</span></span>
+                    <span className="shrink-0 text-[10px] font-bold text-indigo-600">記録する</span>
+                  </button>
+                ))}
+                {dueSchedules.length > 3 && <p className="text-right text-[10px] font-medium text-amber-700">ほか {dueSchedules.length - 3}件</p>}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       <StressGraph schedules={orderedSchedules} dateKey={dateKey} />
       <section className="space-y-4" aria-labelledby="timeline-title">
         <h2 id="timeline-title" className="pl-1 text-lg font-bold text-gray-800">実行タイムライン</h2>

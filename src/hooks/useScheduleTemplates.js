@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { TEMPLATE_STORAGE_KEY } from '../constants.js';
-import { createTemplateFromSchedules, parseStoredTemplates } from '../utils/template.js';
+import { createTemplateFromSchedules, normalizeTemplates, parseStoredTemplates } from '../utils/template.js';
 
 function createTemplateId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -47,5 +47,9 @@ export function useScheduleTemplates() {
     setTemplates((current) => current.filter((template) => template.id !== templateId));
   }, []);
 
-  return { templates, saveTemplate, deleteTemplate };
+  const replaceTemplates = useCallback((nextTemplates) => {
+    setTemplates(normalizeTemplates(nextTemplates));
+  }, []);
+
+  return { templates, saveTemplate, deleteTemplate, replaceTemplates };
 }
