@@ -7,43 +7,63 @@ import {
   createEmptyScheduleStore,
   migrateLegacySchedules,
   normalizeScheduleStore,
-  parseStoredScheduleStore,
+  parseStoredScheduleStoreResult,
 } from '../utils/storage.js';
 
-function loadScheduleStore() {
-  if (typeof window === 'undefined') return createEmptyScheduleStore();
+function loadScheduleState() {
+  if (typeof window === 'undefined') {
+    return { store: createEmptyScheduleStore(), persistenceBlocked: false, unsupportedVersion: null };
+  }
 
   try {
     const current = window.localStorage.getItem(STORAGE_KEY);
-    if (current) return parseStoredScheduleStore(current);
+    if (current) {
+      const result = parseStoredScheduleStoreResult(current);
+      return {
+        store: result.store,
+        persistenceBlocked: !result.ok,
+        unsupportedVersion: result.unsupportedVersion,
+      };
+    }
 
-    return migrateLegacySchedules(
-      window.localStorage.getItem(LEGACY_STORAGE_KEY),
-      dateKeyFromDate(),
-      INITIAL_SCHEDULES,
-    );
+    return {
+      store: migrateLegacySchedules(
+        window.localStorage.getItem(LEGACY_STORAGE_KEY),
+        dateKeyFromDate(),
+        INITIAL_SCHEDULES,
+      ),
+      persistenceBlocked: false,
+      unsupportedVersion: null,
+    };
   } catch {
-    return createEmptyScheduleStore();
+    return { store: createEmptyScheduleStore(), persistenceBlocked: false, unsupportedVersion: null };
   }
 }
 
 export function usePersistentSchedules(dateKey) {
-  const [store, setStore] = useState(loadScheduleStore);
+  const [state, setState] = useState(loadScheduleState);
+  const { store, persistenceBlocked, unsupportedVersion } = state;
   const schedules = useMemo(() => store.days[dateKey] ?? [], [dateKey, store.days]);
 
   useEffect(() => {
+    if (persistenceBlocked) return;
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
       window.localStorage.removeItem(LEGACY_STORAGE_KEY);
     } catch {
       // Restricted/private browsing can reject storage. In-memory mode remains usable.
     }
-  }, [store]);
+  }, [persistenceBlocked, store]);
 
   useEffect(() => {
     const syncFromStorage = (event) => {
       if (event.key !== STORAGE_KEY) return;
-      setStore(parseStoredScheduleStore(event.newValue));
+      const result = parseStoredScheduleStoreResult(event.newValue);
+      setState({
+        store: result.store,
+        persistenceBlocked: !result.ok,
+        unsupportedVersion: result.unsupportedVersion,
+      });
     };
 
     window.addEventListener('storage', syncFromStorage);
@@ -51,31 +71,45 @@ export function usePersistentSchedules(dateKey) {
   }, []);
 
   const setSchedules = useCallback((nextValue) => {
-    setStore((current) => {
-      const currentDay = current.days[dateKey] ?? [];
+    setState((currentState) => {
+      const currentDay = currentState.store.days[dateKey] ?? [];
       const nextDay = typeof nextValue === 'function' ? nextValue(currentDay) : nextValue;
       return {
-        ...current,
-        days: {
-          ...current.days,
-          [dateKey]: normalizeSchedules(nextDay, []),
+        ...currentState,
+        store: {
+          ...currentState.store,
+          days: {
+            ...currentState.store.days,
+            [dateKey]: normalizeSchedules(nextDay, []),
+          },
         },
       };
     });
   }, [dateKey]);
 
   const clearDay = useCallback(() => {
-    setStore((current) => {
-      if (!(dateKey in current.days)) return current;
-      const days = { ...current.days };
+    setState((currentState) => {
+      if (!(dateKey in currentState.store.days)) return currentState;
+      const days = { ...currentState.store.days };
       delete days[dateKey];
-      return { ...current, days };
+      return { ...currentState, store: { ...currentState.store, days } };
     });
   }, [dateKey]);
 
   const replaceStore = useCallback((nextStore) => {
-    setStore(normalizeScheduleStore(nextStore));
+    setState({
+      store: normalizeScheduleStore(nextStore),
+      persistenceBlocked: false,
+      unsupportedVersion: null,
+    });
   }, []);
 
-  return { schedules, setSchedules, clearDay, store, replaceStore };
+  return {
+    schedules,
+    setSchedules,
+    clearDay,
+    store,
+    replaceStore,
+    storageProtection: { persistenceBlocked, unsupportedVersion },
+  };
 }
