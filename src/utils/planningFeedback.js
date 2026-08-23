@@ -77,8 +77,7 @@ function pendingPlan(id, time, title, category, duration, plannedStress, applied
 }
 
 function feedbackAllowedOnDate(experiment, dateKey) {
-  if (!experiment.decisionDateKey) return !experiment.planAdjustment;
-  return dateKey >= experiment.decisionDateKey;
+  return !experiment.decisionDateKey || dateKey >= experiment.decisionDateKey;
 }
 
 export function adoptedExperiments(experiments) {
