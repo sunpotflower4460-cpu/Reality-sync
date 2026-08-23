@@ -1,5 +1,6 @@
 import { AlertCircle, CheckCircle2, Clock3, Frown, Meh, Smile, XCircle } from 'lucide-react';
 import { MOOD, STATUS } from '../constants.js';
+import { formatShortDateLabel } from '../utils/date.js';
 import { sortSchedulesByTime } from '../utils/schedule.js';
 import { StressGraph } from './StressGraph.jsx';
 
@@ -36,7 +37,7 @@ function TimelineTitle({ schedule, recorded }) {
   return <span className="flex flex-col"><span className="text-[10px] font-normal text-gray-400">現在の予定: {schedule.title}</span><span className="break-words">記録時: {recordedTitle}<span className="ml-1 text-[10px] font-normal text-green-700">({recordedCategory})</span></span></span>;
 }
 
-export function TrackView({ schedules, onRecord }) {
+export function TrackView({ schedules, dateKey, onRecord }) {
   const orderedSchedules = sortSchedulesByTime(schedules);
 
   if (orderedSchedules.length === 0) {
@@ -45,22 +46,24 @@ export function TrackView({ schedules, onRecord }) {
 
   return (
     <div className="animate-fade-in space-y-6 pt-4">
-      <StressGraph schedules={orderedSchedules} />
+      <StressGraph schedules={orderedSchedules} dateKey={dateKey} />
       <section className="space-y-4" aria-labelledby="timeline-title">
         <h2 id="timeline-title" className="pl-1 text-lg font-bold text-gray-800">実行タイムライン</h2>
         <div className="relative ml-4 space-y-5 border-l-[3px] border-indigo-100 pb-4">
           {orderedSchedules.map((schedule) => {
             const recorded = schedule.status !== STATUS.PENDING;
+            const actualDateDiffers = schedule.actualStartDateKey && schedule.actualStartDateKey !== dateKey;
             return (
               <article key={schedule.id} className="relative pl-6">
                 <div className={`absolute -left-[11px] top-1 h-5 w-5 rounded-full border-[3px] border-white shadow-sm ${dotClass(schedule.status)}`} aria-hidden="true" />
-                <div className="mb-1 flex items-center gap-2 text-sm font-bold text-indigo-600">
-                  <time dateTime={schedule.time}>予定 {schedule.time}</time>
-                  {recorded && schedule.actualStartTime && schedule.status !== STATUS.SKIPPED && <><span className="text-gray-300">→</span><span className="flex items-center gap-1 text-pink-600"><Clock3 className="h-3.5 w-3.5" />実際 {schedule.actualStartTime}</span></>}
+                <div className="mb-1 flex flex-wrap items-center gap-2 text-sm font-bold text-indigo-600">
+                  <time dateTime={`${dateKey}T${schedule.time}`}>予定 {schedule.time}</time>
+                  {recorded && schedule.actualStartTime && schedule.status !== STATUS.SKIPPED && <><span className="text-gray-300">→</span><span className="flex items-center gap-1 text-pink-600"><Clock3 className="h-3.5 w-3.5" />実際 {actualDateDiffers ? `${formatShortDateLabel(schedule.actualStartDateKey)} ` : ''}{schedule.actualStartTime}</span></>}
                 </div>
                 <button type="button" onClick={() => onRecord(schedule)} className={`w-full rounded-2xl border p-4 text-left shadow-sm transition hover:shadow-md active:scale-[0.99] ${statusCardClass(schedule.status)}`} aria-label={`${schedule.time} ${schedule.title} の実績を${recorded ? '編集' : '記録'}する`}>
                   <div className="mb-2 flex items-start justify-between gap-3"><div className={`min-w-0 font-bold ${schedule.status === STATUS.SKIPPED ? 'text-gray-500' : 'text-gray-800'}`}><TimelineTitle schedule={schedule} recorded={recorded} /></div>{recorded && <span className="shrink-0 rounded-full border border-gray-100 bg-white px-2 py-0.5 shadow-sm"><MoodIcon mood={schedule.mood} /></span>}</div>
-                  {recorded && !schedule.actualStartTime && schedule.status !== STATUS.SKIPPED && <p className="mb-2 text-[10px] font-medium text-gray-400">実際の開始時刻は未記録</p>}
+                  {recorded && !schedule.actualStartTime && schedule.status !== STATUS.SKIPPED && <p className="mb-2 text-[10px] font-medium text-gray-400">実際の開始日時は未記録</p>}
+                  {recorded && schedule.actualStartTime && !schedule.actualStartDateKey && schedule.status !== STATUS.SKIPPED && <p className="mb-2 text-[10px] font-medium text-amber-600">開始時刻はありますが、開始日は旧記録のため不明です</p>}
                   {recorded && schedule.deviationReason && <p className="mb-3 rounded-lg bg-white/70 px-2.5 py-2 text-[10px] leading-relaxed text-gray-600"><span className="font-bold">理由:</span> {schedule.deviationReason}</p>}
                   <div className="mt-3 flex items-center justify-between gap-3 border-t border-black/5 pt-3">
                     <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
