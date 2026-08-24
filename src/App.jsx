@@ -93,34 +93,85 @@ export default function App() {
     setIsTemplateModalOpen(false);
     setSelectedDate(dateKey);
   };
-  const saveRecord = (record) => { if (selectedScheduleId === null || protectedMode) return; setSchedules((current) => current.map((schedule) => schedule.id === selectedScheduleId ? { ...schedule, ...record } : schedule)); setSelectedScheduleId(null); };
+
+  const saveRecord = (record) => {
+    if (selectedScheduleId === null || protectedMode) return;
+    setSchedules((current) => current.map((schedule) => schedule.id === selectedScheduleId ? { ...schedule, ...record } : schedule));
+    setSelectedScheduleId(null);
+  };
+
   const saveSchedule = (draft) => {
     if (protectedMode) return;
-    if (editorState?.type === 'edit') setSchedules((current) => current.map((schedule) => schedule.id === editorState.id ? { ...schedule, ...draft } : schedule));
-    else setSchedules((current) => [...current, { id: createScheduleId(), ...draft, appliedExperimentIds: [], status: STATUS.PENDING, plannedSnapshot: null, actualTitle: '', actualCategory: null, actualDuration: null, actualStartTime: null, actualStartDateKey: null, deviationReason: null, mood: null, actualStress: null }]);
+    if (editorState?.type === 'edit') {
+      setSchedules((current) => current.map((schedule) => schedule.id === editorState.id ? { ...schedule, ...draft } : schedule));
+    } else {
+      setSchedules((current) => [...current, {
+        id: createScheduleId(),
+        ...draft,
+        appliedExperimentIds: [],
+        status: STATUS.PENDING,
+        plannedSnapshot: null,
+        actualTitle: '',
+        actualCategory: null,
+        actualDuration: null,
+        actualStartTime: null,
+        actualStartDateKey: null,
+        deviationReason: null,
+        mood: null,
+        actualStress: null,
+      }]);
+    }
     setEditorState(null);
   };
-  const deleteSchedule = (scheduleId) => { if (protectedMode) return; setSchedules((current) => current.filter((schedule) => schedule.id !== scheduleId)); if (selectedScheduleId === scheduleId) setSelectedScheduleId(null); setSelectedPlanFeedbackId(null); setEditorState(null); };
+
+  const deleteSchedule = (scheduleId) => {
+    if (protectedMode) return;
+    setSchedules((current) => current.filter((schedule) => schedule.id !== scheduleId));
+    if (selectedScheduleId === scheduleId) setSelectedScheduleId(null);
+    setSelectedPlanFeedbackId(null);
+    setEditorState(null);
+  };
+
   const confirmReplaceDay = (sourceLabel) => {
     if (schedules.length === 0) return true;
     const hasReality = schedules.some((schedule) => schedule.status !== STATUS.PENDING);
     return window.confirm(`${sourceLabel}でこの日の予定を置き換えますか？\n${hasReality ? '現在の予定と、この日に記録済みの実績も削除されます。' : '現在の予定は削除されます。'}`);
   };
-  const copyPreviousDay = () => { if (protectedMode || previousSchedules.length === 0 || !confirmReplaceDay('前日の予定')) return; setSchedules(instantiatePlans(previousSchedules)); setSelectedPlanFeedbackId(null); };
-  const applyTemplate = (template) => { if (protectedMode || !template?.schedules?.length || !confirmReplaceDay(`テンプレート「${template.name}」`)) return; setSchedules(instantiatePlans(template.schedules)); setSelectedPlanFeedbackId(null); setIsTemplateModalOpen(false); };
+
+  const copyPreviousDay = () => {
+    if (protectedMode || previousSchedules.length === 0 || !confirmReplaceDay('前日の予定')) return;
+    setSchedules(instantiatePlans(previousSchedules));
+    setSelectedPlanFeedbackId(null);
+  };
+
+  const applyTemplate = (template) => {
+    if (protectedMode || !template?.schedules?.length || !confirmReplaceDay(`テンプレート「${template.name}」`)) return;
+    setSchedules(instantiatePlans(template.schedules));
+    setSelectedPlanFeedbackId(null);
+    setIsTemplateModalOpen(false);
+  };
 
   const applySelectedPlanFeedback = () => {
     if (protectedMode || !selectedPlanFeedback) return;
     const experiment = experiments.find((item) => item.id === selectedPlanFeedback.experimentId);
-    if (!experiment) { setSelectedPlanFeedbackId(null); return; }
+    if (!experiment) {
+      setSelectedPlanFeedbackId(null);
+      return;
+    }
     const result = applyPlanFeedback(experiment, selectedDate, schedules, selectedPlanFeedback.scheduleId, createScheduleId());
     if (result.ok) setSchedules(result.schedules);
     setSelectedPlanFeedbackId(null);
   };
 
   const restoreBackup = ({ scheduleStore, templates: restoredTemplates, reminderPreferences: restoredReminders, experiments: restoredExperiments = [] }) => {
-    replaceStore(scheduleStore); replaceTemplates(restoredTemplates); replaceReminderPreferences(restoredReminders); replaceExperiments(restoredExperiments);
-    setSelectedScheduleId(null); setSelectedPlanFeedbackId(null); setEditorState(null); setIsTemplateModalOpen(false);
+    replaceStore(scheduleStore);
+    replaceTemplates(restoredTemplates);
+    replaceReminderPreferences(restoredReminders);
+    replaceExperiments(restoredExperiments);
+    setSelectedScheduleId(null);
+    setSelectedPlanFeedbackId(null);
+    setEditorState(null);
+    setIsTemplateModalOpen(false);
     const dayKeys = Object.keys(scheduleStore.days).sort();
     if (!(selectedDate in scheduleStore.days) && dayKeys.length > 0) setSelectedDate(dayKeys.at(-1));
   };
@@ -150,24 +201,45 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-dvh bg-gray-50 pb-28 text-gray-800">
-      <header className="sticky top-0 z-10 rounded-b-[1.75rem] bg-indigo-600 px-4 pb-4 pt-app-safe text-white shadow-[0_10px_30px_rgba(79,70,229,0.18)]">
+    <div className="min-h-dvh bg-transparent pb-28 text-slate-800">
+      <header className="sticky top-0 z-10 rounded-b-[2rem] bg-gradient-to-br from-indigo-600 via-indigo-600 to-violet-700 px-4 pb-4 pt-app-safe text-white shadow-[0_14px_38px_rgba(79,70,229,0.24)]">
         <div className="mx-auto max-w-md">
           <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0"><h1 className="truncate text-2xl font-black tracking-tight">RealitySync</h1><p className="mt-0.5 text-xs font-medium text-indigo-200">理想と現実のギャップを力に変える</p></div>
+            <div className="min-w-0">
+              <h1 className="truncate text-[1.55rem] font-black tracking-[-0.035em]">RealitySync</h1>
+              <p className="mt-0.5 text-[11px] font-semibold tracking-wide text-indigo-100/90">理想と現実のギャップを、次の予定へ</p>
+            </div>
             <div className="flex shrink-0 items-center gap-1.5">
-              {activeTab === TABS.PLAN && !protectedMode && <button type="button" onClick={() => setEditorState({ type: 'create' })} aria-label="予定を追加" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-sm transition hover:bg-white/25 active:bg-white/30"><Plus className="h-5 w-5" /></button>}
-              <button type="button" onClick={() => setIsSettingsOpen(true)} aria-label="設定とデータを開く" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-sm transition hover:bg-white/25 active:bg-white/30"><Settings className="h-5 w-5" /></button>
+              {activeTab === TABS.PLAN && !protectedMode && (
+                <button type="button" onClick={() => setEditorState({ type: 'create' })} aria-label="予定を追加" className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/15 bg-white/12 text-white shadow-sm backdrop-blur-sm transition hover:bg-white/20 active:scale-[0.97]">
+                  <Plus className="h-5 w-5" />
+                </button>
+              )}
+              <button type="button" onClick={() => setIsSettingsOpen(true)} aria-label="設定とデータを開く" className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/15 bg-white/12 text-white shadow-sm backdrop-blur-sm transition hover:bg-white/20 active:scale-[0.97]">
+                <Settings className="h-5 w-5" />
+              </button>
             </div>
           </div>
           <DateNavigator dateKey={selectedDate} onChange={changeDate} />
         </div>
       </header>
 
-      <main className="mx-auto -mt-1 max-w-md p-4">
+      <main className="mx-auto max-w-md px-4 pb-4">
         {protectedMode ? (
-          <section className="mt-5 rounded-3xl border border-red-200 bg-white p-6 text-center shadow-sm"><div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-500"><AlertTriangle className="h-6 w-6" /></div><h2 className="text-lg font-extrabold text-gray-800">保存データを保護しています</h2><p className="mt-2 text-sm leading-relaxed text-gray-500">現在版では保存済みデータを安全に解釈できないため、編集と自動保存を停止しました。元のlocalStorageは上書きしていません。</p>{storageProtection.unsupportedVersion !== null && <p className="mt-2 text-xs font-bold text-red-600">検出した保存版: {String(storageProtection.unsupportedVersion)}</p>}<button type="button" onClick={() => setIsSettingsOpen(true)} className="mt-5 min-h-12 w-full rounded-xl bg-indigo-600 px-4 text-sm font-bold text-white">設定とデータを開く</button></section>
-        ) : <>{activeTab === TABS.PLAN && <PlanView schedules={schedules} onCreate={() => setEditorState({ type: 'create' })} onEdit={(id) => setEditorState({ type: 'edit', id })} onCopyPrevious={copyPreviousDay} hasPreviousSchedules={previousSchedules.length > 0} onOpenTemplates={() => setIsTemplateModalOpen(true)} templateCount={templates.length} planFeedbackSuggestions={planFeedbackSuggestions} onReviewPlanFeedback={(suggestion) => setSelectedPlanFeedbackId(suggestion.id)} />}{activeTab === TABS.TRACK && <TrackView schedules={schedules} dueSchedules={dueSchedules} dateKey={selectedDate} onRecord={(schedule) => setSelectedScheduleId(schedule.id)} />}{activeTab === TABS.ANALYTICS && <AnalyticsView stats={stats} weeklyInsights={weeklyInsights} monthlyInsights={monthlyInsights} longitudinalInsights={longitudinalInsights} selectedDate={selectedDate} onChangeDate={changeDate} />}</>}
+          <section className="app-card mt-5 rounded-[1.6rem] border-red-200 p-6 text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-500"><AlertTriangle className="h-6 w-6" /></div>
+            <h2 className="text-lg font-black text-slate-800">保存データを保護しています</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-500">現在版では保存済みデータを安全に解釈できないため、編集と自動保存を停止しました。元データは上書きしていません。</p>
+            {storageProtection.unsupportedVersion !== null && <p className="mt-2 text-xs font-bold text-red-600">検出した保存版: {String(storageProtection.unsupportedVersion)}</p>}
+            <button type="button" onClick={() => setIsSettingsOpen(true)} className="mt-5 min-h-12 w-full rounded-2xl bg-indigo-600 px-4 text-sm font-extrabold text-white">設定とデータを開く</button>
+          </section>
+        ) : (
+          <>
+            {activeTab === TABS.PLAN && <PlanView schedules={schedules} onCreate={() => setEditorState({ type: 'create' })} onEdit={(id) => setEditorState({ type: 'edit', id })} onCopyPrevious={copyPreviousDay} hasPreviousSchedules={previousSchedules.length > 0} onOpenTemplates={() => setIsTemplateModalOpen(true)} templateCount={templates.length} planFeedbackSuggestions={planFeedbackSuggestions} onReviewPlanFeedback={(suggestion) => setSelectedPlanFeedbackId(suggestion.id)} />}
+            {activeTab === TABS.TRACK && <TrackView schedules={schedules} dueSchedules={dueSchedules} dateKey={selectedDate} onRecord={(schedule) => setSelectedScheduleId(schedule.id)} />}
+            {activeTab === TABS.ANALYTICS && <AnalyticsView stats={stats} weeklyInsights={weeklyInsights} monthlyInsights={monthlyInsights} longitudinalInsights={longitudinalInsights} selectedDate={selectedDate} onChangeDate={changeDate} />}
+          </>
+        )}
       </main>
 
       {!protectedMode && <BottomNav activeTab={activeTab} onChange={setActiveTab} />}
