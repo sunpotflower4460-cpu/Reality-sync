@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { Activity, Layers, Sparkles } from 'lucide-react';
 import { formatTime } from '../utils/schedule.js';
-import { ContextShiftReviewSection } from './ContextShiftReviewSection.jsx';
-import { InsightCandidatesView } from './InsightCandidatesView.jsx';
 import { MonthlyAnalyticsView } from './MonthlyAnalyticsView.jsx';
 import { WeeklyAnalyticsView } from './WeeklyAnalyticsView.jsx';
 
@@ -11,63 +9,49 @@ export function AnalyticsView({
   weeklyInsights,
   monthlyInsights,
   longitudinalInsights,
-  experiments,
-  days,
   selectedDate,
   onChangeDate,
-  onStartExperiment,
-  onStartRevalidation,
-  onCaptureTrial,
-  onRemoveTrial,
-  onFinishExperiment,
-  onAbandonExperiment,
-  onDeleteExperiment,
 }) {
-  const [scope, setScope] = useState('day');
+  const [detailScope, setDetailScope] = useState('week');
 
   return (
     <div className="animate-fade-in space-y-4 pt-4">
-      <div className="grid grid-cols-4 rounded-2xl bg-gray-100 p-1" role="group" aria-label="分析期間">
-        {[
-          ['day', '日'],
-          ['week', '週'],
-          ['month', '月'],
-          ['insights', '傾向'],
-        ].map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setScope(value)}
-            aria-pressed={scope === value}
-            className={`rounded-xl py-2.5 text-sm font-bold transition ${scope === value ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <DailyAnalyticsContent stats={stats} />
+      <SimpleInsightCard insights={longitudinalInsights} />
 
-      {scope === 'day' && <DailyAnalyticsContent stats={stats} />}
-      {scope === 'week' && <WeeklyAnalyticsView insights={weeklyInsights} selectedDate={selectedDate} onChangeDate={onChangeDate} />}
-      {scope === 'month' && <MonthlyAnalyticsView insights={monthlyInsights} selectedDate={selectedDate} onChangeDate={onChangeDate} />}
-      {scope === 'insights' && (
-        <>
-          <InsightCandidatesView
-            insights={longitudinalInsights}
-            experiments={experiments}
-            days={days}
-            selectedDate={selectedDate}
-            onStartExperiment={onStartExperiment}
-            onStartRevalidation={onStartRevalidation}
-            onCaptureTrial={onCaptureTrial}
-            onRemoveTrial={onRemoveTrial}
-            onFinishExperiment={onFinishExperiment}
-            onAbandonExperiment={onAbandonExperiment}
-            onDeleteExperiment={onDeleteExperiment}
-          />
-          <ContextShiftReviewSection experiments={experiments} days={days} throughDateKey={selectedDate} />
-        </>
-      )}
+      <details className="rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <summary className="cursor-pointer list-none px-4 py-3 text-xs font-bold text-gray-500">週・月の振り返り</summary>
+        <div className="border-t border-gray-100 p-3">
+          <div className="mb-3 grid grid-cols-2 rounded-xl bg-gray-100 p-1" role="group" aria-label="振り返り期間">
+            <button type="button" onClick={() => setDetailScope('week')} aria-pressed={detailScope === 'week'} className={`rounded-lg py-2 text-xs font-bold transition ${detailScope === 'week' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>週</button>
+            <button type="button" onClick={() => setDetailScope('month')} aria-pressed={detailScope === 'month'} className={`rounded-lg py-2 text-xs font-bold transition ${detailScope === 'month' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>月</button>
+          </div>
+          {detailScope === 'week' && <WeeklyAnalyticsView insights={weeklyInsights} selectedDate={selectedDate} onChangeDate={onChangeDate} />}
+          {detailScope === 'month' && <MonthlyAnalyticsView insights={monthlyInsights} selectedDate={selectedDate} onChangeDate={onChangeDate} />}
+        </div>
+      </details>
     </div>
+  );
+}
+
+function SimpleInsightCard({ insights }) {
+  const candidate = insights?.candidates?.[0] ?? null;
+  if (!candidate) {
+    return (
+      <section className="rounded-2xl border border-dashed border-indigo-100 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-2 text-sm font-extrabold text-gray-800"><Sparkles className="h-4 w-4 text-indigo-400" />記録からの気づき</div>
+        <p className="mt-2 text-xs leading-relaxed text-gray-500">記録がたまると、次の予定を少し現実に近づけるための気づきをここに1つだけ表示します。</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 shadow-sm">
+      <div className="flex items-center gap-2 text-sm font-extrabold text-indigo-900"><Sparkles className="h-4 w-4 text-indigo-500" />記録からの気づき</div>
+      <h2 className="mt-2 text-sm font-extrabold leading-relaxed text-gray-800">{candidate.title}</h2>
+      <p className="mt-2 text-xs leading-relaxed text-gray-600">{candidate.observation}</p>
+      <p className="mt-3 text-[10px] leading-relaxed text-gray-400">まだ断定ではありません。次の予定を考える時に、少し意識してみるためのヒントとして扱います。</p>
+    </section>
   );
 }
 
@@ -76,7 +60,7 @@ function DailyAnalyticsContent({ stats }) {
     return (
       <section className="rounded-3xl border border-dashed border-indigo-200 bg-white p-8 text-center shadow-sm">
         <h2 className="mb-2 text-lg font-extrabold text-gray-800">この日に分析する予定がまだありません</h2>
-        <p className="text-sm leading-relaxed text-gray-500">計画と実績がたまると、理想と現実の差や負荷の傾向がここに育っていきます。週・月・傾向タブには他の日の記録も含まれます。</p>
+        <p className="text-sm leading-relaxed text-gray-500">予定と実績を記録すると、理想と現実の違いがここに見えてきます。</p>
       </section>
     );
   }
@@ -88,7 +72,7 @@ function DailyAnalyticsContent({ stats }) {
     <div className="space-y-6">
       <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
         <h2 className="mb-2 flex items-center gap-2 text-base font-bold text-gray-800"><Layers className="h-5 w-5 text-indigo-500" aria-hidden="true" />理想の軌跡 vs 現実の歩み</h2>
-        <p className="mb-5 text-xs leading-relaxed text-gray-500">予定外の行動も、実際に記録した時間だけを「現実の積み重ね」として可視化します。記録時の予定スナップショットがある実績は、その当時の理想を使います。</p>
+        <p className="mb-5 text-xs leading-relaxed text-gray-500">予定外の行動も、実際に記録した時間だけを「現実の積み重ね」として可視化します。</p>
         <div className="space-y-5">
           {Object.entries(stats.categories).map(([category, data]) => {
             const idealPercent = (data.ideal / maxTime) * 100;
