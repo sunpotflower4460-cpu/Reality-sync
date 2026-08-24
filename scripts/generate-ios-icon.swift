@@ -32,8 +32,8 @@ context.shouldAntialias = true
 
 let fullRect = NSRect(origin: .zero, size: size)
 let background = NSGradient(colors: [
-    NSColor(calibratedRed: 79/255, green: 70/255, blue: 229/255, alpha: 1),
-    NSColor(calibratedRed: 124/255, green: 58/255, blue: 237/255, alpha: 1),
+    NSColor(calibratedRed: 79.0/255.0, green: 70.0/255.0, blue: 229.0/255.0, alpha: 1),
+    NSColor(calibratedRed: 124.0/255.0, green: 58.0/255.0, blue: 237.0/255.0, alpha: 1),
 ])!
 background.draw(in: fullRect, angle: -45)
 
@@ -57,7 +57,7 @@ planned.curve(to: NSPoint(x: 840, y: 534), controlPoint1: NSPoint(x: 536, y: 278
 planned.lineWidth = 34
 planned.lineCapStyle = .round
 planned.setLineDash([34, 30], count: 2, phase: 0)
-NSColor(calibratedRed: 199/255, green: 210/255, blue: 254/255, alpha: 0.78).setStroke()
+NSColor(calibratedRed: 199.0/255.0, green: 210.0/255.0, blue: 254.0/255.0, alpha: 0.78).setStroke()
 planned.stroke()
 
 let actual = NSBezierPath()
@@ -66,11 +66,8 @@ actual.curve(to: NSPoint(x: 472, y: 374), controlPoint1: NSPoint(x: 280, y: 518)
 actual.curve(to: NSPoint(x: 840, y: 442), controlPoint1: NSPoint(x: 568, y: 230), controlPoint2: NSPoint(x: 704, y: 230))
 actual.lineWidth = 60
 actual.lineCapStyle = .round
-let actualGradient = NSGradient(colors: [.white, NSColor(calibratedRed: 249/255, green: 168/255, blue: 212/255, alpha: 1)])!
-context.saveGraphicsState()
-actual.addClip()
-actualGradient.draw(in: fullRect, angle: 0)
-context.restoreGraphicsState()
+NSColor.white.setStroke()
+actual.stroke()
 
 for point in [NSPoint(x: 184, y: 374), NSPoint(x: 472, y: 374), NSPoint(x: 840, y: 442)] {
     NSColor.white.setFill()
