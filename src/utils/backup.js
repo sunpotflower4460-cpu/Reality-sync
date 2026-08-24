@@ -1,4 +1,5 @@
 import { BACKUP_FORMAT, BACKUP_VERSION } from '../constants.js';
+import { normalizeContextRule } from './contextRule.js';
 import { isValidDateKey } from './date.js';
 import { normalizeExperiments, normalizePlanAdjustment, normalizeRetentionSnapshot } from './experiment.js';
 import { normalizeReminderPreferences } from './reminder.js';
@@ -19,6 +20,12 @@ function experimentMetadataPreserved(rawExperiments, experiments) {
       const validatedAdjustment = normalizePlanAdjustment(raw.planAdjustment);
       if (!validatedAdjustment || JSON.stringify(validatedAdjustment) !== JSON.stringify(normalized.planAdjustment)) return false;
     }
+
+    if (raw.contextRule !== undefined && raw.contextRule !== null) {
+      const validatedRule = normalizeContextRule(raw.contextRule);
+      if (!validatedRule || JSON.stringify(validatedRule) !== JSON.stringify(normalized.contextRule)) return false;
+    }
+    if (raw.contextRule === null && normalized.contextRule !== null) return false;
 
     if (raw.decisionDateKey !== undefined && raw.decisionDateKey !== null) {
       if (!isValidDateKey(raw.decisionDateKey) || normalized.decisionDateKey !== raw.decisionDateKey) return false;
