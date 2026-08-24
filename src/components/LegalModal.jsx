@@ -1,7 +1,6 @@
 import { ExternalLink, FileText, ShieldCheck, XCircle } from 'lucide-react';
+import { SUPPORT_URL } from '../config/app.js';
 import { ModalDialog } from './ModalDialog.jsx';
-
-export const SUPPORT_URL = 'https://github.com/sunpotflower4460-cpu/Reality-sync/issues';
 
 const EFFECTIVE_DATE = '2026年8月24日';
 
