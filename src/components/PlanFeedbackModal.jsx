@@ -33,6 +33,14 @@ export function PlanFeedbackModal({ preview, onApply, onClose }) {
           <p className="mt-2 text-xs leading-relaxed text-indigo-700">{preview.action}</p>
         </section>
 
+        {preview.contextRuleLabel && (
+          <section className="rounded-2xl border border-violet-100 bg-violet-50 p-3">
+            <div className="text-[10px] font-black text-violet-500">この学びを使う条件</div>
+            <div className="mt-1 text-xs font-extrabold text-violet-800">{preview.contextRuleLabel}</div>
+            <p className="mt-1 text-[9px] leading-relaxed text-violet-500">条件付きバージョンで検証・採用されたため、この予定が条件に一致する時だけ候補を表示しています。</p>
+          </section>
+        )}
+
         <div className="grid grid-cols-3 gap-2">
           <Metric label="過去の失敗率" value={percent(preview.baselineFailureRate)} />
           <Metric label="実験中" value={percent(preview.experimentFailureRate)} />
@@ -62,7 +70,7 @@ export function PlanFeedbackModal({ preview, onApply, onClose }) {
 
         <section className="flex items-start gap-2 rounded-2xl bg-gray-50 p-3 text-[10px] leading-relaxed text-gray-500">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-indigo-400" />
-          <p>採用済みの実験でも自動適用はしません。このプレビューで現在の予定だけを確認してから反映します。実績がある予定や、重なり・日跨ぎが発生する変更は止めます。</p>
+          <p>採用済みの実験でも自動適用はしません。条件付き学習でも、このプレビューで現在の予定だけを確認してから反映します。実績がある予定や、重なり・日跨ぎが発生する変更は止めます。</p>
         </section>
       </div>
 
