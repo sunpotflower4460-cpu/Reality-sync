@@ -5,3 +5,6 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Generated on macOS by npm run ios:prepare.
+ios/RealitySync/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
