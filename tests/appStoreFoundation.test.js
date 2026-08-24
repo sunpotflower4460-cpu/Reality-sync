@@ -52,6 +52,14 @@ test('settings exposes privacy, terms, live support and destructive local deleti
   assert.match(text, /SUPPORT_PAGE_URL/);
 });
 
+test('unfinished browser notification control is hidden from the native App Store shell', () => {
+  const text = source('src/components/SettingsModal.jsx');
+  assert.match(text, /!isNativeShell && \(/);
+  assert.match(text, /OS通知（任意）/);
+  assert.match(text, /requestNotifications/);
+  assert.doesNotMatch(text, /ネイティブ通知は現在準備中/);
+});
+
 test('application-level erase clears every RealitySync storage domain and resets normalized state', () => {
   const text = source('src/App.jsx');
   for (const storageKey of [
