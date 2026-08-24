@@ -45,9 +45,10 @@ export function RevalidationSetupModal({ sourceExperiment, retentionSummary, pro
   );
   const contextCandidates = useMemo(() => planKnowableContextShiftCandidates(contextShift), [contextShift]);
   const selectedContextCandidate = contextCandidates.find((candidate) => candidate.id === contextCandidateId) ?? null;
+  const contextSourceDateKey = contextShift?.recentWindow?.toDateKey ?? retentionSummary.throughDateKey;
   const contextRule = useMemo(
-    () => selectedContextCandidate ? contextRuleForShiftCandidate(selectedContextCandidate, retentionSummary.throughDateKey) : null,
-    [retentionSummary.throughDateKey, selectedContextCandidate],
+    () => selectedContextCandidate ? contextRuleForShiftCandidate(selectedContextCandidate, contextSourceDateKey) : null,
+    [contextSourceDateKey, selectedContextCandidate],
   );
   const contextBaseline = useMemo(
     () => contextRule ? buildContextualRetentionBaseline(contextRule, retentionSummary, days) : null,
@@ -104,7 +105,7 @@ export function RevalidationSetupModal({ sourceExperiment, retentionSummary, pro
             <div className="mt-3 rounded-xl bg-white p-3">
               <div className="text-[10px] font-black text-violet-500">今回固定する条件</div>
               <div className="mt-1 text-xs font-extrabold text-violet-800">{contextRuleLabel(contextRule)}</div>
-              <p className="mt-1 text-[9px] leading-relaxed text-gray-400">境界値は「以前」と「直近」の観測値の中間を初期境界として固定します。これは原因推定ではありません。</p>
+              <p className="mt-1 text-[9px] leading-relaxed text-gray-400">境界値は「以前」と「直近」の観測値の中間を初期境界として固定します。これは原因推定ではありません。条件の出典日は直近比較窓の最終記録日です。</p>
               <div className="mt-2 grid grid-cols-2 gap-2"><Metric label="条件一致の直近" value={`${contextBaseline?.count ?? 0}件`} /><Metric label="その失敗率" value={contextBaseline?.ok ? percent(contextBaseline.rate) : '不足'} /></div>
               {contextBaseline && !contextBaseline.ok && <p className="mt-2 text-[10px] font-medium leading-relaxed text-red-600">{contextBaseline.reason}</p>}
             </div>
