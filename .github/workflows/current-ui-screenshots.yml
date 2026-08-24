@@ -26,7 +26,7 @@ jobs:
             if curl -fsS http://127.0.0.1:4173 >/dev/null; then break; fi
             sleep 1
           done
-          cat > /tmp/capture.mjs <<'EOF'
+          cat > capture.mjs <<'EOF'
           import { chromium, devices } from 'playwright';
           const browser = await chromium.launch();
           const context = await browser.newContext({ ...devices['iPhone 13'] });
@@ -54,7 +54,7 @@ jobs:
           await page.screenshot({ path:'settings.png', fullPage:true });
           await browser.close();
           EOF
-          node /tmp/capture.mjs
+          node capture.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: realitysync-current-ui
