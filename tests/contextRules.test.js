@@ -128,7 +128,7 @@ test('contextual baseline uses only recent normal-operation records that match t
 });
 
 test('contextual revalidation refuses a sparse contextual baseline', () => {
-  const rule = contextRuleForShiftCandidate({ id: 'target-planned-stress', previousValue: 40, recentValue: 90 }, '2026-08-10');
+  const rule = contextRuleForShiftCandidate({ id: 'target-planned-stress', previousValue: 70, recentValue: 90 }, '2026-08-10');
   const baseline = buildContextualRetentionBaseline(rule, retentionSummary(), retentionDays());
   assert.equal(baseline.ok, false);
   assert.ok(baseline.count < 4);
