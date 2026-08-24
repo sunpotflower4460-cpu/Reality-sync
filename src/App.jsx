@@ -26,6 +26,7 @@ import { useScheduleTemplates } from './hooks/useScheduleTemplates.js';
 import { AnalyticsView } from './components/AnalyticsView.jsx';
 import { BottomNav } from './components/BottomNav.jsx';
 import { DateNavigator } from './components/DateNavigator.jsx';
+import { LegalModal } from './components/LegalModal.jsx';
 import { PlanFeedbackModal } from './components/PlanFeedbackModal.jsx';
 import { PlanView } from './components/PlanView.jsx';
 import { RecordModal } from './components/RecordModal.jsx';
@@ -57,6 +58,7 @@ export default function App() {
   const [editorState, setEditorState] = useState(null);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [legalPage, setLegalPage] = useState(null);
   const { schedules, setSchedules, store, replaceStore, storageProtection } = usePersistentSchedules(selectedDate);
   const { templates, saveTemplate, deleteTemplate, replaceTemplates } = useScheduleTemplates();
   const { experiments, replaceExperiments } = useExperiments();
@@ -142,6 +144,11 @@ export default function App() {
     setActiveTab(TABS.TRACK);
   };
 
+  const openLegal = (page) => {
+    setIsSettingsOpen(false);
+    setLegalPage(page);
+  };
+
   return (
     <div className="min-h-dvh bg-gray-50 pb-28 text-gray-800">
       <header className="sticky top-0 z-10 rounded-b-[1.75rem] bg-indigo-600 px-4 pb-4 pt-app-safe text-white shadow-[0_10px_30px_rgba(79,70,229,0.18)]">
@@ -168,7 +175,8 @@ export default function App() {
       {!protectedMode && selectedPlanFeedback && <PlanFeedbackModal preview={selectedPlanFeedback.preview} onApply={applySelectedPlanFeedback} onClose={() => setSelectedPlanFeedbackId(null)} />}
       {!protectedMode && editorState && (editorState.type !== 'edit' || editingSchedule) && <ScheduleEditorModal schedule={editingSchedule} onClose={() => setEditorState(null)} onSave={saveSchedule} onDelete={editorState.type === 'edit' ? deleteSchedule : undefined} />}
       {!protectedMode && isTemplateModalOpen && <TemplateModal templates={templates} currentSchedules={schedules} onClose={() => setIsTemplateModalOpen(false)} onSaveTemplate={(name) => saveTemplate(name, schedules)} onApplyTemplate={applyTemplate} onDeleteTemplate={deleteTemplate} />}
-      {isSettingsOpen && <SettingsModal store={store} templates={templates} experiments={experiments} reminderPreferences={reminderPreferences} storageProtection={storageProtection} onChangeReminderPreferences={setReminderPreferences} onRestoreBackup={restoreBackup} onEraseAllData={eraseAllData} canInstall={canInstall} isInstalled={isInstalled} isNativeShell={isNativeShell} onInstall={install} onClose={() => setIsSettingsOpen(false)} />}
+      {isSettingsOpen && <SettingsModal store={store} templates={templates} experiments={experiments} reminderPreferences={reminderPreferences} storageProtection={storageProtection} onChangeReminderPreferences={setReminderPreferences} onRestoreBackup={restoreBackup} onEraseAllData={eraseAllData} onOpenLegal={openLegal} canInstall={canInstall} isInstalled={isInstalled} isNativeShell={isNativeShell} onInstall={install} onClose={() => setIsSettingsOpen(false)} />}
+      {legalPage && <LegalModal page={legalPage} onClose={() => setLegalPage(null)} />}
     </div>
   );
 }
