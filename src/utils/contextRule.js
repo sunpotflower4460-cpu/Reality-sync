@@ -178,12 +178,21 @@ function contextValue(rule, schedule, daySchedulesValue) {
   return day.categoryShares[rule.category];
 }
 
-export function contextRuleMatches(ruleValue, schedule, daySchedulesValue) {
+export function evaluateContextRule(ruleValue, schedule, daySchedulesValue) {
   const rule = normalizeContextRule(ruleValue);
-  if (!rule || !schedule) return false;
+  if (!rule || !schedule) return { known: false, matches: false, value: null, rule };
   const value = contextValue(rule, schedule, daySchedulesValue);
-  if (!Number.isFinite(value)) return false;
-  return rule.operator === 'gte' ? value >= rule.threshold : value <= rule.threshold;
+  if (!Number.isFinite(value)) return { known: false, matches: false, value: null, rule };
+  return {
+    known: true,
+    matches: rule.operator === 'gte' ? value >= rule.threshold : value <= rule.threshold,
+    value,
+    rule,
+  };
+}
+
+export function contextRuleMatches(ruleValue, schedule, daySchedulesValue) {
+  return evaluateContextRule(ruleValue, schedule, daySchedulesValue).matches;
 }
 
 export function buildContextualRetentionBaseline(ruleValue, retentionSummary, days) {

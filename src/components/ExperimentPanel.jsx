@@ -12,6 +12,7 @@ import {
   planAdjustmentLabel,
 } from '../utils/experiment.js';
 import { calculateRetentionSummaries, RETENTION_SIGNAL } from '../utils/retention.js';
+import { calculateScopePrecisionSummary, SCOPE_PRECISION_SIGNAL } from '../utils/scopePrecision.js';
 import { RevalidationSetupModal } from './RevalidationSetupModal.jsx';
 
 function percent(value) { return value === null || value === undefined ? '—' : `${Math.round(value * 100)}%`; }
@@ -34,6 +35,13 @@ function retentionCopy(signal) {
   if (signal === RETENTION_SIGNAL.MAINTAINED) return ['維持を観測', 'border-green-200 bg-green-50 text-green-700'];
   if (signal === RETENTION_SIGNAL.UNAVAILABLE) return ['判定対象外', 'border-gray-200 bg-gray-50 text-gray-600'];
   return ['通常運用を収集中', 'border-indigo-200 bg-indigo-50 text-indigo-700'];
+}
+function scopePrecisionCopy(signal) {
+  if (signal === SCOPE_PRECISION_SIGNAL.FOCUSED) return ['高リスク側を切り分ける方向', 'border-green-200 bg-green-50 text-green-700'];
+  if (signal === SCOPE_PRECISION_SIGNAL.REVERSE) return ['条件外も要確認', 'border-red-200 bg-red-50 text-red-700'];
+  if (signal === SCOPE_PRECISION_SIGNAL.UNCLEAR) return ['切り分けはまだ不明瞭', 'border-amber-200 bg-amber-50 text-amber-700'];
+  if (signal === SCOPE_PRECISION_SIGNAL.UNAVAILABLE) return ['比較できません', 'border-gray-200 bg-gray-50 text-gray-600'];
+  return ['条件精度を収集中', 'border-violet-200 bg-violet-50 text-violet-700'];
 }
 function versionBadge(experiment) { return `v${experiment.learningVersion || 1}`; }
 
@@ -65,7 +73,8 @@ export function ExperimentPanel({ experiments, days, throughDateKey, onCaptureTr
             if (!experiment) return null;
             const rootId = experiment.learningRootId || experiment.id;
             const canRevalidate = summary.reviewCandidate && todayView && !activeRootIds.has(rootId);
-            return <RetentionCard key={summary.experimentId} experiment={experiment} summary={summary} canRevalidate={canRevalidate} todayView={todayView} onRevalidate={() => setRevalidationTarget({ experiment, summary })} />;
+            const scopePrecision = calculateScopePrecisionSummary(experiment, experiments, days, throughDateKey);
+            return <RetentionCard key={summary.experimentId} experiment={experiment} summary={summary} scopePrecision={scopePrecision} canRevalidate={canRevalidate} todayView={todayView} onRevalidate={() => setRevalidationTarget({ experiment, summary })} />;
           })}
         </div>
       )}
@@ -110,7 +119,7 @@ function ActiveExperiment({ experiment, days, throughDateKey, onCaptureTrial, on
   );
 }
 
-function RetentionCard({ experiment, summary, canRevalidate, todayView, onRevalidate }) {
+function RetentionCard({ experiment, summary, scopePrecision, canRevalidate, todayView, onRevalidate }) {
   const [label, tone] = retentionCopy(summary.signal);
   const delta = summary.differenceFromExperimentPoints;
   return (
@@ -119,10 +128,44 @@ function RetentionCard({ experiment, summary, canRevalidate, todayView, onRevali
       <div className="mt-3 grid grid-cols-3 gap-2"><Metric label="実験中" value={percent(summary.experimentFailureRate)} detail="失敗率" /><Metric label="通常運用" value={percent(summary.failureRate)} detail={`${summary.weekCount}週`} /><Metric label="差" value={delta === null ? '—' : `${delta > 0 ? '+' : ''}${delta}pt`} detail="＋は悪化方向" /></div>
       {summary.interval && <p className="mt-2 text-[9px] text-gray-400">通常運用失敗率の95% Wilson区間: {percent(summary.interval.low)}–{percent(summary.interval.high)}</p>}
       <p className="mt-3 text-[10px] leading-relaxed text-gray-500">{summary.reason}</p>
+      {scopePrecision && <ScopePrecisionCard summary={scopePrecision} />}
       {summary.reviewCandidate && <div className="mt-3 flex items-start gap-2 rounded-xl bg-red-50 p-3 text-[10px] leading-relaxed text-red-700"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span><strong>見直し候補です。</strong> 採用を自動解除せず、現在の通常運用を比較基準にした新しいバージョンで確かめ直せます。</span></div>}
       {summary.reviewCandidate && <button type="button" disabled={!canRevalidate} onClick={onRevalidate} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white disabled:bg-gray-300"><RefreshCcw className="h-4 w-4" />{canRevalidate ? `v${nextLearningVersion([], experiment)}以降として再検証` : !todayView ? '今日のRetentionで再確認して開始' : '同じ学びを別バージョンで検証中'}</button>}
       <p className="mt-3 border-t border-gray-100 pt-2 text-[9px] leading-relaxed text-gray-400">通常運用での維持は因果効果の証明ではありません。生活条件や予定内容が変われば結果も変わり得るため、RealitySyncは一度採用した学びも固定ルール扱いしません。</p>
     </article>
+  );
+}
+
+function ScopePrecisionCard({ summary }) {
+  const [label, tone] = scopePrecisionCopy(summary.signal);
+  const source = summary.source;
+  const coverage = summary.coverage;
+  return (
+    <section className="mt-3 rounded-2xl border border-violet-100 bg-violet-50/50 p-3">
+      <div className="flex items-center justify-between gap-2"><div className="text-[10px] font-black text-violet-600">条件の切り分け精度</div><span className={`rounded-full border px-2 py-1 text-[9px] font-black ${tone}`}>{label}</span></div>
+      <p className="mt-2 text-[10px] leading-relaxed text-gray-600">{summary.reason}</p>
+      {source && (
+        <>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <Metric label="前版・条件内" value={percent(source.inside.failureRate)} detail={`${source.inside.count}件 / ${source.inside.weekCount}週`} />
+            <Metric label="前版・条件外" value={percent(source.outside.failureRate)} detail={`${source.outside.count}件 / ${source.outside.weekCount}週`} />
+            <Metric label="内−外" value={source.differencePoints === null ? '—' : `${source.differencePoints > 0 ? '+' : ''}${source.differencePoints}pt`} detail="＋は条件内が高い" />
+          </div>
+          {source.parentScopeRestricted && <p className="mt-2 text-[9px] leading-relaxed text-gray-400">前版にも条件があったため、その前版の適用範囲内だけで今回の条件を比較しています。</p>}
+          {!source.sameStructuredAdjustmentAsParent && <p className="mt-2 text-[9px] leading-relaxed text-gray-400">前版と今回で構造化された計画変更が異なるため、この比較は「条件の切り分け」の参考であり、今回の対策そのものの条件外効果ではありません。</p>}
+          {source.unknownCount > 0 && <p className="mt-2 text-[9px] leading-relaxed text-gray-400">履歴条件を安全に判定できない前版記録 {source.unknownCount}件は内外どちらにも入れていません。</p>}
+        </>
+      )}
+      {coverage && coverage.baseConditionCount > 0 && (
+        <div className="mt-3 rounded-xl bg-white p-3">
+          <div className="text-[9px] font-black text-violet-500">採用後のCoverage</div>
+          <p className="mt-1 text-[10px] leading-relaxed text-gray-600">基本条件の記録 {coverage.baseConditionCount}件中、条件判定できた{coverage.knownScopeCount}件のうち{coverage.insideCount}件（{percent(coverage.ruleCoverage)}）が条件内です。条件内で今回の工夫が実際に反映されたのは{coverage.insideAppliedCount}/{coverage.insideCount}件（{percent(coverage.applicationCoverage)}）です。</p>
+          {coverage.unknownCount > 0 && <p className="mt-1 text-[9px] text-gray-400">条件を安全に判定できない記録: {coverage.unknownCount}件</p>}
+          {coverage.outsideAppliedCount > 0 && <p className="mt-2 text-[9px] font-medium leading-relaxed text-red-600">条件外なのにこの実験IDの適用記録が{coverage.outsideAppliedCount}件あります。自動的に成功/失敗の根拠へ混ぜず、記録整合性の確認対象として扱います。</p>}
+        </div>
+      )}
+      <p className="mt-3 border-t border-violet-100 pt-2 text-[9px] leading-relaxed text-gray-400">条件外で現在の対策を十分な回数、明示的に試した記録がない限り、「条件外では効かない / 効く」とは推定しません。そこを確かめるには、別の検証が必要です。</p>
+    </section>
   );
 }
 
