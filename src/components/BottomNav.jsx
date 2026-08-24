@@ -9,14 +9,20 @@ const ITEMS = [
 
 export function BottomNav({ activeTab, onChange }) {
   return (
-    <nav className="fixed bottom-0 z-20 w-full border-t border-gray-200 bg-white/95 backdrop-blur pb-safe" aria-label="メインナビゲーション">
-      <div className="mx-auto flex max-w-md justify-around p-3">
+    <nav className="fixed bottom-0 z-20 w-full border-t border-gray-200/80 bg-white/95 backdrop-blur-xl pb-safe" aria-label="メインナビゲーション">
+      <div className="mx-auto grid max-w-md grid-cols-3 gap-1 px-2 pt-2">
         {ITEMS.map(({ id, label, Icon }) => {
           const active = activeTab === id;
           return (
-            <button key={id} type="button" onClick={() => onChange(id)} aria-current={active ? 'page' : undefined} className={`flex flex-1 flex-col items-center gap-1 rounded-xl py-1 transition-colors ${active ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
-              <Icon className="h-6 w-6" aria-hidden="true" />
-              <span className="text-[10px] font-bold">{label}</span>
+            <button
+              key={id}
+              type="button"
+              onClick={() => onChange(id)}
+              aria-current={active ? 'page' : undefined}
+              className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-2 transition-colors ${active ? 'bg-indigo-50 text-indigo-600' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'}`}
+            >
+              <Icon className="h-5.5 w-5.5" aria-hidden="true" />
+              <span className="text-[11px] font-extrabold">{label}</span>
             </button>
           );
         })}

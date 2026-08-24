@@ -3,50 +3,51 @@ import { dateKeyFromDate, formatDateLabel, isToday, shiftDateKey } from '../util
 
 export function DateNavigator({ dateKey, onChange }) {
   const today = dateKeyFromDate();
+  const todaySelected = isToday(dateKey);
 
   return (
-    <div className="mt-5 rounded-2xl bg-white/10 p-2 backdrop-blur-sm">
-      <div className="flex items-center gap-2">
+    <div className="mt-4 rounded-2xl bg-white/10 p-1.5 backdrop-blur-sm">
+      <div className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center gap-1">
         <button
           type="button"
           onClick={() => onChange(shiftDateKey(dateKey, -1))}
           aria-label="前の日へ"
-          className="rounded-xl p-2 text-white transition hover:bg-white/15"
+          className="flex h-11 w-11 items-center justify-center rounded-xl text-white transition hover:bg-white/15 active:bg-white/20"
         >
-          <ChevronLeft className="h-5 w-5" />
+          <ChevronLeft className="h-5 w-5" aria-hidden="true" />
         </button>
 
-        <div className="min-w-0 flex-1 text-center">
-          <div className="truncate text-sm font-bold text-white">{formatDateLabel(dateKey)}</div>
-          <label className="mt-1 inline-flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-indigo-100">
-            <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>{isToday(dateKey) ? '今日' : '日付を選択'}</span>
-            <input
-              type="date"
-              value={dateKey}
-              max="9999-12-31"
-              onChange={(event) => event.target.value && onChange(event.target.value)}
-              aria-label="表示する日付を選択"
-              className="w-[7.6rem] rounded-lg border border-white/15 bg-white/10 px-1.5 py-0.5 text-[10px] text-white outline-none"
-            />
-          </label>
-        </div>
+        <label className="relative flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl px-2 text-center transition hover:bg-white/10">
+          <CalendarDays className="h-4 w-4 shrink-0 text-indigo-100" aria-hidden="true" />
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-extrabold text-white">{formatDateLabel(dateKey)}</span>
+            <span className="block text-[10px] font-medium text-indigo-100">{todaySelected ? '今日' : 'タップして日付を変更'}</span>
+          </span>
+          <input
+            type="date"
+            value={dateKey}
+            max="9999-12-31"
+            onChange={(event) => event.target.value && onChange(event.target.value)}
+            aria-label="表示する日付を選択"
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          />
+        </label>
 
         <button
           type="button"
           onClick={() => onChange(shiftDateKey(dateKey, 1))}
           aria-label="次の日へ"
-          className="rounded-xl p-2 text-white transition hover:bg-white/15"
+          className="flex h-11 w-11 items-center justify-center rounded-xl text-white transition hover:bg-white/15 active:bg-white/20"
         >
-          <ChevronRight className="h-5 w-5" />
+          <ChevronRight className="h-5 w-5" aria-hidden="true" />
         </button>
       </div>
 
-      {!isToday(dateKey) && (
+      {!todaySelected && (
         <button
           type="button"
           onClick={() => onChange(today)}
-          className="mt-1 w-full rounded-lg py-1 text-[11px] font-bold text-indigo-100 transition hover:bg-white/10"
+          className="mt-0.5 min-h-9 w-full rounded-lg px-3 text-[11px] font-bold text-indigo-100 transition hover:bg-white/10 active:bg-white/15"
         >
           今日に戻る
         </button>
