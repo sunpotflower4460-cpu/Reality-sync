@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Activity, Layers, Sparkles } from 'lucide-react';
 import { formatTime } from '../utils/schedule.js';
+import { ContextShiftReviewSection } from './ContextShiftReviewSection.jsx';
 import { InsightCandidatesView } from './InsightCandidatesView.jsx';
 import { MonthlyAnalyticsView } from './MonthlyAnalyticsView.jsx';
 import { WeeklyAnalyticsView } from './WeeklyAnalyticsView.jsx';
@@ -49,19 +50,22 @@ export function AnalyticsView({
       {scope === 'week' && <WeeklyAnalyticsView insights={weeklyInsights} selectedDate={selectedDate} onChangeDate={onChangeDate} />}
       {scope === 'month' && <MonthlyAnalyticsView insights={monthlyInsights} selectedDate={selectedDate} onChangeDate={onChangeDate} />}
       {scope === 'insights' && (
-        <InsightCandidatesView
-          insights={longitudinalInsights}
-          experiments={experiments}
-          days={days}
-          selectedDate={selectedDate}
-          onStartExperiment={onStartExperiment}
-          onStartRevalidation={onStartRevalidation}
-          onCaptureTrial={onCaptureTrial}
-          onRemoveTrial={onRemoveTrial}
-          onFinishExperiment={onFinishExperiment}
-          onAbandonExperiment={onAbandonExperiment}
-          onDeleteExperiment={onDeleteExperiment}
-        />
+        <>
+          <InsightCandidatesView
+            insights={longitudinalInsights}
+            experiments={experiments}
+            days={days}
+            selectedDate={selectedDate}
+            onStartExperiment={onStartExperiment}
+            onStartRevalidation={onStartRevalidation}
+            onCaptureTrial={onCaptureTrial}
+            onRemoveTrial={onRemoveTrial}
+            onFinishExperiment={onFinishExperiment}
+            onAbandonExperiment={onAbandonExperiment}
+            onDeleteExperiment={onDeleteExperiment}
+          />
+          <ContextShiftReviewSection experiments={experiments} days={days} throughDateKey={selectedDate} />
+        </>
       )}
     </div>
   );
