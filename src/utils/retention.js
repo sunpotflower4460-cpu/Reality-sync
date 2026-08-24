@@ -93,10 +93,11 @@ export function listRetentionUsages(experimentValue, days, throughDateKey) {
 
   for (const [dateKey, rawSchedules] of Object.entries(sourceDays)) {
     if (!isValidDateKey(dateKey) || dateKey < experiment.decisionDateKey || dateKey > throughDateKey || !Array.isArray(rawSchedules)) continue;
-    for (const schedule of normalizeSchedules(rawSchedules, [])) {
+    const schedules = normalizeSchedules(rawSchedules, []);
+    for (const schedule of schedules) {
       if (schedule.status === STATUS.PENDING) continue;
       if (!Array.isArray(schedule.appliedExperimentIds) || !schedule.appliedExperimentIds.includes(experiment.id)) continue;
-      if (!experimentMatchesSchedule(experiment, dateKey, schedule)) continue;
+      if (!experimentMatchesSchedule(experiment, dateKey, schedule, schedules)) continue;
       if (isGeneratedBufferSchedule(experiment, schedule)) continue;
       const observation = retentionObservation(experiment, dateKey, schedule);
       if (!observation) continue;

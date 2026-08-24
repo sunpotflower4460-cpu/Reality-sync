@@ -1,6 +1,7 @@
 import { EXPERIMENT_STORAGE_VERSION, STATUS } from '../constants.js';
 import { differenceInCalendarDays, isValidDateKey, weekdayIndexMondayFirst } from './date.js';
 import { exactStartDeltaMinutes } from './analytics.js';
+import { contextRuleLabel, contextRuleMatches, normalizeContextRule } from './contextRule.js';
 import { normalizeSchedules, recordedPlanForSchedule } from './schedule.js';
 
 export const EXPERIMENT_STATUS = Object.freeze({ ACTIVE: 'active', COMPLETED: 'completed', ABANDONED: 'abandoned' });
@@ -95,6 +96,8 @@ export function normalizeExperiment(value, generatedId = 'experiment') {
   const startDateKey = isValidDateKey(value.startDateKey) ? value.startDateKey : null;
   const title = text(value.title); const action = text(value.action);
   if (!condition || !metricKind || !startDateKey || !title || !action) return null;
+  const contextRule = value.contextRule === undefined || value.contextRule === null ? null : normalizeContextRule(value.contextRule);
+  if (value.contextRule !== undefined && value.contextRule !== null && !contextRule) return null;
   const trials = []; const seen = new Set();
   if (Array.isArray(value.trials)) value.trials.forEach((trial, index) => { const normalized = normalizeTrial(trial, index); if (normalized && !seen.has(normalized.recordKey)) { seen.add(normalized.recordKey); trials.push(normalized); } });
   const status = VALID_STATUSES.has(value.status) ? value.status : EXPERIMENT_STATUS.ACTIVE;
@@ -107,7 +110,7 @@ export function normalizeExperiment(value, generatedId = 'experiment') {
     id, candidateId: text(value.candidateId), candidateType: text(value.candidateType),
     title, hypothesis: text(value.hypothesis), action, metricKind,
     metricLabel: text(value.metricLabel, metricKind === EXPERIMENT_METRIC.LATE_START ? '20分以上の開始遅れ' : '変更・スキップ'),
-    condition, startDateKey, targetRuns: clampInteger(value.targetRuns, 3, 10, 3),
+    condition, contextRule, startDateKey, targetRuns: clampInteger(value.targetRuns, 3, 10, 3),
     baselineFailureRate: normalizeRate(value.baselineFailureRate),
     baselineSampleCount: clampInteger(value.baselineSampleCount, 0, 100000, 0),
     planAdjustment: normalizePlanAdjustment(value.planAdjustment),
@@ -169,15 +172,20 @@ export function experimentBlueprintForCandidate(candidate) {
 }
 export function canCreateExperiment(candidate) { return Boolean(experimentBlueprintForCandidate(candidate)); }
 
-export function experimentMatchesSchedule(experimentValue, dateKey, schedule) {
+export function experimentMatchesSchedule(experimentValue, dateKey, schedule, daySchedulesValue = null) {
   const experiment = normalizeExperiment(experimentValue);
   if (!experiment || !isValidDateKey(dateKey) || !schedule) return false;
   const { condition } = experiment;
-  if (condition.kind === 'weekday') return weekdayIndexMondayFirst(dateKey) === condition.value;
-  const plan = schedule.status === STATUS.PENDING ? schedule : schedule.plannedSnapshot;
-  if (!plan) return false;
-  if (condition.kind === 'planned-stress-min') return plan.plannedStress >= condition.value;
-  return condition.kind === 'planned-category' && plan.category === condition.value;
+  let baseMatch = false;
+  if (condition.kind === 'weekday') baseMatch = weekdayIndexMondayFirst(dateKey) === condition.value;
+  else {
+    const plan = schedule.status === STATUS.PENDING ? schedule : schedule.plannedSnapshot;
+    if (!plan) return false;
+    if (condition.kind === 'planned-stress-min') baseMatch = plan.plannedStress >= condition.value;
+    else baseMatch = condition.kind === 'planned-category' && plan.category === condition.value;
+  }
+  if (!baseMatch) return false;
+  return !experiment.contextRule || contextRuleMatches(experiment.contextRule, schedule, daySchedulesValue);
 }
 
 function recordKey(dateKey, scheduleId) { return `${dateKey}::${String(scheduleId)}`; }
@@ -202,8 +210,9 @@ function historicalBaseline(days, anchorDateKey, blueprint) {
     if (!isValidDateKey(dateKey) || !Array.isArray(rawSchedules)) continue;
     const distance = differenceInCalendarDays(dateKey, anchorDateKey);
     if (distance === null || distance < 0 || distance >= BASELINE_WINDOW_DAYS) continue;
-    for (const schedule of normalizeSchedules(rawSchedules, [])) {
-      if (schedule.status === STATUS.PENDING || !experimentMatchesSchedule(probe, dateKey, schedule)) continue;
+    const schedules = normalizeSchedules(rawSchedules, []);
+    for (const schedule of schedules) {
+      if (schedule.status === STATUS.PENDING || !experimentMatchesSchedule(probe, dateKey, schedule, schedules)) continue;
       const observation = experimentObservation(probe, dateKey, schedule);
       if (!observation) continue;
       count += 1; if (observation.outcome === 'failure') failures += 1;
@@ -219,7 +228,7 @@ export function createExperimentFromCandidate(candidate, { id, startDateKey, act
   return normalizeExperiment({
     id, candidateId: candidate.id, candidateType: candidate.type, title: candidate.title, hypothesis: candidate.hypothesis,
     action: text(action, blueprint.actionSuggestion), metricKind: blueprint.metricKind, metricLabel: blueprint.metricLabel,
-    condition: blueprint.condition, startDateKey, targetRuns, baselineFailureRate: baseline.rate, baselineSampleCount: baseline.count,
+    condition: blueprint.condition, contextRule: null, startDateKey, targetRuns, baselineFailureRate: baseline.rate, baselineSampleCount: baseline.count,
     planAdjustment: planAdjustment === undefined ? blueprint.planAdjustmentSuggestion : planAdjustment,
     learningRootId: id, parentExperimentId: null, learningVersion: 1, revalidationReason: '', sourceRetention: null,
     status: EXPERIMENT_STATUS.ACTIVE, decision: null, decisionDateKey: null, trials: [], createdAt, completedAt: '',
@@ -262,6 +271,8 @@ export function createRevalidationExperiment(sourceValue, retentionSummary, {
   startDateKey,
   action,
   planAdjustment,
+  contextRule = null,
+  contextBaseline = null,
   targetRuns = 3,
   learningVersion,
   createdAt = new Date().toISOString(),
@@ -291,9 +302,17 @@ export function createRevalidationExperiment(sourceValue, retentionSummary, {
   });
   if (!snapshot) return null;
 
+  const normalizedRule = contextRule === null || contextRule === undefined ? null : normalizeContextRule(contextRule);
+  if (contextRule !== null && contextRule !== undefined && !normalizedRule) return null;
+  const contextualRate = normalizedRule ? normalizeRate(contextBaseline?.rate) : null;
+  const contextualCount = normalizedRule ? clampInteger(contextBaseline?.count, 0, 100000, 0) : 0;
+  const contextualWeekCount = normalizedRule ? clampInteger(contextBaseline?.weekCount, 0, 100000, 0) : 0;
+  if (normalizedRule && (contextBaseline?.ok !== true || contextualRate === null || contextualCount < 4 || contextualWeekCount < 2)) return null;
+
   const version = clampInteger(learningVersion, 2, 999, (source.learningVersion || 1) + 1);
   const rootId = source.learningRootId || source.id;
-  const reason = `通常運用で実験中より${snapshot.differenceFromExperimentPoints > 0 ? '+' : ''}${snapshot.differenceFromExperimentPoints}ptの悪化を観測したため再検証`;
+  const ruleSuffix = normalizedRule ? `。${contextRuleLabel(normalizedRule)}に限定して再検証` : '';
+  const reason = `通常運用で実験中より${snapshot.differenceFromExperimentPoints > 0 ? '+' : ''}${snapshot.differenceFromExperimentPoints}ptの悪化を観測したため再検証${ruleSuffix}`;
   return normalizeExperiment({
     id,
     candidateId: source.candidateId,
@@ -304,10 +323,11 @@ export function createRevalidationExperiment(sourceValue, retentionSummary, {
     metricKind: source.metricKind,
     metricLabel: source.metricLabel,
     condition: source.condition,
+    contextRule: normalizedRule,
     startDateKey,
     targetRuns,
-    baselineFailureRate: snapshot.failureRate,
-    baselineSampleCount: snapshot.assessmentCount,
+    baselineFailureRate: normalizedRule ? contextualRate : snapshot.failureRate,
+    baselineSampleCount: normalizedRule ? contextualCount : snapshot.assessmentCount,
     planAdjustment: planAdjustment === undefined ? source.planAdjustment : planAdjustment,
     learningRootId: rootId,
     parentExperimentId: source.id,
@@ -332,8 +352,9 @@ export function listEligibleExperimentRecords(experimentValue, days, throughDate
     if (!isValidDateKey(dateKey) || !Array.isArray(rawSchedules)) continue;
     const fromStart = differenceInCalendarDays(experiment.startDateKey, dateKey); const toAnchor = differenceInCalendarDays(dateKey, throughDateKey);
     if (fromStart === null || toAnchor === null || fromStart < 0 || toAnchor < 0) continue;
-    for (const schedule of normalizeSchedules(rawSchedules, [])) {
-      if (schedule.status === STATUS.PENDING || !experimentMatchesSchedule(experiment, dateKey, schedule)) continue;
+    const schedules = normalizeSchedules(rawSchedules, []);
+    for (const schedule of schedules) {
+      if (schedule.status === STATUS.PENDING || !experimentMatchesSchedule(experiment, dateKey, schedule, schedules)) continue;
       const key = recordKey(dateKey, schedule.id); if (captured.has(key)) continue;
       const observation = experimentObservation(experiment, dateKey, schedule); if (!observation) continue;
       const plan = recordedPlanForSchedule(schedule);

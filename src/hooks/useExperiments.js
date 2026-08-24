@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { EXPERIMENT_STORAGE_KEY } from '../constants.js';
+import { buildContextualRetentionBaseline, normalizeContextRule } from '../utils/contextRule.js';
 import { dateKeyFromDate, shiftDateKey } from '../utils/date.js';
 import {
   abandonExperiment,
@@ -51,8 +52,20 @@ export function useExperiments() {
     if (!source) return false;
     const rootId = source.learningRootId || source.id;
     if (experiments.some((experiment) => experiment.status === 'active' && (experiment.learningRootId || experiment.id) === rootId)) return false;
+
+    const contextRule = options.contextRule === undefined || options.contextRule === null
+      ? null
+      : normalizeContextRule(options.contextRule);
+    if (options.contextRule !== undefined && options.contextRule !== null && !contextRule) return false;
+    const contextBaseline = contextRule
+      ? buildContextualRetentionBaseline(contextRule, retentionSummary, options.days)
+      : null;
+    if (contextRule && !contextBaseline?.ok) return false;
+
     const experiment = createRevalidationExperiment(source, retentionSummary, {
       ...options,
+      contextRule,
+      contextBaseline,
       id: createExperimentId(),
       startDateKey: shiftDateKey(today, 1),
       learningVersion: nextLearningVersion(experiments, source),
