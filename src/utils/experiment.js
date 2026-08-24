@@ -306,7 +306,8 @@ export function createRevalidationExperiment(sourceValue, retentionSummary, {
   if (contextRule !== null && contextRule !== undefined && !normalizedRule) return null;
   const contextualRate = normalizedRule ? normalizeRate(contextBaseline?.rate) : null;
   const contextualCount = normalizedRule ? clampInteger(contextBaseline?.count, 0, 100000, 0) : 0;
-  if (normalizedRule && (contextualRate === null || contextualCount <= 0)) return null;
+  const contextualWeekCount = normalizedRule ? clampInteger(contextBaseline?.weekCount, 0, 100000, 0) : 0;
+  if (normalizedRule && (contextBaseline?.ok !== true || contextualRate === null || contextualCount < 4 || contextualWeekCount < 2)) return null;
 
   const version = clampInteger(learningVersion, 2, 999, (source.learningVersion || 1) + 1);
   const rootId = source.learningRootId || source.id;
