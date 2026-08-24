@@ -103,21 +103,26 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24 text-gray-800">
-      <header className="sticky top-0 z-10 rounded-b-[2rem] bg-indigo-600 px-4 pb-5 pt-10 text-white shadow-md">
+    <div className="min-h-dvh bg-gray-50 pb-28 text-gray-800">
+      <header className="sticky top-0 z-10 rounded-b-[1.75rem] bg-indigo-600 px-4 pb-4 pt-app-safe text-white shadow-[0_10px_30px_rgba(79,70,229,0.18)]">
         <div className="mx-auto max-w-md">
-          <div className="flex items-end justify-between gap-4">
-            <div><h1 className="mb-1 text-3xl font-extrabold tracking-tight">RealitySync</h1><p className="text-sm font-medium text-indigo-200">理想と現実のギャップを力に変える</p></div>
-            <div className="flex items-center gap-2">{activeTab === TABS.PLAN && !protectedMode && <button type="button" onClick={() => setEditorState({ type: 'create' })} aria-label="予定を追加" className="rounded-full bg-white/20 p-2 text-white backdrop-blur-sm transition hover:bg-white/30"><Plus className="h-5 w-5" /></button>}<button type="button" onClick={() => setIsSettingsOpen(true)} aria-label="設定とデータを開く" className="rounded-full bg-white/20 p-2 text-white backdrop-blur-sm transition hover:bg-white/30"><Settings className="h-5 w-5" /></button></div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0"><h1 className="truncate text-2xl font-black tracking-tight">RealitySync</h1><p className="mt-0.5 text-xs font-medium text-indigo-200">理想と現実のギャップを力に変える</p></div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {activeTab === TABS.PLAN && !protectedMode && <button type="button" onClick={() => setEditorState({ type: 'create' })} aria-label="予定を追加" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-sm transition hover:bg-white/25 active:bg-white/30"><Plus className="h-5 w-5" /></button>}
+              <button type="button" onClick={() => setIsSettingsOpen(true)} aria-label="設定とデータを開く" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-sm transition hover:bg-white/25 active:bg-white/30"><Settings className="h-5 w-5" /></button>
+            </div>
           </div>
           <DateNavigator dateKey={selectedDate} onChange={changeDate} />
         </div>
       </header>
-      <main className="mx-auto -mt-2 max-w-md p-4">
+
+      <main className="mx-auto -mt-1 max-w-md p-4">
         {protectedMode ? (
-          <section className="mt-6 rounded-3xl border border-red-200 bg-white p-6 text-center shadow-sm"><div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-500"><AlertTriangle className="h-6 w-6" /></div><h2 className="text-lg font-extrabold text-gray-800">保存データを保護しています</h2><p className="mt-2 text-sm leading-relaxed text-gray-500">現在版では保存済みデータを安全に解釈できないため、編集と自動保存を停止しました。元のlocalStorageは上書きしていません。</p>{storageProtection.unsupportedVersion !== null && <p className="mt-2 text-xs font-bold text-red-600">検出した保存版: {String(storageProtection.unsupportedVersion)}</p>}<button type="button" onClick={() => setIsSettingsOpen(true)} className="mt-5 w-full rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white">設定とデータを開く</button></section>
+          <section className="mt-5 rounded-3xl border border-red-200 bg-white p-6 text-center shadow-sm"><div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-500"><AlertTriangle className="h-6 w-6" /></div><h2 className="text-lg font-extrabold text-gray-800">保存データを保護しています</h2><p className="mt-2 text-sm leading-relaxed text-gray-500">現在版では保存済みデータを安全に解釈できないため、編集と自動保存を停止しました。元のlocalStorageは上書きしていません。</p>{storageProtection.unsupportedVersion !== null && <p className="mt-2 text-xs font-bold text-red-600">検出した保存版: {String(storageProtection.unsupportedVersion)}</p>}<button type="button" onClick={() => setIsSettingsOpen(true)} className="mt-5 min-h-12 w-full rounded-xl bg-indigo-600 px-4 text-sm font-bold text-white">設定とデータを開く</button></section>
         ) : <>{activeTab === TABS.PLAN && <PlanView schedules={schedules} onCreate={() => setEditorState({ type: 'create' })} onEdit={(id) => setEditorState({ type: 'edit', id })} onCopyPrevious={copyPreviousDay} hasPreviousSchedules={previousSchedules.length > 0} onOpenTemplates={() => setIsTemplateModalOpen(true)} templateCount={templates.length} planFeedbackSuggestions={planFeedbackSuggestions} onReviewPlanFeedback={(suggestion) => setSelectedPlanFeedbackId(suggestion.id)} />}{activeTab === TABS.TRACK && <TrackView schedules={schedules} dueSchedules={dueSchedules} dateKey={selectedDate} onRecord={(schedule) => setSelectedScheduleId(schedule.id)} />}{activeTab === TABS.ANALYTICS && <AnalyticsView stats={stats} weeklyInsights={weeklyInsights} monthlyInsights={monthlyInsights} longitudinalInsights={longitudinalInsights} selectedDate={selectedDate} onChangeDate={changeDate} />}</>}
       </main>
+
       {!protectedMode && <BottomNav activeTab={activeTab} onChange={setActiveTab} />}
       {!protectedMode && selectedSchedule && <RecordModal schedule={selectedSchedule} dateKey={selectedDate} onClose={() => setSelectedScheduleId(null)} onSave={saveRecord} />}
       {!protectedMode && selectedPlanFeedback && <PlanFeedbackModal preview={selectedPlanFeedback.preview} onApply={applySelectedPlanFeedback} onClose={() => setSelectedPlanFeedbackId(null)} />}
