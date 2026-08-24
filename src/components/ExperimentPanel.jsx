@@ -164,7 +164,7 @@ function ScopePrecisionCard({ summary }) {
           {coverage.outsideAppliedCount > 0 && <p className="mt-2 text-[9px] font-medium leading-relaxed text-red-600">条件外なのにこの実験IDの適用記録が{coverage.outsideAppliedCount}件あります。自動的に成功/失敗の根拠へ混ぜず、記録整合性の確認対象として扱います。</p>}
         </div>
       )}
-      <p className="mt-3 border-t border-violet-100 pt-2 text-[9px] leading-relaxed text-gray-400">条件外で現在の対策を試していない記録から、「条件外では効かない / 効く」とは推定しません。そこを確かめるには、別の明示的な試行が必要です。</p>
+      <p className="mt-3 border-t border-violet-100 pt-2 text-[9px] leading-relaxed text-gray-400">条件外で現在の対策を十分な回数、明示的に試した記録がない限り、「条件外では効かない / 効く」とは推定しません。そこを確かめるには、別の検証が必要です。</p>
     </section>
   );
 }
