@@ -9,23 +9,25 @@ const ITEMS = [
 
 export function BottomNav({ activeTab, onChange }) {
   return (
-    <nav className="fixed bottom-0 z-20 w-full border-t border-gray-200/80 bg-white/95 backdrop-blur-xl pb-safe" aria-label="メインナビゲーション">
-      <div className="mx-auto grid max-w-md grid-cols-3 gap-1 px-2 pt-2">
-        {ITEMS.map(({ id, label, Icon }) => {
-          const active = activeTab === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => onChange(id)}
-              aria-current={active ? 'page' : undefined}
-              className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-2 transition-colors ${active ? 'bg-indigo-50 text-indigo-600' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'}`}
-            >
-              <Icon className="h-5.5 w-5.5" aria-hidden="true" />
-              <span className="text-[11px] font-extrabold">{label}</span>
-            </button>
-          );
-        })}
+    <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-20 px-3 pb-safe" aria-label="メインナビゲーション">
+      <div className="pointer-events-auto mx-auto max-w-sm rounded-[1.45rem] border border-white/80 bg-white/94 p-1.5 shadow-[0_12px_40px_rgba(15,23,42,0.14)] backdrop-blur-xl">
+        <div className="grid grid-cols-3 gap-1">
+          {ITEMS.map(({ id, label, Icon }) => {
+            const active = activeTab === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => onChange(id)}
+                aria-current={active ? 'page' : undefined}
+                className={`relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-[1.1rem] px-2 transition-all ${active ? 'bg-indigo-600 text-white shadow-[0_6px_18px_rgba(79,70,229,0.24)]' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600 active:bg-slate-100'}`}
+              >
+                <Icon className={`h-5 w-5 ${active ? 'stroke-[2.4]' : ''}`} aria-hidden="true" />
+                <span className="text-[10px] font-extrabold tracking-wide">{label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );
