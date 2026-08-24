@@ -11,14 +11,15 @@ test('date navigation uses the displayed date as the mobile date-picker target w
   assert.match(text, /grid-cols-\[2\.75rem_minmax\(0,1fr\)_2\.75rem\]/);
   assert.match(text, /h-11 w-11/);
   assert.match(text, /absolute inset-0 h-full w-full cursor-pointer opacity-0/);
-  assert.match(text, /タップして日付を変更/);
+  assert.match(text, /日付を変更/);
 });
 
-test('bottom navigation provides large thumb targets and a visible active surface', () => {
+test('bottom navigation provides large thumb targets and a strong active surface', () => {
   const text = source('src/components/BottomNav.jsx');
   assert.match(text, /min-h-14/);
-  assert.match(text, /bg-indigo-50 text-indigo-600/);
+  assert.match(text, /bg-indigo-600 text-white/);
   assert.match(text, /pb-safe/);
+  assert.match(text, /grid grid-cols-3/);
 });
 
 test('record flow keeps the everyday fields primary and folds optional timing and reasons away', () => {
@@ -42,7 +43,7 @@ test('stress graph preserves truth notes without putting technical caveats in th
   assert.match(text, /予定時刻への推測配置はしていません/);
 });
 
-test('mobile shell uses dynamic viewport and safe-area padding', () => {
+test('mobile shell uses dynamic viewport, safe areas and the floating navigation layout', () => {
   const app = source('src/App.jsx');
   const css = source('src/index.css');
   assert.match(app, /min-h-dvh/);
@@ -50,4 +51,5 @@ test('mobile shell uses dynamic viewport and safe-area padding', () => {
   assert.match(css, /env\(safe-area-inset-top\)/);
   assert.match(css, /env\(safe-area-inset-bottom\)/);
   assert.match(css, /pb-modal-safe/);
+  assert.match(css, /\.app-card/);
 });
