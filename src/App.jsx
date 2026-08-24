@@ -1,11 +1,22 @@
 import { useMemo, useState } from 'react';
 import { AlertTriangle, Plus, Settings } from 'lucide-react';
-import { STATUS, TABS } from './constants.js';
+import {
+  EXPERIMENT_STORAGE_KEY,
+  LEGACY_STORAGE_KEY,
+  REMINDER_NOTIFIED_STORAGE_KEY,
+  REMINDER_STORAGE_KEY,
+  STATUS,
+  STORAGE_KEY,
+  TEMPLATE_STORAGE_KEY,
+  TABS,
+} from './constants.js';
 import { calculateMonthlyInsights, calculateWeeklyInsights } from './utils/analytics.js';
 import { dateKeyFromDate, shiftDateKey } from './utils/date.js';
 import { calculateLongitudinalInsights } from './utils/insights.js';
 import { applyPlanFeedback, buildPlanFeedbackSuggestions } from './utils/planningFeedback.js';
+import { DEFAULT_REMINDER_PREFERENCES } from './utils/reminder.js';
 import { calculateStats, createPendingScheduleCopy } from './utils/schedule.js';
+import { createEmptyScheduleStore } from './utils/storage.js';
 import { useDueRecordReminders } from './hooks/useDueRecordReminders.js';
 import { useExperiments } from './hooks/useExperiments.js';
 import { usePersistentSchedules } from './hooks/usePersistentSchedules.js';
@@ -15,6 +26,7 @@ import { useScheduleTemplates } from './hooks/useScheduleTemplates.js';
 import { AnalyticsView } from './components/AnalyticsView.jsx';
 import { BottomNav } from './components/BottomNav.jsx';
 import { DateNavigator } from './components/DateNavigator.jsx';
+import { LegalModal } from './components/LegalModal.jsx';
 import { PlanFeedbackModal } from './components/PlanFeedbackModal.jsx';
 import { PlanView } from './components/PlanView.jsx';
 import { RecordModal } from './components/RecordModal.jsx';
@@ -29,6 +41,15 @@ function createScheduleId() {
 }
 function instantiatePlans(source) { return source.map((schedule) => createPendingScheduleCopy(schedule, createScheduleId())); }
 
+const LOCAL_STORAGE_KEYS = Object.freeze([
+  STORAGE_KEY,
+  LEGACY_STORAGE_KEY,
+  TEMPLATE_STORAGE_KEY,
+  REMINDER_STORAGE_KEY,
+  REMINDER_NOTIFIED_STORAGE_KEY,
+  EXPERIMENT_STORAGE_KEY,
+]);
+
 export default function App() {
   const [activeTab, setActiveTab] = useState(TABS.TRACK);
   const [selectedDate, setSelectedDate] = useState(() => dateKeyFromDate());
@@ -37,6 +58,7 @@ export default function App() {
   const [editorState, setEditorState] = useState(null);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [legalPage, setLegalPage] = useState(null);
   const { schedules, setSchedules, store, replaceStore, storageProtection } = usePersistentSchedules(selectedDate);
   const { templates, saveTemplate, deleteTemplate, replaceTemplates } = useScheduleTemplates();
   const { experiments, replaceExperiments } = useExperiments();
@@ -48,6 +70,7 @@ export default function App() {
   const monthlyInsights = useMemo(() => calculateMonthlyInsights(store.days, selectedDate), [selectedDate, store.days]);
   const longitudinalInsights = useMemo(() => calculateLongitudinalInsights(store.days, selectedDate), [selectedDate, store.days]);
   const todayKey = dateKeyFromDate();
+  const isNativeShell = typeof window !== 'undefined' && window.location.protocol === 'file:';
   const planFeedbackSuggestions = useMemo(
     () => selectedDate >= todayKey ? buildPlanFeedbackSuggestions(experiments, selectedDate, schedules) : [],
     [experiments, schedules, selectedDate, todayKey],
@@ -102,6 +125,30 @@ export default function App() {
     if (!(selectedDate in scheduleStore.days) && dayKeys.length > 0) setSelectedDate(dayKeys.at(-1));
   };
 
+  const eraseAllData = () => {
+    const today = dateKeyFromDate();
+    replaceStore(createEmptyScheduleStore());
+    replaceTemplates([]);
+    replaceExperiments([]);
+    replaceReminderPreferences(DEFAULT_REMINDER_PREFERENCES);
+    try {
+      for (const key of LOCAL_STORAGE_KEYS) window.localStorage.removeItem(key);
+    } catch {
+      // React state is still cleared even when the storage API is unavailable.
+    }
+    setSelectedDate(today);
+    setSelectedScheduleId(null);
+    setSelectedPlanFeedbackId(null);
+    setEditorState(null);
+    setIsTemplateModalOpen(false);
+    setActiveTab(TABS.TRACK);
+  };
+
+  const openLegal = (page) => {
+    setIsSettingsOpen(false);
+    setLegalPage(page);
+  };
+
   return (
     <div className="min-h-dvh bg-gray-50 pb-28 text-gray-800">
       <header className="sticky top-0 z-10 rounded-b-[1.75rem] bg-indigo-600 px-4 pb-4 pt-app-safe text-white shadow-[0_10px_30px_rgba(79,70,229,0.18)]">
@@ -128,7 +175,8 @@ export default function App() {
       {!protectedMode && selectedPlanFeedback && <PlanFeedbackModal preview={selectedPlanFeedback.preview} onApply={applySelectedPlanFeedback} onClose={() => setSelectedPlanFeedbackId(null)} />}
       {!protectedMode && editorState && (editorState.type !== 'edit' || editingSchedule) && <ScheduleEditorModal schedule={editingSchedule} onClose={() => setEditorState(null)} onSave={saveSchedule} onDelete={editorState.type === 'edit' ? deleteSchedule : undefined} />}
       {!protectedMode && isTemplateModalOpen && <TemplateModal templates={templates} currentSchedules={schedules} onClose={() => setIsTemplateModalOpen(false)} onSaveTemplate={(name) => saveTemplate(name, schedules)} onApplyTemplate={applyTemplate} onDeleteTemplate={deleteTemplate} />}
-      {isSettingsOpen && <SettingsModal store={store} templates={templates} experiments={experiments} reminderPreferences={reminderPreferences} storageProtection={storageProtection} onChangeReminderPreferences={setReminderPreferences} onRestoreBackup={restoreBackup} canInstall={canInstall} isInstalled={isInstalled} onInstall={install} onClose={() => setIsSettingsOpen(false)} />}
+      {isSettingsOpen && <SettingsModal store={store} templates={templates} experiments={experiments} reminderPreferences={reminderPreferences} storageProtection={storageProtection} onChangeReminderPreferences={setReminderPreferences} onRestoreBackup={restoreBackup} onEraseAllData={eraseAllData} onOpenLegal={openLegal} canInstall={canInstall} isInstalled={isInstalled} isNativeShell={isNativeShell} onInstall={install} onClose={() => setIsSettingsOpen(false)} />}
+      {legalPage && <LegalModal page={legalPage} onClose={() => setLegalPage(null)} />}
     </div>
   );
 }

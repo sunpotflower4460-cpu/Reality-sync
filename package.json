@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test"
+    "test": "node --test",
+    "ios:prepare": "bash scripts/prepare-ios.sh",
+    "appstore:check": "node scripts/check-app-store-readiness.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.33.0",
