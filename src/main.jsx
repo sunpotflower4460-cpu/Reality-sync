@@ -9,10 +9,11 @@ createRoot(document.getElementById('root')).render(
   </StrictMode>,
 );
 
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+const canUseWebServiceWorker = location.protocol === 'https:' || location.protocol === 'http:';
+if (import.meta.env.PROD && canUseWebServiceWorker && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(() => {
-      // PWA support is progressive enhancement; the web app remains usable.
+      // PWA support is progressive enhancement; the web/native app remains usable.
     });
   });
 }
