@@ -1,4 +1,5 @@
 import { STATUS } from '../constants.js';
+import { contextRuleLabel } from './contextRule.js';
 import { isValidDateKey } from './date.js';
 import {
   buildLearningLineages,
@@ -102,7 +103,7 @@ export function createPlanFeedbackPreview(experimentValue, dateKey, schedulesVal
     return { canApply: false, error: 'この予定は実験を採用する前の日付です。過去へ遡って学習結果を適用しません。' };
   }
   if (schedule.status !== STATUS.PENDING) return { canApply: false, error: '実績がある予定は、過去を書き換えないため変更できません。' };
-  if (!experimentMatchesSchedule(experiment, dateKey, schedule)) return { canApply: false, error: 'この予定は採用した実験条件に一致しません。' };
+  if (!experimentMatchesSchedule(experiment, dateKey, schedule, schedules)) return { canApply: false, error: 'この予定は採用した実験条件または条件付きルールに一致しません。' };
   if (schedule.appliedExperimentIds.includes(experiment.id)) return { canApply: false, error: 'この予定にはすでに同じ工夫が反映されています。' };
 
   const result = calculateExperimentResult(experiment);
@@ -111,6 +112,7 @@ export function createPlanFeedbackPreview(experimentValue, dateKey, schedulesVal
     scheduleId: schedule.id,
     experimentTitle: experiment.title,
     action: experiment.action,
+    contextRuleLabel: experiment.contextRule ? contextRuleLabel(experiment.contextRule) : null,
     adjustmentLabel: planAdjustmentLabel(experiment.planAdjustment),
     baselineFailureRate: result?.baselineFailureRate ?? null,
     experimentFailureRate: result?.failureRate ?? null,
@@ -205,7 +207,7 @@ export function buildPlanFeedbackSuggestions(experimentsValue, dateKey, schedule
     for (const schedule of schedules) {
       if (schedule.status !== STATUS.PENDING) continue;
       if (schedule.appliedExperimentIds.includes(experiment.id)) continue;
-      if (!experimentMatchesSchedule(experiment, dateKey, schedule)) continue;
+      if (!experimentMatchesSchedule(experiment, dateKey, schedule, schedules)) continue;
       suggestions.push({
         id: `${experiment.id}::${String(schedule.id)}`,
         experimentId: experiment.id,
