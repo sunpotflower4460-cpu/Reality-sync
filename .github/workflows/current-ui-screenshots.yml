@@ -1,9 +1,7 @@
 name: Current UI Screenshots
 
 on:
-  push:
-    branches:
-      - chore/current-ui-screenshots
+  pull_request:
 
 permissions:
   contents: read
