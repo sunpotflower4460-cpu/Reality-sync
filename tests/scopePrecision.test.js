@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { STATUS } from '../src/constants.js';
 import { evaluateContextRule, normalizeContextRule } from '../src/utils/contextRule.js';
+import { shiftDateKey } from '../src/utils/date.js';
 import { normalizeExperiment } from '../src/utils/experiment.js';
 import { calculateScopePrecisionSummary, SCOPE_PRECISION_SIGNAL } from '../src/utils/scopePrecision.js';
 
@@ -85,8 +86,7 @@ function recorded(id, dateKey, { stress = 70, failed = false, applied = ['v1'], 
 function sourceDays({ reverse = false, insideCount = 4, outsideCount = 4 } = {}) {
   const days = {};
   for (let index = 0; index < Math.max(insideCount, outsideCount); index += 1) {
-    const monthDay = String(5 + index * 7).padStart(2, '0');
-    const dateKey = `2026-01-${monthDay}`;
+    const dateKey = shiftDateKey('2026-01-05', index * 7);
     const schedules = [];
     if (index < insideCount) schedules.push(recorded(`in-${index}`, dateKey, { stress: 70, failed: !reverse, applied: ['v1'] }));
     if (index < outsideCount) schedules.push(recorded(`out-${index}`, dateKey, { stress: 40, failed: reverse, applied: ['v1'] }));
