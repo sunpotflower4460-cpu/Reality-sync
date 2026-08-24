@@ -124,7 +124,7 @@ export function normalizeExperiment(value, generatedId = 'experiment') {
     decisionDateKey: status === EXPERIMENT_STATUS.COMPLETED && isValidDateKey(value.decisionDateKey) ? value.decisionDateKey : null,
     trials,
     createdAt: text(value.createdAt),
-    completedAt: status === EXPERIMENT_STATUS.COMPLETED || status === EXPERIMENT_STATUS.ABONED ? text(value.completedAt) : '',
+    completedAt: status === EXPERIMENT_STATUS.COMPLETED || status === EXPERIMENT_STATUS.ABANDONED ? text(value.completedAt) : '',
   };
 }
 
