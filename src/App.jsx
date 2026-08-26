@@ -201,21 +201,21 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-dvh bg-transparent pb-24 text-slate-800">
-      <header className="sticky top-0 z-10 rounded-b-[1.55rem] bg-gradient-to-br from-indigo-600 via-indigo-600 to-violet-700 px-4 pb-3 pt-app-safe text-white shadow-[0_10px_28px_rgba(79,70,229,0.20)]">
+    <div className="min-h-dvh bg-[#f6f7fb] text-slate-800">
+      <header className="sticky top-0 z-10 border-b border-slate-200/70 bg-white/90 px-4 pb-2 pt-app-safe shadow-[0_1px_0_rgba(15,23,42,0.02)] backdrop-blur-2xl">
         <div className="mx-auto max-w-md">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <h1 className="truncate text-[1.35rem] font-black tracking-[-0.035em]">RealitySync</h1>
-              <p className="mt-0.5 text-[10px] font-semibold tracking-wide text-indigo-100/90">理想と現実のギャップを、次の予定へ</p>
+          <div className="flex min-h-11 items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 shadow-[0_0_0_4px_rgba(99,102,241,0.08)]" aria-hidden="true" />
+              <h1 className="truncate text-[15px] font-semibold tracking-[-0.025em] text-slate-900">RealitySync</h1>
             </div>
-            <div className="flex shrink-0 items-center gap-1.5">
+            <div className="flex shrink-0 items-center gap-1">
               {activeTab === TABS.PLAN && !protectedMode && (
-                <button type="button" onClick={() => setEditorState({ type: 'create' })} aria-label="予定を追加" className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/14 bg-white/10 text-white backdrop-blur-sm transition hover:bg-white/18 active:scale-[0.97]">
-                  <Plus className="h-[1.1rem] w-[1.1rem]" />
+                <button type="button" onClick={() => setEditorState({ type: 'create' })} aria-label="予定を追加" className="tap-target flex items-center justify-center rounded-xl text-indigo-600 transition hover:bg-indigo-50 active:bg-indigo-100">
+                  <Plus className="h-[1.15rem] w-[1.15rem]" />
                 </button>
               )}
-              <button type="button" onClick={() => setIsSettingsOpen(true)} aria-label="設定とデータを開く" className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/14 bg-white/10 text-white backdrop-blur-sm transition hover:bg-white/18 active:scale-[0.97]">
+              <button type="button" onClick={() => setIsSettingsOpen(true)} aria-label="設定とデータを開く" className="tap-target flex items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 active:bg-slate-200/80">
                 <Settings className="h-[1.1rem] w-[1.1rem]" />
               </button>
             </div>
@@ -224,14 +224,14 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-md px-4 pb-6">
+      <main className="mx-auto max-w-md px-4 pb-[calc(5.25rem+env(safe-area-inset-bottom))]">
         {protectedMode ? (
-          <section className="app-card mt-5 rounded-[1.5rem] border-red-200 p-6 text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-500"><AlertTriangle className="h-6 w-6" /></div>
-            <h2 className="text-lg font-black text-slate-800">保存データを保護しています</h2>
-            <p className="mt-2 text-sm leading-relaxed text-slate-500">現在版では保存済みデータを安全に解釈できないため、編集と自動保存を停止しました。元データは上書きしていません。</p>
-            {storageProtection.unsupportedVersion !== null && <p className="mt-2 text-xs font-bold text-red-600">検出した保存版: {String(storageProtection.unsupportedVersion)}</p>}
-            <button type="button" onClick={() => setIsSettingsOpen(true)} className="mt-5 min-h-12 w-full rounded-2xl bg-indigo-600 px-4 text-sm font-extrabold text-white">設定とデータを開く</button>
+          <section className="app-card mt-4 rounded-[1.25rem] border-red-200 p-5 text-center">
+            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 text-red-500"><AlertTriangle className="h-5 w-5" /></div>
+            <h2 className="text-base font-semibold text-slate-800">保存データを保護しています</h2>
+            <p className="mt-2 text-xs leading-relaxed text-slate-500">現在版では保存済みデータを安全に解釈できないため、編集と自動保存を停止しました。元データは上書きしていません。</p>
+            {storageProtection.unsupportedVersion !== null && <p className="mt-2 text-xs font-semibold text-red-600">検出した保存版: {String(storageProtection.unsupportedVersion)}</p>}
+            <button type="button" onClick={() => setIsSettingsOpen(true)} className="mt-4 min-h-11 w-full rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white">設定とデータを開く</button>
           </section>
         ) : (
           <>
