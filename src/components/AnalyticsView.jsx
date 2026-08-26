@@ -82,8 +82,8 @@ function DailyAnalyticsContent({ stats }) {
       <section className="app-card-strong rounded-[1.15rem] p-3.5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-[8px] font-semibold tracking-[0.12em] text-indigo-400">TODAY</p>
-            <h2 className="mt-1 flex items-center gap-2 text-[13px] font-semibold text-slate-800"><Activity className="h-4 w-4 text-indigo-500" aria-hidden="true" />今日の記録</h2>
+            <p className="text-[8px] font-semibold tracking-[0.12em] text-indigo-400">DAY</p>
+            <h2 className="mt-1 flex items-center gap-2 text-[13px] font-semibold text-slate-800"><Activity className="h-4 w-4 text-indigo-500" aria-hidden="true" />この日の記録</h2>
             <p className="mt-1 text-[8px] text-slate-400">結果ではなく、次の予定の材料</p>
           </div>
           <div className="shrink-0 text-right">
