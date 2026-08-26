@@ -1,6 +1,26 @@
-import { normalizeSchedules } from './schedule.js';
+import { CATEGORIES } from '../constants.js';
+import { isValidTime, normalizeSchedules } from './schedule.js';
+
+function templateScheduleInputValid(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const title = typeof value.title === 'string' ? value.title.trim() : '';
+  const duration = Number(value.duration);
+  const plannedStress = Number(value.plannedStress);
+  return Boolean(
+    isValidTime(value.time)
+    && title
+    && CATEGORIES.includes(value.category)
+    && Number.isFinite(duration)
+    && duration >= 0
+    && duration <= 1440
+    && Number.isFinite(plannedStress)
+    && plannedStress >= 0
+    && plannedStress <= 100
+  );
+}
 
 function normalizeTemplateItem(value) {
+  if (!templateScheduleInputValid(value)) return null;
   const [schedule] = normalizeSchedules([value], []);
   if (!schedule) return null;
   return {
@@ -37,13 +57,25 @@ export function normalizeTemplates(value) {
   return templates;
 }
 
-export function parseStoredTemplates(raw) {
-  if (!raw) return [];
-  try {
-    return normalizeTemplates(JSON.parse(raw));
-  } catch {
-    return [];
+export function parseStoredTemplatesResult(raw) {
+  if (!raw) return { ok: true, templates: [] };
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch { return { ok: false, templates: [] }; }
+  if (!Array.isArray(parsed)) return { ok: false, templates: [] };
+  const templates = normalizeTemplates(parsed);
+  if (templates.length !== parsed.length) return { ok: false, templates: [] };
+  for (let index = 0; index < parsed.length; index += 1) {
+    const rawTemplate = parsed[index];
+    const normalized = templates[index];
+    if (!Array.isArray(rawTemplate?.schedules) || rawTemplate.schedules.length !== normalized.schedules.length) {
+      return { ok: false, templates: [] };
+    }
   }
+  return { ok: true, templates };
+}
+
+export function parseStoredTemplates(raw) {
+  return parseStoredTemplatesResult(raw).templates;
 }
 
 export function createTemplateFromSchedules(name, schedules, id) {
