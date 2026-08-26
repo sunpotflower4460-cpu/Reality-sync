@@ -55,7 +55,7 @@ test('settings exposes privacy, terms, live support and destructive local deleti
 test('unfinished browser notification control is hidden from the native App Store shell', () => {
   const text = source('src/components/SettingsModal.jsx');
   assert.match(text, /!isNativeShell && \(/);
-  assert.match(text, /OS通知（任意）/);
+  assert.match(text, /Web版のOS通知/);
   assert.match(text, /requestNotifications/);
   assert.doesNotMatch(text, /ネイティブ通知は現在準備中/);
 });

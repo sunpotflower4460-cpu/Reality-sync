@@ -10,7 +10,7 @@ const ITEMS = [
 export function BottomNav({ activeTab, onChange }) {
   return (
     <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-20 px-3 pb-safe" aria-label="メインナビゲーション">
-      <div className="pointer-events-auto mx-auto max-w-sm rounded-[1.45rem] border border-white/80 bg-white/94 p-1.5 shadow-[0_12px_40px_rgba(15,23,42,0.14)] backdrop-blur-xl">
+      <div className="pointer-events-auto mx-auto max-w-sm rounded-[1.3rem] border border-white/90 bg-white/96 p-1 shadow-[0_10px_32px_rgba(15,23,42,0.12)] backdrop-blur-xl">
         <div className="grid grid-cols-3 gap-1">
           {ITEMS.map(({ id, label, Icon }) => {
             const active = activeTab === id;
@@ -20,10 +20,11 @@ export function BottomNav({ activeTab, onChange }) {
                 type="button"
                 onClick={() => onChange(id)}
                 aria-current={active ? 'page' : undefined}
-                className={`relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-[1.1rem] px-2 transition-all ${active ? 'bg-indigo-600 text-white shadow-[0_6px_18px_rgba(79,70,229,0.24)]' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600 active:bg-slate-100'}`}
+                className={`relative flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-[1rem] px-2 transition-all ${active ? 'bg-indigo-50 text-indigo-700' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600 active:bg-slate-100'}`}
               >
-                <Icon className={`h-5 w-5 ${active ? 'stroke-[2.4]' : ''}`} aria-hidden="true" />
-                <span className="text-[10px] font-extrabold tracking-wide">{label}</span>
+                <Icon className={`h-[1.15rem] w-[1.15rem] ${active ? 'stroke-[2.5]' : ''}`} aria-hidden="true" />
+                <span className={`text-[9px] font-extrabold tracking-wide ${active ? 'text-indigo-700' : ''}`}>{label}</span>
+                {active && <span className="absolute bottom-1 h-1 w-1 rounded-full bg-indigo-500" aria-hidden="true" />}
               </button>
             );
           })}

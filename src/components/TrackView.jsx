@@ -20,7 +20,7 @@ function statusStyle(status) {
 function TimelineTitle({ schedule, recorded }) {
   if (!recorded) return schedule.title;
   if (schedule.status === STATUS.CHANGED) {
-    return <span className="flex flex-col"><span className="text-[10px] font-medium text-slate-400 line-through">{schedule.title}</span><span className="break-words">{schedule.actualTitle}<span className="ml-1 text-[9px] font-semibold text-amber-600">{schedule.actualCategory ? `・${schedule.actualCategory}` : ''}</span></span></span>;
+    return <span className="flex flex-col"><span className="text-[9px] font-medium text-slate-400 line-through">{schedule.title}</span><span className="break-words">{schedule.actualTitle}<span className="ml-1 text-[9px] font-semibold text-amber-600">{schedule.actualCategory ? `・${schedule.actualCategory}` : ''}</span></span></span>;
   }
   if (schedule.status === STATUS.SKIPPED) return <span className="text-slate-500 line-through">{schedule.title}</span>;
   const recordedTitle = schedule.actualTitle || schedule.title;
@@ -37,8 +37,8 @@ export function TrackView({ schedules, dueSchedules = [], dateKey, onRecord }) {
   if (orderedSchedules.length === 0) {
     return (
       <div className="animate-fade-in pt-4">
-        <section className="app-card-strong rounded-[1.75rem] p-7 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-500"><Clock3 className="h-5 w-5" /></div>
+        <section className="app-card-strong rounded-[1.55rem] p-6 text-center">
+          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-500"><Clock3 className="h-5 w-5" /></div>
           <h2 className="mt-4 text-base font-black text-slate-800">記録する予定がまだありません</h2>
           <p className="mx-auto mt-2 max-w-[17rem] text-xs leading-relaxed text-slate-500">計画タブで予定を置くと、ここに「予定と現実」のタイムラインができます。</p>
         </section>
@@ -47,51 +47,51 @@ export function TrackView({ schedules, dueSchedules = [], dateKey, onRecord }) {
   }
 
   return (
-    <div className="animate-fade-in space-y-5 pt-4">
+    <div className="animate-fade-in space-y-4 pt-4">
       <div className="px-1">
-        <p className="text-[10px] font-black tracking-[0.16em] text-indigo-500">REALITY</p>
-        <h2 className="mt-1 text-[1.35rem] font-black tracking-tight text-slate-900">今日の現実</h2>
-        <p className="mt-1 text-[11px] leading-relaxed text-slate-500">できた・変えた・休んだを、そのまま残す</p>
+        <p className="text-[9px] font-black tracking-[0.18em] text-indigo-500">REALITY</p>
+        <h2 className="mt-1 text-[1.25rem] font-black tracking-tight text-slate-900">今日の現実</h2>
+        <p className="mt-1 text-[10px] leading-relaxed text-slate-500">できた・変えた・休んだを、そのまま残す</p>
       </div>
 
       {firstDue && (
         <button
           type="button"
           onClick={() => onRecord(firstDue)}
-          className="flex w-full items-center gap-3 rounded-[1.35rem] border border-amber-200/80 bg-amber-50/80 p-3.5 text-left shadow-[0_8px_24px_rgba(245,158,11,0.08)] transition hover:border-amber-300 active:scale-[0.99]"
+          className="flex w-full items-center gap-3 rounded-xl border border-amber-200/80 bg-amber-50/75 p-3 text-left transition hover:border-amber-300 active:scale-[0.99]"
           aria-label={`記録待ち ${dueSchedules.length}件。${firstDue.time} ${firstDue.title} を記録する`}
         >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-amber-600 shadow-sm"><BellRing className="h-5 w-5" aria-hidden="true" /></div>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-amber-600 shadow-sm"><BellRing className="h-4 w-4" aria-hidden="true" /></div>
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-black text-amber-900">記録待ち {dueSchedules.length}件</div>
-            <p className="mt-1 truncate text-[11px] font-semibold text-amber-700">{firstDue.time} {firstDue.title}</p>
+            <div className="text-[10px] font-black text-amber-900">記録待ち {dueSchedules.length}件</div>
+            <p className="mt-0.5 truncate text-[10px] font-semibold text-amber-700">{firstDue.time} {firstDue.title}</p>
           </div>
-          <span className="shrink-0 rounded-xl bg-indigo-600 px-3 py-2 text-[10px] font-extrabold text-white shadow-sm">記録する</span>
+          <span className="shrink-0 rounded-lg bg-indigo-600 px-2.5 py-1.5 text-[9px] font-extrabold text-white">記録</span>
         </button>
       )}
 
       <StressGraph schedules={orderedSchedules} dateKey={dateKey} />
 
-      <section className="space-y-3" aria-labelledby="timeline-title">
+      <section className="space-y-2.5" aria-labelledby="timeline-title">
         <div className="flex items-end justify-between gap-3 px-1">
-          <div><h2 id="timeline-title" className="text-base font-black text-slate-800">実行タイムライン</h2><p className="mt-0.5 text-[10px] text-slate-400">予定と、実際どうだったか</p></div>
-          <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-extrabold text-slate-400 shadow-sm ring-1 ring-slate-200/70">{orderedSchedules.length}件</span>
+          <div><h2 id="timeline-title" className="text-[15px] font-black text-slate-800">実行タイムライン</h2><p className="mt-0.5 text-[9px] text-slate-400">予定と、実際どうだったか</p></div>
+          <span className="text-[10px] font-extrabold text-slate-400">{orderedSchedules.length}件</span>
         </div>
 
-        <div className="relative ml-3 space-y-3.5 border-l border-indigo-100 pb-2">
+        <div className="relative ml-2.5 space-y-3 border-l border-indigo-100 pb-2">
           {orderedSchedules.map((schedule) => {
             const recorded = schedule.status !== STATUS.PENDING;
             const actualDateDiffers = schedule.actualStartDateKey && schedule.actualStartDateKey !== dateKey;
             const style = statusStyle(schedule.status);
             return (
-              <article key={schedule.id} className="relative pl-5">
-                <div className={`absolute -left-[5px] top-5 h-2.5 w-2.5 rounded-full ring-[3px] ring-[#f5f6fa] ${style.accent}`} aria-hidden="true" />
-                <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[11px] font-extrabold text-indigo-600">
+              <article key={schedule.id} className="relative pl-4.5">
+                <div className={`absolute -left-[5px] top-4 h-2.5 w-2.5 rounded-full ring-[3px] ring-[#f5f6fa] ${style.accent}`} aria-hidden="true" />
+                <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[10px] font-extrabold text-indigo-600">
                   <time dateTime={`${dateKey}T${schedule.time}`}>{schedule.time}</time>
                   {recorded && schedule.actualStartTime && schedule.status !== STATUS.SKIPPED && <><span className="text-slate-300">→</span><span className="flex items-center gap-1 text-pink-600"><Clock3 className="h-3 w-3" aria-hidden="true" />{actualDateDiffers ? `${formatShortDateLabel(schedule.actualStartDateKey)} ` : ''}{schedule.actualStartTime}</span></>}
                 </div>
 
-                <button type="button" onClick={() => onRecord(schedule)} className="app-card relative w-full overflow-hidden rounded-[1.35rem] p-3.5 text-left transition hover:shadow-[0_10px_30px_rgba(15,23,42,0.07)] active:scale-[0.99]" aria-label={`${schedule.time} ${schedule.title} の実績を${recorded ? '編集' : '記録'}する`}>
+                <button type="button" onClick={() => onRecord(schedule)} className="app-card relative w-full overflow-hidden rounded-[1.2rem] p-3 text-left transition hover:shadow-[0_10px_28px_rgba(15,23,42,0.06)] active:scale-[0.99]" aria-label={`${schedule.time} ${schedule.title} の実績を${recorded ? '編集' : '記録'}する`}>
                   <span className={`absolute inset-y-3 left-0 w-[3px] rounded-r-full ${style.accent}`} aria-hidden="true" />
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 text-sm font-black text-slate-800"><TimelineTitle schedule={schedule} recorded={recorded} /></div>
@@ -108,15 +108,15 @@ export function TrackView({ schedules, dueSchedules = [], dateKey, onRecord }) {
                     </div>
                   )}
 
-                  {recorded && schedule.deviationReason && <p className="mt-2 line-clamp-2 rounded-xl bg-slate-50 px-2.5 py-2 text-[10px] leading-relaxed text-slate-600">{schedule.deviationReason}</p>}
+                  {recorded && schedule.deviationReason && <p className="mt-2 line-clamp-2 border-l-2 border-slate-200 pl-2.5 text-[10px] leading-relaxed text-slate-500">{schedule.deviationReason}</p>}
 
-                  <div className="mt-3 flex items-end justify-between gap-3 border-t border-slate-100 pt-3">
-                    <div className="flex min-w-0 flex-wrap items-end gap-x-4 gap-y-2">
+                  <div className="mt-2.5 flex items-end justify-between gap-3 border-t border-slate-100 pt-2.5">
+                    <div className="flex min-w-0 flex-wrap items-end gap-x-3.5 gap-y-2">
                       <Metric label="想定負荷" value={schedule.plannedStress} muted />
                       {recorded && <Metric label="実負荷" value={schedule.actualStress ?? '—'} danger={schedule.actualStress > 80} />}
                       {recorded && <Metric label="実時間" value={schedule.actualDuration === null ? '—' : `${schedule.actualDuration}分`} neutral />}
                     </div>
-                    {!recorded && <span className="shrink-0 rounded-xl bg-indigo-600 px-3 py-2 text-[10px] font-extrabold text-white">記録する</span>}
+                    {!recorded && <span className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-[9px] font-extrabold text-white">記録</span>}
                     {recorded && <span className="shrink-0" aria-hidden="true">{schedule.status === STATUS.AS_PLANNED && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}{schedule.status === STATUS.CHANGED && <AlertCircle className="h-4 w-4 text-amber-500" />}{schedule.status === STATUS.SKIPPED && <XCircle className="h-4 w-4 text-rose-400" />}</span>}
                   </div>
                 </button>
@@ -131,5 +131,5 @@ export function TrackView({ schedules, dueSchedules = [], dateKey, onRecord }) {
 
 function Metric({ label, value, muted = false, danger = false, neutral = false }) {
   const valueClass = danger ? 'text-rose-500' : neutral ? 'text-slate-700' : muted ? 'text-slate-400' : 'text-indigo-600';
-  return <div className="flex flex-col"><span className="text-[8px] font-bold text-slate-400">{label}</span><span className={`text-sm font-black ${valueClass}`}>{value}</span></div>;
+  return <div className="flex flex-col"><span className="text-[8px] font-bold text-slate-400">{label}</span><span className={`text-[13px] font-black ${valueClass}`}>{value}</span></div>;
 }

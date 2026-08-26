@@ -201,22 +201,22 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-dvh bg-transparent pb-28 text-slate-800">
-      <header className="sticky top-0 z-10 rounded-b-[2rem] bg-gradient-to-br from-indigo-600 via-indigo-600 to-violet-700 px-4 pb-4 pt-app-safe text-white shadow-[0_14px_38px_rgba(79,70,229,0.24)]">
+    <div className="min-h-dvh bg-transparent pb-24 text-slate-800">
+      <header className="sticky top-0 z-10 rounded-b-[1.55rem] bg-gradient-to-br from-indigo-600 via-indigo-600 to-violet-700 px-4 pb-3 pt-app-safe text-white shadow-[0_10px_28px_rgba(79,70,229,0.20)]">
         <div className="mx-auto max-w-md">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <h1 className="truncate text-[1.55rem] font-black tracking-[-0.035em]">RealitySync</h1>
-              <p className="mt-0.5 text-[11px] font-semibold tracking-wide text-indigo-100/90">理想と現実のギャップを、次の予定へ</p>
+              <h1 className="truncate text-[1.35rem] font-black tracking-[-0.035em]">RealitySync</h1>
+              <p className="mt-0.5 text-[10px] font-semibold tracking-wide text-indigo-100/90">理想と現実のギャップを、次の予定へ</p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               {activeTab === TABS.PLAN && !protectedMode && (
-                <button type="button" onClick={() => setEditorState({ type: 'create' })} aria-label="予定を追加" className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/15 bg-white/12 text-white shadow-sm backdrop-blur-sm transition hover:bg-white/20 active:scale-[0.97]">
-                  <Plus className="h-5 w-5" />
+                <button type="button" onClick={() => setEditorState({ type: 'create' })} aria-label="予定を追加" className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/14 bg-white/10 text-white backdrop-blur-sm transition hover:bg-white/18 active:scale-[0.97]">
+                  <Plus className="h-[1.1rem] w-[1.1rem]" />
                 </button>
               )}
-              <button type="button" onClick={() => setIsSettingsOpen(true)} aria-label="設定とデータを開く" className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/15 bg-white/12 text-white shadow-sm backdrop-blur-sm transition hover:bg-white/20 active:scale-[0.97]">
-                <Settings className="h-5 w-5" />
+              <button type="button" onClick={() => setIsSettingsOpen(true)} aria-label="設定とデータを開く" className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/14 bg-white/10 text-white backdrop-blur-sm transition hover:bg-white/18 active:scale-[0.97]">
+                <Settings className="h-[1.1rem] w-[1.1rem]" />
               </button>
             </div>
           </div>
@@ -224,9 +224,9 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-md px-4 pb-4">
+      <main className="mx-auto max-w-md px-4 pb-6">
         {protectedMode ? (
-          <section className="app-card mt-5 rounded-[1.6rem] border-red-200 p-6 text-center">
+          <section className="app-card mt-5 rounded-[1.5rem] border-red-200 p-6 text-center">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-500"><AlertTriangle className="h-6 w-6" /></div>
             <h2 className="text-lg font-black text-slate-800">保存データを保護しています</h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-500">現在版では保存済みデータを安全に解釈できないため、編集と自動保存を停止しました。元データは上書きしていません。</p>
