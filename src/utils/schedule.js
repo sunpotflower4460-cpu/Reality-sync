@@ -191,8 +191,10 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
     : null;
 
   if (status === STATUS.AS_PLANNED) {
-    normalized.actualTitle = normalizeText(source.actualTitle, normalizeText(base.actualTitle, normalized.title));
-    normalized.actualCategory = normalizeCategory(source.actualCategory, base.actualCategory ?? normalized.category);
+    const recordedTitleFallback = normalized.plannedSnapshot?.title ?? normalized.title;
+    const recordedCategoryFallback = normalized.plannedSnapshot?.category ?? normalized.category;
+    normalized.actualTitle = normalizeText(source.actualTitle, normalizeText(base.actualTitle, recordedTitleFallback));
+    normalized.actualCategory = normalizeCategory(source.actualCategory, base.actualCategory ?? recordedCategoryFallback);
     normalized.actualDuration = normalizeOptionalNumber(actualField(source, base, 'actualDuration'), 0, 1440);
     normalized.deviationReason = null;
     return normalized;
