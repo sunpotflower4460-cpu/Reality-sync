@@ -49,6 +49,50 @@ test('template parser blocks malformed schedule rows instead of fabricating defa
   assert.deepEqual(result.templates, []);
 });
 
+test('template parser keeps missing numeric plan facts invalid instead of coercing null to zero', () => {
+  const nullDuration = JSON.stringify([{
+    id: 'bad-duration',
+    name: 'Broken duration',
+    schedules: [{ time: '09:00', title: 'Focus', category: '仕事', duration: null, plannedStress: 20 }],
+  }]);
+  const nullStress = JSON.stringify([{
+    id: 'bad-stress',
+    name: 'Broken stress',
+    schedules: [{ time: '09:00', title: 'Focus', category: '仕事', duration: 60, plannedStress: null }],
+  }]);
+  assert.equal(parseStoredTemplatesResult(nullDuration).ok, false);
+  assert.equal(parseStoredTemplatesResult(nullStress).ok, false);
+});
+
+test('template parser protects explicit learned-plan markers instead of silently dropping malformed ids', () => {
+  const malformedIds = JSON.stringify([{
+    id: 'bad-ids',
+    name: 'Broken ids',
+    schedules: [{
+      time: '09:00', title: 'Focus', category: '仕事', duration: 60, plannedStress: 20,
+      appliedExperimentIds: ['exp-a', 'exp-a'],
+    }],
+  }]);
+  const nonArrayIds = JSON.stringify([{
+    id: 'bad-id-shape',
+    name: 'Broken id shape',
+    schedules: [{
+      time: '09:00', title: 'Focus', category: '仕事', duration: 60, plannedStress: 20,
+      appliedExperimentIds: 'exp-a',
+    }],
+  }]);
+  assert.equal(parseStoredTemplatesResult(malformedIds).ok, false);
+  assert.equal(parseStoredTemplatesResult(nonArrayIds).ok, false);
+});
+
+test('template parser refuses to invent a stored template id', () => {
+  const raw = JSON.stringify([{
+    name: 'No id',
+    schedules: [{ time: '09:00', title: 'Focus', category: '仕事', duration: 60, plannedStress: 20 }],
+  }]);
+  assert.equal(parseStoredTemplatesResult(raw).ok, false);
+});
+
 test('template normalization rejects malformed plan rows and still deduplicates valid ids', () => {
   const templates = normalizeTemplates([
     { id: 'same', name: 'Broken first', schedules: [{ time: '25:00', title: 'Focus', category: '__proto__', duration: 9999, plannedStress: -5 }] },
