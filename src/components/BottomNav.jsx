@@ -9,9 +9,9 @@ const ITEMS = [
 
 export function BottomNav({ activeTab, onChange }) {
   return (
-    <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-20 px-3 pb-safe" aria-label="メインナビゲーション">
-      <div className="pointer-events-auto mx-auto max-w-sm rounded-[1.3rem] border border-white/90 bg-white/96 p-1 shadow-[0_10px_32px_rgba(15,23,42,0.12)] backdrop-blur-xl">
-        <div className="grid grid-cols-3 gap-1">
+    <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200/75 bg-white/92 backdrop-blur-2xl" aria-label="メインナビゲーション">
+      <div className="mx-auto max-w-md px-5 pb-safe pt-1">
+        <div className="grid grid-cols-3">
           {ITEMS.map(({ id, label, Icon }) => {
             const active = activeTab === id;
             return (
@@ -20,11 +20,10 @@ export function BottomNav({ activeTab, onChange }) {
                 type="button"
                 onClick={() => onChange(id)}
                 aria-current={active ? 'page' : undefined}
-                className={`relative flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-[1rem] px-2 transition-all ${active ? 'bg-indigo-50 text-indigo-700' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600 active:bg-slate-100'}`}
+                className={`relative flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl px-2 transition ${active ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600 active:bg-slate-100/75'}`}
               >
-                <Icon className={`h-[1.15rem] w-[1.15rem] ${active ? 'stroke-[2.5]' : ''}`} aria-hidden="true" />
-                <span className={`text-[9px] font-extrabold tracking-wide ${active ? 'text-indigo-700' : ''}`}>{label}</span>
-                {active && <span className="absolute bottom-1 h-1 w-1 rounded-full bg-indigo-500" aria-hidden="true" />}
+                <Icon className={`h-[1.15rem] w-[1.15rem] ${active ? 'stroke-[2.35]' : 'stroke-[1.9]'}`} aria-hidden="true" />
+                <span className={`text-[9px] tracking-wide ${active ? 'font-semibold' : 'font-medium'}`}>{label}</span>
               </button>
             );
           })}
