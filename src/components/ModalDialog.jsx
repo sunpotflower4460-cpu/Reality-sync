@@ -9,9 +9,10 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
-export function ModalDialog({ onClose, labelledBy, children, className = '' }) {
+export function ModalDialog({ onClose, labelledBy, children, className = '', placement = 'center' }) {
   const dialogRef = useRef(null);
   const onCloseRef = useRef(onClose);
+  const mobileSheet = placement === 'sheet';
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -69,9 +70,13 @@ export function ModalDialog({ onClose, labelledBy, children, className = '' }) {
     };
   }, []);
 
+  const overlayClass = mobileSheet
+    ? 'items-end justify-center p-0 sm:items-center sm:p-4'
+    : 'items-center justify-center p-4';
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in"
+      className={`fixed inset-0 z-50 flex bg-slate-950/48 backdrop-blur-[2px] animate-fade-in ${overlayClass}`}
       onMouseDown={(event) => event.target === event.currentTarget && onCloseRef.current?.()}
     >
       <div
