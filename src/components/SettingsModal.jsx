@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Bell,
@@ -27,6 +27,11 @@ function backupFilename() {
   return `reality-sync-backup-${year}-${month}-${day}.json`;
 }
 
+function nativeMessageHandler(name) {
+  if (typeof window === 'undefined') return null;
+  return window.webkit?.messageHandlers?.[name] ?? null;
+}
+
 export function SettingsModal({
   store,
   templates,
@@ -51,6 +56,54 @@ export function SettingsModal({
   ));
   const storageBlocked = Boolean(storageProtection?.persistenceBlocked);
 
+  const restoreBackupText = useCallback((text) => {
+    const parsed = parseBackup(text);
+    if (!parsed.ok) {
+      setMessage('');
+      setError(parsed.error);
+      return;
+    }
+    const { dayCount, scheduleCount, templateCount, experimentCount } = parsed.summary;
+    const confirmed = window.confirm(
+      `このバックアップで現在のRealitySyncデータを置き換えますか？\n\n予定・実績: ${scheduleCount}件 / ${dayCount}日\nテンプレート: ${templateCount}件\n内部の学習履歴: ${experimentCount}件\n\n現在の端末内データは置き換わります。必要なら先に書き出してください。`,
+    );
+    if (!confirmed) return;
+    onRestoreBackup(parsed.data);
+    setError('');
+    setMessage('バックアップを復元しました。');
+  }, [onRestoreBackup]);
+
+  useEffect(() => {
+    if (!isNativeShell || typeof window === 'undefined') return undefined;
+
+    const receiveImport = (event) => {
+      if (typeof event.detail !== 'string') {
+        setMessage('');
+        setError('バックアップをアプリへ渡せませんでした。');
+        return;
+      }
+      restoreBackupText(event.detail);
+    };
+    const receiveStatus = (event) => {
+      const detail = event.detail;
+      if (!detail || typeof detail.message !== 'string') return;
+      if (detail.type === 'error') {
+        setMessage('');
+        setError(detail.message);
+        return;
+      }
+      setError('');
+      setMessage(detail.message);
+    };
+
+    window.addEventListener('realitysync:native-backup-import', receiveImport);
+    window.addEventListener('realitysync:native-backup-status', receiveStatus);
+    return () => {
+      window.removeEventListener('realitysync:native-backup-import', receiveImport);
+      window.removeEventListener('realitysync:native-backup-status', receiveStatus);
+    };
+  }, [isNativeShell, restoreBackupText]);
+
   const exportBackup = () => {
     if (storageBlocked) {
       setMessage('');
@@ -58,6 +111,20 @@ export function SettingsModal({
       return;
     }
     const text = serializeBackup({ store, templates, experiments, reminderPreferences });
+
+    if (isNativeShell) {
+      const handler = nativeMessageHandler('realitySyncBackupExport');
+      if (!handler?.postMessage) {
+        setMessage('');
+        setError('バックアップの保存画面を開けませんでした。');
+        return;
+      }
+      handler.postMessage({ filename: backupFilename(), text });
+      setError('');
+      setMessage('バックアップの保存先を選択してください。');
+      return;
+    }
+
     const blob = new Blob([text], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -83,20 +150,23 @@ export function SettingsModal({
       setError('ファイルを読み込めませんでした。');
       return;
     }
-    const parsed = parseBackup(text);
-    if (!parsed.ok) {
-      setMessage('');
-      setError(parsed.error);
+    restoreBackupText(text);
+  };
+
+  const openBackupImport = () => {
+    if (!isNativeShell) {
+      fileInputRef.current?.click();
       return;
     }
-    const { dayCount, scheduleCount, templateCount, experimentCount } = parsed.summary;
-    const confirmed = window.confirm(
-      `このバックアップで現在のRealitySyncデータを置き換えますか？\n\n予定・実績: ${scheduleCount}件 / ${dayCount}日\nテンプレート: ${templateCount}件\n内部の学習履歴: ${experimentCount}件\n\n現在の端末内データは置き換わります。必要なら先に書き出してください。`,
-    );
-    if (!confirmed) return;
-    onRestoreBackup(parsed.data);
+    const handler = nativeMessageHandler('realitySyncBackupImport');
+    if (!handler?.postMessage) {
+      setMessage('');
+      setError('バックアップの選択画面を開けませんでした。');
+      return;
+    }
+    setMessage('');
     setError('');
-    setMessage('バックアップを復元しました。');
+    handler.postMessage(null);
   };
 
   const requestNotifications = async () => {
@@ -200,7 +270,7 @@ export function SettingsModal({
           <div className="app-group divide-y divide-slate-100">
             <div className="px-3.5 py-3"><p className="text-[10px] font-semibold text-slate-700">バックアップ</p><p className="mt-1 text-[8px] leading-relaxed text-slate-400">予定・実績・テンプレートなどをJSONに保存します。ファイル自体は暗号化されません。</p></div>
             <button type="button" onClick={exportBackup} disabled={storageBlocked} className="flex min-h-12 w-full items-center justify-between px-3.5 text-left text-[10px] font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"><span className="flex items-center gap-2.5"><Download className="h-4 w-4 text-indigo-500" />バックアップを書き出す</span><ChevronRight className="h-4 w-4 text-slate-300" /></button>
-            <button type="button" onClick={() => fileInputRef.current?.click()} className="flex min-h-12 w-full items-center justify-between px-3.5 text-left text-[10px] font-medium text-slate-700"><span className="flex items-center gap-2.5"><Upload className="h-4 w-4 text-indigo-500" />バックアップから復元</span><ChevronRight className="h-4 w-4 text-slate-300" /></button>
+            <button type="button" onClick={openBackupImport} className="flex min-h-12 w-full items-center justify-between px-3.5 text-left text-[10px] font-medium text-slate-700"><span className="flex items-center gap-2.5"><Upload className="h-4 w-4 text-indigo-500" />バックアップから復元</span><ChevronRight className="h-4 w-4 text-slate-300" /></button>
             <input ref={fileInputRef} type="file" accept="application/json,.json" onChange={importBackup} className="hidden" />
           </div>
         </section>
