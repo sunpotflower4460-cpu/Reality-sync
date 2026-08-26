@@ -78,10 +78,24 @@ fieldset.app-group {
   overflow: visible;
 }
 
-.app-group > button:focus-visible,
-.app-group > summary:focus-visible,
-.app-group > a:focus-visible {
+.app-group button:focus-visible,
+.app-group summary:focus-visible,
+.app-group a:focus-visible {
   outline-offset: -3px;
+}
+
+.app-group input[type="checkbox"]:focus-visible + span {
+  outline: 3px solid color-mix(in srgb, #4f46e5 30%, transparent);
+  outline-offset: 2px;
+}
+
+.date-picker-target:has(> input[type="date"]:focus-visible) {
+  outline: 3px solid color-mix(in srgb, #4f46e5 25%, transparent);
+  outline-offset: 2px;
+}
+
+.date-picker-target > input[type="date"]:focus-visible {
+  outline: none;
 }
 
 .app-group button,
