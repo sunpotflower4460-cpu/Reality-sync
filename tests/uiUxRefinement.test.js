@@ -46,10 +46,10 @@ test('analytics keeps completion rate informative without turning percentage int
 
 test('settings keeps routine controls first and destructive deletion visually secondary but explicit', () => {
   const text = source('src/components/SettingsModal.jsx');
-  const reminder = text.indexOf('記録リマインダー');
-  const backup = text.indexOf('バックアップ');
-  const privacy = text.indexOf('プライバシーとサポート');
-  const deletion = text.indexOf('この端末のデータをすべて削除');
+  const reminder = text.indexOf('>記録リマインダー<');
+  const backup = text.indexOf('>バックアップ<');
+  const privacy = text.indexOf('>プライバシーとサポート<');
+  const deletion = text.lastIndexOf('>この端末のデータをすべて削除<');
   assert.ok(reminder > -1 && backup > reminder && privacy > backup && deletion > privacy);
   assert.match(text, /peer-checked:bg-indigo-600/);
   assert.doesNotMatch(text, /rounded-2xl border border-red-100 bg-red-50\/40/);
