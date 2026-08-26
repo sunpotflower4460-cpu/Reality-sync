@@ -60,6 +60,22 @@ function normalizeId(value, fallback) {
   return fallback;
 }
 
+function hasOwn(object, key) {
+  return Boolean(object) && Object.prototype.hasOwnProperty.call(object, key);
+}
+
+function actualField(source, base, key) {
+  return hasOwn(source, key) ? source[key] : base?.[key];
+}
+
+function normalizeOptionalNumber(value, min, max) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) return null;
+  return parsed;
+}
+
 function normalizeAppliedExperimentIds(value, fallback = []) {
   const source = Array.isArray(value) ? value : (Array.isArray(fallback) ? fallback : []);
   const seen = new Set();
@@ -157,10 +173,9 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
 
   normalized.plannedSnapshot = normalizePlannedSnapshot(source.plannedSnapshot)
     ?? normalizePlannedSnapshot(base.plannedSnapshot);
-  normalized.actualStress = clampNumber(source.actualStress ?? base.actualStress ?? plannedStress, 0, 100);
-  normalized.mood = VALID_MOODS.has(source.mood)
-    ? source.mood
-    : (VALID_MOODS.has(base.mood) ? base.mood : MOOD.NORMAL);
+  normalized.actualStress = normalizeOptionalNumber(actualField(source, base, 'actualStress'), 0, 100);
+  const moodValue = actualField(source, base, 'mood');
+  normalized.mood = VALID_MOODS.has(moodValue) ? moodValue : null;
 
   if (status === STATUS.SKIPPED) {
     normalized.actualTitle = 'スキップ';
@@ -179,7 +194,7 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
   if (status === STATUS.AS_PLANNED) {
     normalized.actualTitle = normalizeText(source.actualTitle, normalizeText(base.actualTitle, normalized.title));
     normalized.actualCategory = normalizeCategory(source.actualCategory, base.actualCategory ?? normalized.category);
-    normalized.actualDuration = clampNumber(source.actualDuration ?? base.actualDuration ?? duration, 0, 1440);
+    normalized.actualDuration = normalizeOptionalNumber(actualField(source, base, 'actualDuration'), 0, 1440);
     normalized.deviationReason = null;
     return normalized;
   }
@@ -203,7 +218,7 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
 
   normalized.actualTitle = actualTitle;
   normalized.actualCategory = normalizeCategory(source.actualCategory, base.actualCategory);
-  normalized.actualDuration = clampNumber(source.actualDuration ?? base.actualDuration ?? 0, 0, 1440);
+  normalized.actualDuration = normalizeOptionalNumber(actualField(source, base, 'actualDuration'), 0, 1440);
   normalized.deviationReason = normalizeOptionalText(source.deviationReason, base.deviationReason);
   return normalized;
 }
@@ -261,11 +276,10 @@ export function createPendingScheduleCopy(schedule, id) {
 }
 
 export function durationAfterStatusChange(currentDuration, previousStatus, nextStatus, plannedDuration) {
+  void plannedDuration;
   if (nextStatus === STATUS.SKIPPED) return 0;
-  if (previousStatus === STATUS.SKIPPED && nextStatus !== STATUS.SKIPPED) {
-    return clampNumber(plannedDuration, 0, 1440);
-  }
-  return clampNumber(currentDuration, 0, 1440);
+  if (previousStatus === STATUS.SKIPPED && nextStatus !== STATUS.SKIPPED) return null;
+  return parseActualDuration(currentDuration);
 }
 
 export function replacementTitleForEditing(schedule) {
@@ -291,6 +305,7 @@ export function calculateStats(schedules) {
   const skipped = list.filter((schedule) => schedule.status === STATUS.SKIPPED).length;
   const pending = list.filter((schedule) => schedule.status === STATUS.PENDING).length;
   const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+  let unknownActualDurationCount = 0;
 
   const categories = Object.create(null);
   const ensureCategory = (category) => {
@@ -305,16 +320,18 @@ export function calculateStats(schedules) {
     if (schedule.status === STATUS.AS_PLANNED) {
       const category = schedule.actualCategory || planned.category;
       ensureCategory(category);
-      categories[category].actual += schedule.actualDuration ?? 0;
+      if (Number.isFinite(schedule.actualDuration)) categories[category].actual += schedule.actualDuration;
+      else unknownActualDurationCount += 1;
       continue;
     }
 
     if (schedule.status === STATUS.CHANGED) {
       const category = schedule.actualCategory || 'その他';
       ensureCategory(category);
-      categories[category].actual += schedule.actualDuration ?? 0;
+      if (Number.isFinite(schedule.actualDuration)) categories[category].actual += schedule.actualDuration;
+      else unknownActualDurationCount += 1;
     }
   }
 
-  return { total, completed, changed, skipped, pending, completionRate, categories };
+  return { total, completed, changed, skipped, pending, completionRate, categories, unknownActualDurationCount };
 }
