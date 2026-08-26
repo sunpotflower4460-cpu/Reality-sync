@@ -35,6 +35,16 @@ export function normalizeScheduleStore(value) {
   return { version: STORAGE_VERSION, days };
 }
 
+function storedScheduleShapePreserved(parsed) {
+  if (!parsed.days || typeof parsed.days !== 'object' || Array.isArray(parsed.days)) return false;
+  for (const [dateKey, schedules] of Object.entries(parsed.days)) {
+    if (!isValidDateKey(dateKey) || !Array.isArray(schedules)) return false;
+    const normalized = normalizeSchedules(schedules, []);
+    if (normalized.length !== schedules.length) return false;
+  }
+  return true;
+}
+
 export function parseStoredScheduleStoreResult(raw) {
   if (!raw) return { ok: true, store: createEmptyScheduleStore(), unsupportedVersion: null };
 
@@ -54,6 +64,9 @@ export function parseStoredScheduleStoreResult(raw) {
       store: createEmptyScheduleStore(),
       unsupportedVersion: parsed.version ?? 'unknown',
     };
+  }
+  if (!storedScheduleShapePreserved(parsed)) {
+    return { ok: false, store: createEmptyScheduleStore(), unsupportedVersion: null };
   }
 
   return { ok: true, store: normalizeScheduleStore(parsed), unsupportedVersion: null };
