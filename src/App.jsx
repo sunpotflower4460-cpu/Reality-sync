@@ -40,6 +40,7 @@ function createScheduleId() {
   return `schedule-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 function instantiatePlans(source) { return source.map((schedule) => createPendingScheduleCopy(schedule, createScheduleId())); }
+function scheduleRevisionKey(schedule) { return schedule ? JSON.stringify(schedule) : 'none'; }
 
 const LOCAL_STORAGE_KEYS = Object.freeze([
   STORAGE_KEY,
@@ -292,9 +293,9 @@ export default function App() {
       </main>
 
       {!protectedMode && <BottomNav activeTab={activeTab} onChange={setActiveTab} />}
-      {!protectedMode && canRecordSelectedDate && selectedSchedule && <RecordModal schedule={selectedSchedule} dateKey={selectedDate} onClose={() => setSelectedScheduleId(null)} onSave={saveRecord} />}
+      {!protectedMode && canRecordSelectedDate && selectedSchedule && <RecordModal key={`record:${selectedDate}:${scheduleRevisionKey(selectedSchedule)}`} schedule={selectedSchedule} dateKey={selectedDate} onClose={() => setSelectedScheduleId(null)} onSave={saveRecord} />}
       {!protectedMode && selectedPlanFeedback && <PlanFeedbackModal preview={selectedPlanFeedback.preview} onApply={applySelectedPlanFeedback} onClose={() => setSelectedPlanFeedbackId(null)} />}
-      {!protectedMode && editorState && (editorState.type !== 'edit' || editingSchedule) && <ScheduleEditorModal schedule={editingSchedule} onClose={() => setEditorState(null)} onSave={saveSchedule} onDelete={editorState.type === 'edit' ? deleteSchedule : undefined} />}
+      {!protectedMode && editorState && (editorState.type !== 'edit' || editingSchedule) && <ScheduleEditorModal key={`editor:${selectedDate}:${editorState.type}:${scheduleRevisionKey(editingSchedule)}`} schedule={editingSchedule} onClose={() => setEditorState(null)} onSave={saveSchedule} onDelete={editorState.type === 'edit' ? deleteSchedule : undefined} />}
       {!protectedMode && isTemplateModalOpen && <TemplateModal templates={templates} currentSchedules={schedules} onClose={() => setIsTemplateModalOpen(false)} onSaveTemplate={(name) => saveTemplate(name, schedules)} onApplyTemplate={applyTemplate} onDeleteTemplate={deleteTemplate} />}
       {isSettingsOpen && <SettingsModal store={store} templates={templates} experiments={experiments} reminderPreferences={reminderPreferences} storageProtection={storageProtection} onChangeReminderPreferences={setReminderPreferences} onRestoreBackup={restoreBackup} onEraseAllData={eraseAllData} onOpenLegal={openLegal} canInstall={canInstall} isInstalled={isInstalled} isNativeShell={isNativeShell} onInstall={install} onClose={() => setIsSettingsOpen(false)} />}
       {legalPage && <LegalModal page={legalPage} onClose={() => setLegalPage(null)} />}
