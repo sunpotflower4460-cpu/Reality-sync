@@ -23,6 +23,14 @@ test('system typography and 44 point controls remain part of the mobile design f
   assert.match(text, /\.app-group/);
 });
 
+test('grouped surfaces preserve keyboard focus visibility and Safari fieldset legends', () => {
+  const text = source('src/index.css');
+  assert.match(text, /fieldset\.app-group\s*\{\s*overflow: visible;/s);
+  assert.match(text, /\.app-group > button:focus-visible/);
+  assert.match(text, /outline-offset: -3px/);
+  assert.match(text, /\.app-group fieldset button\s*\{\s*min-height: 44px;/s);
+});
+
 test('tab bar stays attached to the bottom edge and uses tint rather than a filled active tile', () => {
   const text = source('src/components/BottomNav.jsx');
   assert.match(text, /border-t border-slate-200\/75 bg-white\/92/);
