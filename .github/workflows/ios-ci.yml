@@ -1,0 +1,42 @@
+name: iOS Native Build
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-ios:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Prepare bundled web app and icon
+        run: npm run ios:prepare
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Build iOS Simulator target
+        run: >-
+          xcodebuild
+          -project ios/RealitySync.xcodeproj
+          -target RealitySync
+          -configuration Debug
+          -sdk iphonesimulator
+          CODE_SIGNING_ALLOWED=NO
+          CODE_SIGNING_REQUIRED=NO
+          build
