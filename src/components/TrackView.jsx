@@ -1,13 +1,14 @@
 import { BellRing, ChevronRight, Clock3, Frown, Meh, Smile } from 'lucide-react';
 import { MOOD, STATUS } from '../constants.js';
-import { formatShortDateLabel } from '../utils/date.js';
+import { formatShortDateLabel, isToday } from '../utils/date.js';
 import { sortSchedulesByTime } from '../utils/schedule.js';
 import { StressGraph } from './StressGraph.jsx';
 
 function MoodIcon({ mood }) {
   if (mood === MOOD.GOOD) return <Smile className="h-4 w-4 text-indigo-500" aria-label="気分: 良い" />;
+  if (mood === MOOD.NORMAL) return <Meh className="h-4 w-4 text-slate-400" aria-label="気分: 普通" />;
   if (mood === MOOD.BAD) return <Frown className="h-4 w-4 text-rose-400" aria-label="気分: 疲れた" />;
-  return <Meh className="h-4 w-4 text-slate-400" aria-label="気分: 普通" />;
+  return <span className="text-[10px] font-semibold text-slate-300" aria-label="気分: 未記録">—</span>;
 }
 
 function statusStyle(status) {
@@ -30,9 +31,10 @@ function TimelineTitle({ schedule, recorded }) {
   return <span className="flex flex-col"><span className="text-[8px] font-normal text-slate-400">現在: {schedule.title}</span><span className="break-words">記録時: {recordedTitle}<span className="ml-1 text-[8px] font-medium text-emerald-700">{recordedCategory ? `・${recordedCategory}` : ''}</span></span></span>;
 }
 
-export function TrackView({ schedules, dueSchedules = [], dateKey, onRecord }) {
+export function TrackView({ schedules, dueSchedules = [], dateKey, canRecord = true, onRecord }) {
   const orderedSchedules = sortSchedulesByTime(schedules);
-  const firstDue = dueSchedules[0] ?? null;
+  const firstDue = canRecord ? (dueSchedules[0] ?? null) : null;
+  const today = isToday(dateKey);
 
   if (orderedSchedules.length === 0) {
     return (
@@ -50,8 +52,8 @@ export function TrackView({ schedules, dueSchedules = [], dateKey, onRecord }) {
     <div className="animate-fade-in space-y-3.5 pt-3.5">
       <div className="px-0.5">
         <p className="text-[8px] font-semibold tracking-[0.16em] text-indigo-500">REALITY</p>
-        <h2 className="mt-1 text-[1.2rem] font-semibold tracking-[-0.025em] text-slate-900">今日の現実</h2>
-        <p className="mt-1 text-[10px] leading-relaxed text-slate-500">できた・変えた・休んだを、そのまま残す</p>
+        <h2 className="mt-1 text-[1.2rem] font-semibold tracking-[-0.025em] text-slate-900">{today ? '今日の現実' : 'この日の現実'}</h2>
+        <p className="mt-1 text-[10px] leading-relaxed text-slate-500">{canRecord ? 'できた・変えた・休んだを、そのまま残す' : '未来日は予定だけ確認できます。実績は当日以降に記録できます。'}</p>
       </div>
 
       {firstDue && (
@@ -84,6 +86,41 @@ export function TrackView({ schedules, dueSchedules = [], dateKey, onRecord }) {
             const recorded = schedule.status !== STATUS.PENDING;
             const actualDateDiffers = schedule.actualStartDateKey && schedule.actualStartDateKey !== dateKey;
             const style = statusStyle(schedule.status);
+            const cardClassName = `app-card relative w-full overflow-hidden rounded-[1.05rem] px-3 py-2.5 text-left ${canRecord ? 'transition hover:shadow-[0_10px_28px_rgba(15,23,42,0.055)] active:scale-[0.99]' : 'cursor-default'}`;
+            const cardContent = (
+              <>
+                <span className={`absolute inset-y-3 left-0 w-[2px] rounded-r-full ${style.accent}`} aria-hidden="true" />
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 text-[13px] font-semibold text-slate-800"><TimelineTitle schedule={schedule} recorded={recorded} /></div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {recorded && <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-50"><MoodIcon mood={schedule.mood} /></span>}
+                    <span className={`rounded-full px-2 py-1 text-[8px] font-semibold ${style.badge}`}>{style.label}</span>
+                  </div>
+                </div>
+
+                {recorded && schedule.status !== STATUS.SKIPPED && (!schedule.actualStartTime || !schedule.actualStartDateKey) && (
+                  <div className="mt-2 flex flex-wrap gap-1.5 text-[8px] font-medium">
+                    {!schedule.actualStartTime && <span className="rounded-full bg-slate-50 px-2 py-1 text-slate-400">開始時刻なし</span>}
+                    {schedule.actualStartTime && !schedule.actualStartDateKey && <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-600">開始日不明</span>}
+                  </div>
+                )}
+
+                {recorded && schedule.deviationReason && <p className="mt-2 line-clamp-2 border-l-2 border-slate-200 pl-2.5 text-[9px] leading-relaxed text-slate-500">{schedule.deviationReason}</p>}
+
+                <div className="mt-2 flex min-h-8 items-center justify-between gap-3 border-t border-slate-100 pt-2">
+                  {recorded ? (
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-[9px] font-medium text-slate-400">
+                      <span>予定負荷 {schedule.plannedStress}</span>
+                      <span className={schedule.actualStress > 80 ? 'text-rose-500' : schedule.actualStress === null ? 'text-slate-400' : 'text-indigo-600'}>実負荷 {schedule.actualStress ?? '—'}</span>
+                      <span className="text-slate-600">実時間 {schedule.actualDuration === null ? '—' : `${schedule.actualDuration}分`}</span>
+                    </div>
+                  ) : (
+                    <span className="text-[9px] font-medium text-slate-400">予定負荷 {schedule.plannedStress}</span>
+                  )}
+                  <span className={`flex shrink-0 items-center gap-0.5 text-[9px] font-semibold ${canRecord ? (recorded ? 'text-slate-400' : 'text-indigo-600') : 'text-slate-300'}`}>{canRecord ? (recorded ? '編集' : '記録する') : '予定'}{canRecord && <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />}</span>
+                </div>
+              </>
+            );
             return (
               <article key={schedule.id} className="relative pl-4">
                 <div className={`absolute -left-[4px] top-4 h-2 w-2 rounded-full ring-[3px] ring-[#f6f7fb] ${style.accent}`} aria-hidden="true" />
@@ -92,38 +129,11 @@ export function TrackView({ schedules, dueSchedules = [], dateKey, onRecord }) {
                   {recorded && schedule.actualStartTime && schedule.status !== STATUS.SKIPPED && <><span className="text-slate-300">→</span><span className="flex items-center gap-1 text-pink-600"><Clock3 className="h-3 w-3" aria-hidden="true" />{actualDateDiffers ? `${formatShortDateLabel(schedule.actualStartDateKey)} ` : ''}{schedule.actualStartTime}</span></>}
                 </div>
 
-                <button type="button" onClick={() => onRecord(schedule)} className="app-card relative w-full overflow-hidden rounded-[1.05rem] px-3 py-2.5 text-left transition hover:shadow-[0_10px_28px_rgba(15,23,42,0.055)] active:scale-[0.99]" aria-label={`${schedule.time} ${schedule.title} の実績を${recorded ? '編集' : '記録'}する`}>
-                  <span className={`absolute inset-y-3 left-0 w-[2px] rounded-r-full ${style.accent}`} aria-hidden="true" />
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 text-[13px] font-semibold text-slate-800"><TimelineTitle schedule={schedule} recorded={recorded} /></div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      {recorded && <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-50"><MoodIcon mood={schedule.mood} /></span>}
-                      <span className={`rounded-full px-2 py-1 text-[8px] font-semibold ${style.badge}`}>{style.label}</span>
-                    </div>
-                  </div>
-
-                  {recorded && schedule.status !== STATUS.SKIPPED && (!schedule.actualStartTime || !schedule.actualStartDateKey) && (
-                    <div className="mt-2 flex flex-wrap gap-1.5 text-[8px] font-medium">
-                      {!schedule.actualStartTime && <span className="rounded-full bg-slate-50 px-2 py-1 text-slate-400">開始時刻なし</span>}
-                      {schedule.actualStartTime && !schedule.actualStartDateKey && <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-600">開始日不明</span>}
-                    </div>
-                  )}
-
-                  {recorded && schedule.deviationReason && <p className="mt-2 line-clamp-2 border-l-2 border-slate-200 pl-2.5 text-[9px] leading-relaxed text-slate-500">{schedule.deviationReason}</p>}
-
-                  <div className="mt-2 flex min-h-8 items-center justify-between gap-3 border-t border-slate-100 pt-2">
-                    {recorded ? (
-                      <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-[9px] font-medium text-slate-400">
-                        <span>予定負荷 {schedule.plannedStress}</span>
-                        <span className={schedule.actualStress > 80 ? 'text-rose-500' : 'text-indigo-600'}>実負荷 {schedule.actualStress ?? '—'}</span>
-                        <span className="text-slate-600">実時間 {schedule.actualDuration === null ? '—' : `${schedule.actualDuration}分`}</span>
-                      </div>
-                    ) : (
-                      <span className="text-[9px] font-medium text-slate-400">予定負荷 {schedule.plannedStress}</span>
-                    )}
-                    <span className={`flex shrink-0 items-center gap-0.5 text-[9px] font-semibold ${recorded ? 'text-slate-400' : 'text-indigo-600'}`}>{recorded ? '編集' : '記録する'}<ChevronRight className="h-3.5 w-3.5" aria-hidden="true" /></span>
-                  </div>
-                </button>
+                {canRecord ? (
+                  <button type="button" onClick={() => onRecord(schedule)} className={cardClassName} aria-label={`${schedule.time} ${schedule.title} の実績を${recorded ? '編集' : '記録'}する`}>{cardContent}</button>
+                ) : (
+                  <div className={cardClassName} aria-label={`${schedule.time} ${schedule.title}。未来日のため実績はまだ記録できません`}>{cardContent}</div>
+                )}
               </article>
             );
           })}

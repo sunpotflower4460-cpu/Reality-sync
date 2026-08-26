@@ -54,7 +54,9 @@ function rawScheduleFor(days, dateKey, scheduleId) {
 
 function explicitActualStress(rawSchedule) {
   if (!rawSchedule || !Object.prototype.hasOwnProperty.call(rawSchedule, 'actualStress')) return null;
-  const value = Number(rawSchedule.actualStress);
+  const rawValue = rawSchedule.actualStress;
+  if (rawValue === null || rawValue === undefined || (typeof rawValue === 'string' && rawValue.trim() === '')) return null;
+  const value = Number(rawValue);
   return Number.isFinite(value) && value >= 0 && value <= 100 ? value : null;
 }
 

@@ -20,7 +20,7 @@ test('an explicitly empty legacy list remains empty instead of restoring demo sc
   assert.deepEqual(schedules, []);
 });
 
-test('legacy stored records are normalized before they reach the UI', () => {
+test('legacy stored records normalize plan fields but do not fabricate invalid actual-only fields', () => {
   const raw = JSON.stringify([{
     id: 1,
     time: '77:77',
@@ -37,24 +37,53 @@ test('legacy stored records are normalized before they reach the UI', () => {
   assert.equal(schedule.time, '07:00');
   assert.equal(schedule.duration, 0);
   assert.equal(schedule.plannedStress, 100);
-  assert.equal(schedule.actualDuration, 1440);
-  assert.equal(schedule.actualStress, 0);
+  assert.equal(schedule.actualDuration, null);
+  assert.equal(schedule.actualStress, null);
 });
 
-test('v2 storage preserves independent days and ignores invalid date keys', () => {
+test('v2 storage preserves independent valid days', () => {
   const raw = JSON.stringify({
     version: 2,
     days: {
       '2026-08-23': [{ id: 'a', time: '09:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 40, status: STATUS.PENDING }],
       '2026-08-24': [],
-      invalid: [{ id: 'bad' }],
     },
   });
 
-  const store = parseStoredScheduleStore(raw);
-  assert.deepEqual(Object.keys(store.days).sort(), ['2026-08-23', '2026-08-24']);
-  assert.equal(store.days['2026-08-23'][0].title, 'Work');
-  assert.deepEqual(store.days['2026-08-24'], []);
+  const result = parseStoredScheduleStoreResult(raw);
+  assert.equal(result.ok, true);
+  assert.deepEqual(Object.keys(result.store.days).sort(), ['2026-08-23', '2026-08-24']);
+  assert.equal(result.store.days['2026-08-23'][0].title, 'Work');
+  assert.deepEqual(result.store.days['2026-08-24'], []);
+});
+
+test('invalid day keys block persistence instead of being silently discarded', () => {
+  const raw = JSON.stringify({
+    version: 2,
+    days: {
+      '2026-08-23': [{ id: 'a', time: '09:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 40, status: STATUS.PENDING }],
+      invalid: [{ id: 'bad' }],
+    },
+  });
+  const result = parseStoredScheduleStoreResult(raw);
+  assert.equal(result.ok, false);
+  assert.equal(result.unsupportedVersion, null);
+  assert.deepEqual(result.store, { version: 2, days: {} });
+});
+
+test('schedule item loss blocks persistence instead of rewriting a partial day', () => {
+  const raw = JSON.stringify({
+    version: 2,
+    days: {
+      '2026-08-23': [
+        { id: 'same', time: '09:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 40, status: STATUS.PENDING },
+        { id: 'same', time: '10:00', title: 'Duplicate', category: '仕事', duration: 60, plannedStress: 40, status: STATUS.PENDING },
+      ],
+    },
+  });
+  const result = parseStoredScheduleStoreResult(raw);
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.store, { version: 2, days: {} });
 });
 
 test('unknown future storage versions are detected so persistence can be blocked', () => {

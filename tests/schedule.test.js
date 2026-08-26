@@ -54,6 +54,24 @@ test('as-planned records keep their actual snapshot when the plan is edited late
   assert.equal(stats.categories['運動'].actual, 30);
 });
 
+test('recorded reality fields remain unknown when they were never explicitly stored', () => {
+  const normalized = normalizeSchedule({
+    id: 'legacy-record',
+    time: '09:00',
+    title: 'Work',
+    category: '仕事',
+    duration: 90,
+    plannedStress: 75,
+    status: STATUS.AS_PLANNED,
+  });
+  assert.equal(normalized.actualDuration, null);
+  assert.equal(normalized.actualStress, null);
+  assert.equal(normalized.mood, null);
+  const stats = calculateStats([normalized]);
+  assert.equal(stats.categories['仕事'].actual, 0);
+  assert.equal(stats.unknownActualDurationCount, 1);
+});
+
 test('actual start date is preserved only when explicitly valid and paired with a start time', () => {
   const exact = normalizeSchedule({ id: 1, time: '23:50', title: 'Work', category: '仕事', duration: 60, plannedStress: 50, status: STATUS.AS_PLANNED, actualDuration: 55, actualStartTime: '00:10', actualStartDateKey: '2026-08-24' });
   const legacyTimeOnly = normalizeSchedule({ id: 2, time: '10:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 50, status: STATUS.AS_PLANNED, actualDuration: 55, actualStartTime: '10:15' });
@@ -102,16 +120,16 @@ test('pending plan copies strip all historical reality fields and receive a fres
   assert.equal(copied.actualStress, null);
 });
 
-test('normalization clamps corrupted numeric values and rejects unknown categories', () => {
+test('normalization clamps plan corruption but withholds corrupted actual-only values', () => {
   const normalized = normalizeSchedule({ id: 7, time: '27:80', title: '  Test  ', category: '__proto__', duration: 99999, plannedStress: -20, status: STATUS.AS_PLANNED, actualDuration: 99999, actualStress: 500, mood: 'unknown' });
   assert.equal(normalized.time, '00:00');
   assert.equal(normalized.title, 'Test');
   assert.equal(normalized.category, 'その他');
   assert.equal(normalized.duration, 1440);
   assert.equal(normalized.plannedStress, 0);
-  assert.equal(normalized.actualDuration, 1440);
-  assert.equal(normalized.actualStress, 100);
-  assert.equal(normalized.mood, MOOD.NORMAL);
+  assert.equal(normalized.actualDuration, null);
+  assert.equal(normalized.actualStress, null);
+  assert.equal(normalized.mood, null);
 });
 
 test('malformed changed records return to pending instead of keeping inconsistent actual fields', () => {
@@ -159,9 +177,9 @@ test('actual duration parser rejects blank and out-of-range input instead of sil
   assert.equal(parseActualDuration(0), 0);
 });
 
-test('changing a skipped record back to an active status restores the planned duration', () => {
-  assert.equal(durationAfterStatusChange(0, STATUS.SKIPPED, STATUS.AS_PLANNED, 90), 90);
-  assert.equal(durationAfterStatusChange(0, STATUS.SKIPPED, STATUS.CHANGED, 90), 90);
+test('changing a skipped record back to an active status does not invent actual duration', () => {
+  assert.equal(durationAfterStatusChange(0, STATUS.SKIPPED, STATUS.AS_PLANNED, 90), null);
+  assert.equal(durationAfterStatusChange(0, STATUS.SKIPPED, STATUS.CHANGED, 90), null);
   assert.equal(durationAfterStatusChange(45, STATUS.CHANGED, STATUS.SKIPPED, 90), 0);
 });
 

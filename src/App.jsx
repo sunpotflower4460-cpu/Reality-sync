@@ -59,9 +59,25 @@ export default function App() {
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [legalPage, setLegalPage] = useState(null);
-  const { schedules, setSchedules, store, replaceStore, storageProtection } = usePersistentSchedules(selectedDate);
-  const { templates, saveTemplate, deleteTemplate, replaceTemplates } = useScheduleTemplates();
-  const { experiments, replaceExperiments } = useExperiments();
+  const {
+    schedules,
+    setSchedules,
+    store,
+    replaceStore,
+    storageProtection: scheduleStorageProtection,
+  } = usePersistentSchedules(selectedDate);
+  const {
+    templates,
+    saveTemplate,
+    deleteTemplate,
+    replaceTemplates,
+    storageProtection: templateStorageProtection,
+  } = useScheduleTemplates();
+  const {
+    experiments,
+    replaceExperiments,
+    storageProtection: experimentStorageProtection,
+  } = useExperiments();
   const { preferences: reminderPreferences, setPreferences: setReminderPreferences, replacePreferences: replaceReminderPreferences } = useReminderPreferences();
   const { canInstall, isInstalled, install } = usePwaInstall();
   const dueSchedules = useDueRecordReminders({ schedules, dateKey: selectedDate, preferences: reminderPreferences });
@@ -70,6 +86,7 @@ export default function App() {
   const monthlyInsights = useMemo(() => calculateMonthlyInsights(store.days, selectedDate), [selectedDate, store.days]);
   const longitudinalInsights = useMemo(() => calculateLongitudinalInsights(store.days, selectedDate), [selectedDate, store.days]);
   const todayKey = dateKeyFromDate();
+  const canRecordSelectedDate = selectedDate <= todayKey;
   const isNativeShell = typeof window !== 'undefined' && window.location.protocol === 'file:';
   const planFeedbackSuggestions = useMemo(
     () => selectedDate >= todayKey ? buildPlanFeedbackSuggestions(experiments, selectedDate, schedules) : [],
@@ -81,6 +98,23 @@ export default function App() {
   );
   const previousDate = useMemo(() => shiftDateKey(selectedDate, -1), [selectedDate]);
   const previousSchedules = store.days[previousDate] ?? [];
+  const storageProtection = useMemo(() => {
+    const protectedDomains = [];
+    if (scheduleStorageProtection.persistenceBlocked) protectedDomains.push('予定・実績');
+    if (templateStorageProtection.persistenceBlocked) protectedDomains.push('テンプレート');
+    if (experimentStorageProtection.persistenceBlocked) protectedDomains.push('実験履歴');
+    return {
+      persistenceBlocked: protectedDomains.length > 0,
+      unsupportedVersion: scheduleStorageProtection.unsupportedVersion ?? experimentStorageProtection.unsupportedVersion,
+      protectedDomains,
+    };
+  }, [
+    experimentStorageProtection.persistenceBlocked,
+    experimentStorageProtection.unsupportedVersion,
+    scheduleStorageProtection.persistenceBlocked,
+    scheduleStorageProtection.unsupportedVersion,
+    templateStorageProtection.persistenceBlocked,
+  ]);
   const protectedMode = storageProtection.persistenceBlocked;
 
   const selectedSchedule = useMemo(() => schedules.find((schedule) => schedule.id === selectedScheduleId) ?? null, [schedules, selectedScheduleId]);
@@ -95,7 +129,7 @@ export default function App() {
   };
 
   const saveRecord = (record) => {
-    if (selectedScheduleId === null || protectedMode) return;
+    if (selectedScheduleId === null || protectedMode || !canRecordSelectedDate) return;
     setSchedules((current) => current.map((schedule) => schedule.id === selectedScheduleId ? { ...schedule, ...record } : schedule));
     setSelectedScheduleId(null);
   };
@@ -230,20 +264,21 @@ export default function App() {
             <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 text-red-500"><AlertTriangle className="h-5 w-5" /></div>
             <h2 className="text-base font-semibold text-slate-800">保存データを保護しています</h2>
             <p className="mt-2 text-xs leading-relaxed text-slate-500">現在版では保存済みデータを安全に解釈できないため、編集と自動保存を停止しました。元データは上書きしていません。</p>
+            {storageProtection.protectedDomains.length > 0 && <p className="mt-2 text-xs font-medium text-slate-500">保護対象: {storageProtection.protectedDomains.join('・')}</p>}
             {storageProtection.unsupportedVersion !== null && <p className="mt-2 text-xs font-semibold text-red-600">検出した保存版: {String(storageProtection.unsupportedVersion)}</p>}
             <button type="button" onClick={() => setIsSettingsOpen(true)} className="mt-4 min-h-11 w-full rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white">設定とデータを開く</button>
           </section>
         ) : (
           <>
             {activeTab === TABS.PLAN && <PlanView schedules={schedules} onCreate={() => setEditorState({ type: 'create' })} onEdit={(id) => setEditorState({ type: 'edit', id })} onCopyPrevious={copyPreviousDay} hasPreviousSchedules={previousSchedules.length > 0} onOpenTemplates={() => setIsTemplateModalOpen(true)} templateCount={templates.length} planFeedbackSuggestions={planFeedbackSuggestions} onReviewPlanFeedback={(suggestion) => setSelectedPlanFeedbackId(suggestion.id)} />}
-            {activeTab === TABS.TRACK && <TrackView schedules={schedules} dueSchedules={dueSchedules} dateKey={selectedDate} onRecord={(schedule) => setSelectedScheduleId(schedule.id)} />}
+            {activeTab === TABS.TRACK && <TrackView schedules={schedules} dueSchedules={dueSchedules} dateKey={selectedDate} canRecord={canRecordSelectedDate} onRecord={(schedule) => setSelectedScheduleId(schedule.id)} />}
             {activeTab === TABS.ANALYTICS && <AnalyticsView stats={stats} weeklyInsights={weeklyInsights} monthlyInsights={monthlyInsights} longitudinalInsights={longitudinalInsights} selectedDate={selectedDate} onChangeDate={changeDate} />}
           </>
         )}
       </main>
 
       {!protectedMode && <BottomNav activeTab={activeTab} onChange={setActiveTab} />}
-      {!protectedMode && selectedSchedule && <RecordModal schedule={selectedSchedule} dateKey={selectedDate} onClose={() => setSelectedScheduleId(null)} onSave={saveRecord} />}
+      {!protectedMode && canRecordSelectedDate && selectedSchedule && <RecordModal schedule={selectedSchedule} dateKey={selectedDate} onClose={() => setSelectedScheduleId(null)} onSave={saveRecord} />}
       {!protectedMode && selectedPlanFeedback && <PlanFeedbackModal preview={selectedPlanFeedback.preview} onApply={applySelectedPlanFeedback} onClose={() => setSelectedPlanFeedbackId(null)} />}
       {!protectedMode && editorState && (editorState.type !== 'edit' || editingSchedule) && <ScheduleEditorModal schedule={editingSchedule} onClose={() => setEditorState(null)} onSave={saveSchedule} onDelete={editorState.type === 'edit' ? deleteSchedule : undefined} />}
       {!protectedMode && isTemplateModalOpen && <TemplateModal templates={templates} currentSchedules={schedules} onClose={() => setIsTemplateModalOpen(false)} onSaveTemplate={(name) => saveTemplate(name, schedules)} onApplyTemplate={applyTemplate} onDeleteTemplate={deleteTemplate} />}

@@ -108,6 +108,7 @@ function DailyAnalyticsContent({ stats }) {
       <section className="app-group p-3.5">
         <h2 className="flex items-center gap-2 text-[13px] font-semibold text-slate-800"><Layers className="h-4 w-4 text-indigo-500" aria-hidden="true" />理想と現実の時間</h2>
         <p className="mt-1 text-[9px] leading-relaxed text-slate-500">実際に記録した時間だけを「現実」として比べます。</p>
+        {stats.unknownActualDurationCount > 0 && <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-[8px] leading-relaxed text-amber-700">実時間が未記録の実績 {stats.unknownActualDurationCount}件は、0分とみなさず時間集計から除外しています。</p>}
         <div className="mt-3.5 space-y-3">
           {Object.entries(stats.categories).map(([category, data]) => {
             const idealPercent = (data.ideal / maxTime) * 100;
