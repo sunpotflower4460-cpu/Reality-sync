@@ -85,6 +85,7 @@ function createOutcomeState() {
     pending: 0,
     plannedMinutes: 0,
     actualMinutes: 0,
+    unknownActualDurationCount: 0,
     daysWithPlans: 0,
     daysWithRecords: 0,
     untimedStartCount: 0,
@@ -172,6 +173,7 @@ function calculateRangeInsights(days, dateKeys) {
     state.pending += stats.pending;
     state.plannedMinutes += dayPlannedMinutes;
     state.actualMinutes += dayActualMinutes;
+    state.unknownActualDurationCount += stats.unknownActualDurationCount;
     mergeCategoryTotals(state.categories, stats.categories);
 
     for (const schedule of schedules) recordScheduleObservations(state, schedule, dateKey, dayDeltas);
@@ -188,6 +190,7 @@ function calculateRangeInsights(days, dateKeys) {
       asPlannedRate: dayRecorded > 0 ? Math.round((stats.completed / dayRecorded) * 100) : 0,
       plannedMinutes: dayPlannedMinutes,
       actualMinutes: dayActualMinutes,
+      unknownActualDurationCount: stats.unknownActualDurationCount,
       averageStartDelta: average(dayDeltas),
       averageAbsoluteStartDelta: average(dayDeltas.map(Math.abs)),
       startSampleCount: dayDeltas.length,
@@ -224,6 +227,7 @@ function calculateRangeInsights(days, dateKeys) {
     asPlannedRate: state.recordedCount > 0 ? Math.round((state.completed / state.recordedCount) * 100) : 0,
     plannedMinutes: state.plannedMinutes,
     actualMinutes: state.actualMinutes,
+    unknownActualDurationCount: state.unknownActualDurationCount,
     averageStartDelta: average(state.startDeltas),
     averageAbsoluteStartDelta: average(state.startDeltas.map(Math.abs)),
     startSampleCount: state.startDeltas.length,
@@ -251,6 +255,7 @@ function createWeekdayBucket(index) {
     skipped: 0,
     plannedMinutes: 0,
     actualMinutes: 0,
+    unknownActualDurationCount: 0,
     startDeltas: [],
   };
 }
@@ -271,6 +276,7 @@ function finalizeWeekdayBucket(bucket) {
     asPlannedRate: bucket.recorded > 0 ? Math.round((bucket.completed / bucket.recorded) * 100) : 0,
     plannedMinutes: bucket.plannedMinutes,
     actualMinutes: bucket.actualMinutes,
+    unknownActualDurationCount: bucket.unknownActualDurationCount,
     averageStartDelta: average(bucket.startDeltas),
     averageAbsoluteStartDelta: average(bucket.startDeltas.map(Math.abs)),
     startSampleCount: bucket.startDeltas.length,
@@ -298,6 +304,7 @@ export function calculateMonthlyInsights(days, anchorDateKey) {
       bucket.skipped += day.skipped;
       bucket.plannedMinutes += day.plannedMinutes;
       bucket.actualMinutes += day.actualMinutes;
+      bucket.unknownActualDurationCount += day.unknownActualDurationCount;
 
       const schedules = normalizeSchedules(sourceDays[day.dateKey] ?? [], []);
       for (const schedule of schedules) {
@@ -322,6 +329,7 @@ export function calculateMonthlyInsights(days, anchorDateKey) {
         completed: 0,
         plannedMinutes: 0,
         actualMinutes: 0,
+        unknownActualDurationCount: 0,
       });
     }
     const week = weekMap.get(weekKey);
@@ -330,6 +338,7 @@ export function calculateMonthlyInsights(days, anchorDateKey) {
     week.completed += day.completed;
     week.plannedMinutes += day.plannedMinutes;
     week.actualMinutes += day.actualMinutes;
+    week.unknownActualDurationCount += day.unknownActualDurationCount;
   }
 
   const weeks = [...weekMap.values()].map((week) => ({
