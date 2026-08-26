@@ -84,6 +84,10 @@ final class ViewController: UIViewController, WKNavigationDelegate, WKUIDelegate
     }
 
     private func handleBackupExport(_ body: Any) {
+        guard presentedViewController == nil else {
+            sendBackupStatus(type: "error", message: "別の画面を閉じてからバックアップを書き出してください。")
+            return
+        }
         guard
             let payload = body as? [String: Any],
             let text = payload["text"] as? String,
@@ -146,8 +150,17 @@ final class ViewController: UIViewController, WKNavigationDelegate, WKUIDelegate
     }
 
     func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-        if backupPickerOperation == .exporting { cleanupPendingExport() }
+        let operation = backupPickerOperation
+        if operation == .exporting { cleanupPendingExport() }
         backupPickerOperation = nil
+        switch operation {
+        case .exporting:
+            sendBackupStatus(type: "info", message: "バックアップの書き出しをキャンセルしました。")
+        case .importing:
+            sendBackupStatus(type: "info", message: "バックアップの復元をキャンセルしました。")
+        case .none:
+            break
+        }
     }
 
     private func importBackup(from url: URL) {
