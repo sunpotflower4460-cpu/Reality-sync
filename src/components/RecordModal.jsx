@@ -23,11 +23,14 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
     : schedule.status === STATUS.PENDING
       ? '予定'
       : '現在の予定（記録時は不明）';
+  const hasRecordedStress = Number.isFinite(schedule.actualStress);
   const [recordMode, setRecordMode] = useState(schedule.status !== STATUS.PENDING ? schedule.status : STATUS.AS_PLANNED);
   const [actualTitle, setActualTitle] = useState(() => replacementTitleForEditing(schedule));
   const [actualCategory, setActualCategory] = useState(schedule.actualCategory || recordedPlan.category || 'その他');
   const [mood, setMood] = useState(schedule.mood ?? null);
-  const [actualStress, setActualStress] = useState(Number.isFinite(schedule.actualStress) ? schedule.actualStress : null);
+  const [actualStress, setActualStress] = useState(hasRecordedStress ? schedule.actualStress : null);
+  const [stressEditing, setStressEditing] = useState(hasRecordedStress);
+  const [stressDraft, setStressDraft] = useState(hasRecordedStress ? schedule.actualStress : 50);
   const [actualDuration, setActualDuration] = useState(
     schedule.status === STATUS.SKIPPED ? 0 : (schedule.actualDuration ?? ''),
   );
@@ -109,6 +112,23 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
     });
   };
 
+  const beginStressEntry = () => {
+    setStressDraft(50);
+    setStressEditing(true);
+  };
+
+  const updateStress = (value) => {
+    const next = Number(value);
+    setStressDraft(next);
+    setActualStress(next);
+  };
+
+  const clearStress = () => {
+    setActualStress(null);
+    setStressEditing(false);
+    setStressDraft(50);
+  };
+
   const detailSummary = recordMode === STATUS.AS_PLANNED
     ? '開始日時を詳しく残す'
     : recordMode === STATUS.SKIPPED
@@ -171,12 +191,13 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
 
           <div className="space-y-2.5 p-3.5">
             <div className="flex items-end justify-between gap-3"><div><p className="text-[12px] font-semibold text-slate-800">実際の負荷 <span className="font-normal text-slate-400">（任意）</span></p><p className="mt-0.5 text-[8px] font-normal text-slate-400">予定では {recordedPlan.plannedStress}。未記録は予定値で補いません</p></div><span className={`text-[18px] font-semibold ${actualStress === null ? 'text-slate-300' : actualStress > 80 ? 'text-rose-500' : 'text-indigo-600'}`}>{actualStress ?? '—'}</span></div>
-            {actualStress === null ? (
-              <button type="button" onClick={() => setActualStress(50)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] font-medium text-indigo-600">負荷を記録する</button>
+            {!stressEditing ? (
+              <button type="button" onClick={beginStressEntry} className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] font-medium text-indigo-600">負荷を記録する</button>
             ) : (
               <>
-                <input type="range" min="0" max="100" value={actualStress} onChange={(event) => setActualStress(Number(event.target.value))} className="reality-range w-full" />
-                <div className="flex items-center justify-between text-[8px] font-medium text-slate-400"><span>楽だった</span><button type="button" onClick={() => setActualStress(null)} className="min-h-11 px-2 text-[8px] font-medium text-slate-400">未記録に戻す</button><span>かなり重かった</span></div>
+                <input type="range" min="0" max="100" value={stressDraft} onChange={(event) => updateStress(event.target.value)} aria-label="実際の負荷" className="reality-range w-full" />
+                <div className="flex items-center justify-between text-[8px] font-medium text-slate-400"><span>楽だった</span><button type="button" onClick={clearStress} className="min-h-11 px-2 text-[8px] font-medium text-slate-400">未記録に戻す</button><span>かなり重かった</span></div>
+                {actualStress === null && <p className="text-[8px] leading-relaxed text-slate-400">スライダーを動かすまで負荷は未記録のままです。</p>}
               </>
             )}
           </div>
