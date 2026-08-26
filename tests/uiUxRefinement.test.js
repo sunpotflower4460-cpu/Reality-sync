@@ -11,7 +11,7 @@ test('mobile dialog system supports bottom sheets while retaining desktop center
   assert.match(text, /placement = 'center'/);
   assert.match(text, /placement === 'sheet'/);
   assert.match(text, /items-end justify-center p-0 sm:items-center sm:p-4/);
-  assert.match(text, /bg-slate-950\/48/);
+  assert.match(text, /bg-slate-950\/34/);
 });
 
 test('every everyday mobile modal uses the shared sheet presentation', () => {
@@ -27,18 +27,19 @@ test('every everyday mobile modal uses the shared sheet presentation', () => {
   }
 });
 
-test('plan cards prioritize time title and duration before subtle load metadata', () => {
+test('plan rows prioritize time title and duration before subtle load metadata', () => {
   const text = source('src/components/PlanView.jsx');
   assert.match(text, /負荷 \{schedule\.plannedStress\}/);
+  assert.match(text, /app-group divide-y divide-slate-100/);
   assert.match(text, /ChevronRight/);
   assert.match(text, /記録済み/);
   assert.doesNotMatch(text, /Pencil/);
-  assert.doesNotMatch(text, /absolute inset-y-3 left-0 w-\[3px\]/);
+  assert.doesNotMatch(text, /rounded-full px-2\.5 py-1 text-\[10px\].*負荷/s);
 });
 
 test('analytics keeps completion rate informative without turning percentage into a giant score', () => {
   const text = source('src/components/AnalyticsView.jsx');
-  assert.match(text, /予定通り ・ \{stats\.completionRate\}%/);
+  assert.match(text, /予定通り \{stats\.completionRate\}%/);
   assert.match(text, /\{stats\.completed\}.*\{stats\.total\}/s);
   assert.match(text, /結果ではなく、次の予定の材料/);
   assert.doesNotMatch(text, /text-\[2rem\].*completionRate/s);
@@ -46,16 +47,17 @@ test('analytics keeps completion rate informative without turning percentage int
 
 test('settings keeps routine controls first and destructive deletion visually secondary but explicit', () => {
   const text = source('src/components/SettingsModal.jsx');
-  const reminder = text.indexOf('>記録リマインダー<');
-  const backup = text.indexOf('>バックアップ<');
+  const reminder = text.indexOf('>記録<');
+  const backup = text.indexOf('>データ<');
   const privacy = text.indexOf('>プライバシーとサポート<');
   const deletion = text.lastIndexOf('>この端末のデータをすべて削除<');
   assert.ok(reminder > -1 && backup > reminder && privacy > backup && deletion > privacy);
   assert.match(text, /peer-checked:bg-indigo-600/);
+  assert.match(text, /app-section-label/);
   assert.doesNotMatch(text, /rounded-2xl border border-red-100 bg-red-50\/40/);
 });
 
-test('phase 19 does not expand the primary product navigation or surface internal learning vocabulary', () => {
+test('phase 20 does not expand the primary product navigation or surface internal learning vocabulary', () => {
   const nav = source('src/components/BottomNav.jsx');
   const app = source('src/App.jsx');
   assert.match(nav, /計画/);

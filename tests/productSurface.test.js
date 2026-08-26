@@ -8,8 +8,9 @@ function source(relativePath) {
 
 test('analytics keeps the original ideal-versus-reality experience as the default surface', () => {
   const text = source('src/components/AnalyticsView.jsx');
-  assert.match(text, /理想の軌跡 vs 現実の歩み/);
-  assert.match(text, /予定の達成度サマリー/);
+  assert.match(text, /理想と現実の時間/);
+  assert.match(text, /この日の記録/);
+  assert.doesNotMatch(text, /今日の記録/);
   assert.match(text, /記録からの気づき/);
   assert.match(text, /週・月の振り返り/);
   assert.doesNotMatch(text, /InsightCandidatesView/);

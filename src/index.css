@@ -1,94 +1,178 @@
 @import "tailwindcss";
 
 :root {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Hiragino Sans", "Yu Gothic UI", Inter, ui-sans-serif, system-ui, "Segoe UI", sans-serif;
   color: #172033;
-  background: #f5f6fa;
+  background: #f6f7fb;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  color-scheme: light;
 }
 
 html {
-  background: #f5f6fa;
-  scroll-padding-bottom: 6rem;
+  background: #f6f7fb;
+  scroll-padding-top: 6rem;
+  scroll-padding-bottom: 6.5rem;
 }
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 50% -180px, rgba(99, 102, 241, 0.075), transparent 430px),
-    #f5f6fa;
+  background: #f6f7fb;
   overscroll-behavior-y: none;
 }
+
 button, input, select, textarea { font: inherit; }
 button { -webkit-user-select: none; user-select: none; touch-action: manipulation; }
 input, select, textarea { color: #172033; }
 summary { -webkit-user-select: none; user-select: none; }
 summary::-webkit-details-marker { display: none; }
-button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible, a:focus-visible {
-  outline: 3px solid color-mix(in srgb, #6366f1 28%, transparent);
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+a:focus-visible {
+  outline: 3px solid color-mix(in srgb, #4f46e5 25%, transparent);
   outline-offset: 2px;
 }
+
 ::selection { background: #e0e7ff; color: #312e81; }
 
-.pt-app-safe { padding-top: max(0.85rem, env(safe-area-inset-top)); }
-.pb-safe { padding-bottom: max(0.6rem, env(safe-area-inset-bottom)); }
-.pb-modal-safe { padding-bottom: max(0.85rem, env(safe-area-inset-bottom)); }
+.pt-app-safe { padding-top: max(0.6rem, env(safe-area-inset-top)); }
+.pb-safe { padding-bottom: max(0.45rem, env(safe-area-inset-bottom)); }
+.pb-modal-safe { padding-bottom: max(0.8rem, env(safe-area-inset-bottom)); }
 
 .app-card {
-  border: 1px solid rgba(226, 232, 240, 0.78);
-  background: rgba(255, 255, 255, 0.97);
-  box-shadow: 0 6px 22px rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(226, 232, 240, 0.82);
+  background: rgba(255, 255, 255, 0.985);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.025),
+    0 9px 28px rgba(15, 23, 42, 0.035);
 }
+
 .app-card-strong {
   border: 1px solid rgba(224, 231, 255, 0.86);
+  background: rgba(255, 255, 255, 0.995);
+  box-shadow:
+    0 1px 2px rgba(79, 70, 229, 0.025),
+    0 10px 30px rgba(79, 70, 229, 0.055);
+}
+
+.app-group {
+  overflow: hidden;
+  border: 1px solid rgba(226, 232, 240, 0.82);
+  border-radius: 1rem;
   background: rgba(255, 255, 255, 0.99);
-  box-shadow: 0 8px 26px rgba(79, 70, 229, 0.065);
+  box-shadow: 0 5px 22px rgba(15, 23, 42, 0.025);
+}
+
+fieldset.app-group {
+  overflow: visible;
+}
+
+.app-group button:focus-visible,
+.app-group summary:focus-visible,
+.app-group a:focus-visible {
+  outline-offset: -3px;
+}
+
+.app-group input[type="checkbox"]:focus-visible + span {
+  outline: 3px solid color-mix(in srgb, #4f46e5 30%, transparent);
+  outline-offset: 2px;
+}
+
+.date-picker-target:has(> input[type="date"]:focus-visible) {
+  outline: 3px solid color-mix(in srgb, #4f46e5 25%, transparent);
+  outline-offset: 2px;
+}
+
+.date-picker-target > input[type="date"]:focus-visible {
+  outline: none;
+}
+
+.app-group button,
+.app-group a,
+.sheet-scroll button {
+  min-height: 44px;
+}
+
+.app-section-label {
+  margin: 0 0.2rem 0.4rem;
+  color: #94a3b8;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.tap-target {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.sheet-scroll {
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .reality-range {
-  height: 1.5rem;
+  height: 1.65rem;
   appearance: none;
   background: transparent;
   cursor: pointer;
 }
+
 .reality-range::-webkit-slider-runnable-track {
-  height: 0.42rem;
+  height: 0.34rem;
   border-radius: 999px;
   background: #e2e8f0;
-}
-.reality-range::-webkit-slider-thumb {
-  width: 1.35rem;
-  height: 1.35rem;
-  margin-top: -0.46rem;
-  appearance: none;
-  border: 3px solid white;
-  border-radius: 999px;
-  background: #4f46e5;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.28);
-}
-.reality-range::-moz-range-track {
-  height: 0.42rem;
-  border-radius: 999px;
-  background: #e2e8f0;
-}
-.reality-range::-moz-range-thumb {
-  width: 1.15rem;
-  height: 1.15rem;
-  border: 3px solid white;
-  border-radius: 999px;
-  background: #4f46e5;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.28);
 }
 
-@keyframes fade-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes slide-down { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
-.animate-fade-in { animation: fade-in 180ms ease-out; }
-.animate-slide-down { animation: slide-down 180ms ease-out; }
+.reality-range::-webkit-slider-thumb {
+  width: 1.45rem;
+  height: 1.45rem;
+  margin-top: -0.56rem;
+  appearance: none;
+  border: 4px solid white;
+  border-radius: 999px;
+  background: #4f46e5;
+  box-shadow: 0 2px 9px rgba(79, 70, 229, 0.24);
+}
+
+.reality-range::-moz-range-track {
+  height: 0.34rem;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.reality-range::-moz-range-thumb {
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 4px solid white;
+  border-radius: 999px;
+  background: #4f46e5;
+  box-shadow: 0 2px 9px rgba(79, 70, 229, 0.24);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(1px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in { animation: fade-in 150ms ease-out; }
+.animate-slide-down { animation: slide-down 160ms ease-out; }
 
 @media (max-width: 640px) {
   input:not([type="range"]):not([type="checkbox"]), select, textarea { font-size: 16px; }

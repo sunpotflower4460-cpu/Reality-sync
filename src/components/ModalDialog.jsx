@@ -76,7 +76,7 @@ export function ModalDialog({ onClose, labelledBy, children, className = '', pla
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex bg-slate-950/48 backdrop-blur-[2px] animate-fade-in ${overlayClass}`}
+      className={`fixed inset-0 z-50 flex bg-slate-950/34 backdrop-blur-[1.5px] animate-fade-in ${overlayClass}`}
       onMouseDown={(event) => event.target === event.currentTarget && onCloseRef.current?.()}
     >
       <div

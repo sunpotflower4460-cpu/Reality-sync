@@ -140,89 +140,112 @@ export function SettingsModal({
       onClose={onClose}
       labelledBy="settings-modal-title"
       placement="sheet"
-      className="max-h-[94dvh] w-full max-w-sm overflow-y-auto rounded-t-[1.75rem] rounded-b-none bg-[#f7f8fb] shadow-[0_24px_70px_rgba(15,23,42,0.28)] sm:rounded-[1.75rem]"
+      className="sheet-scroll max-h-[94dvh] w-full max-w-sm overflow-y-auto rounded-t-[1.65rem] rounded-b-none bg-[#f6f7fb] shadow-[0_22px_64px_rgba(15,23,42,0.24)] sm:rounded-[1.65rem]"
     >
-      <div className="sticky top-0 z-10 border-b border-slate-100 bg-white/96 px-4 pb-3 pt-2 backdrop-blur-xl sm:pt-4">
+      <div className="sticky top-0 z-10 border-b border-slate-100 bg-white/96 px-4 pb-3 pt-2 backdrop-blur-2xl sm:pt-4">
         <div className="mx-auto mb-2 h-1 w-9 rounded-full bg-slate-200 sm:hidden" aria-hidden="true" />
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 id="settings-modal-title" className="text-base font-black text-slate-900">設定とデータ</h2>
+            <h2 id="settings-modal-title" className="text-[16px] font-semibold tracking-[-0.02em] text-slate-900">設定とデータ</h2>
             <p className="mt-0.5 text-[9px] text-slate-400">記録・データ・プライバシー</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="設定を閉じる" className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600">
-            <X className="h-4 w-4" />
+          <button type="button" onClick={onClose} aria-label="設定を閉じる" className="tap-target flex items-center justify-center rounded-full bg-slate-100 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600">
+            <X className="h-4.5 w-4.5" />
           </button>
         </div>
       </div>
 
-      <div className="space-y-3 p-4 pb-modal-safe">
+      <div className="space-y-4 p-3.5 pb-modal-safe">
         {storageBlocked && (
-          <section className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-[10px] leading-relaxed text-red-700">
+          <section className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-[9px] leading-relaxed text-red-700">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <div><div className="font-extrabold">保存データ保護モード</div><p className="mt-1">現在の保存データを安全に解釈できないため、自動保存とバックアップ書き出しを止めています。元データは上書きしていません。{storageProtection.unsupportedVersion !== null ? ` 検出した保存版: ${String(storageProtection.unsupportedVersion)}` : ''}</p></div>
+            <div><div className="font-semibold">保存データ保護モード</div><p className="mt-1">現在の保存データを安全に解釈できないため、自動保存とバックアップ書き出しを止めています。元データは上書きしていません。{storageProtection.unsupportedVersion !== null ? ` 検出した保存版: ${String(storageProtection.unsupportedVersion)}` : ''}</p></div>
           </section>
         )}
 
         {(message || error) && (
-          <div role={error ? 'alert' : 'status'} className={`rounded-xl border p-3 text-[10px] font-semibold leading-relaxed ${error ? 'border-rose-100 bg-rose-50 text-rose-600' : 'border-emerald-100 bg-emerald-50 text-emerald-700'}`}>
+          <div role={error ? 'alert' : 'status'} aria-live="polite" className={`rounded-xl border p-3 text-[9px] font-medium leading-relaxed ${error ? 'border-rose-100 bg-rose-50 text-rose-600' : 'border-emerald-100 bg-emerald-50 text-emerald-700'}`}>
             {error || message}
           </div>
         )}
 
-        <section className="app-card rounded-[1.25rem] p-3.5">
-          <div className="mb-3 flex items-center gap-2"><Bell className="h-4 w-4 text-indigo-500" /><h3 className="text-[13px] font-black text-slate-800">記録リマインダー</h3></div>
-          <label className="flex items-center justify-between gap-4 rounded-xl bg-slate-50 p-3">
-            <span><span className="block text-[12px] font-extrabold text-slate-700">アプリ内の記録待ち</span><span className="mt-0.5 block text-[9px] leading-relaxed text-slate-400">今日の未記録予定だけを表示</span></span>
-            <span className="relative shrink-0">
-              <input type="checkbox" checked={reminderPreferences.enabled} onChange={(event) => onChangeReminderPreferences((current) => ({ ...current, enabled: event.target.checked }))} className="peer sr-only" />
-              <span className="block h-6 w-11 rounded-full bg-slate-200 transition peer-checked:bg-indigo-600" />
-              <span className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition peer-checked:translate-x-5" />
-            </span>
-          </label>
-          <label className="mt-3 block">
-            <span className="mb-1.5 block text-[10px] font-extrabold text-slate-500">記録待ちにするタイミング</span>
-            <select value={reminderPreferences.delayMinutes} disabled={!reminderPreferences.enabled} onChange={(event) => onChangeReminderPreferences((current) => ({ ...current, delayMinutes: Number(event.target.value) }))} className="w-full rounded-xl border border-slate-200 bg-white p-3 text-[12px] font-semibold text-slate-700 outline-none disabled:opacity-50">
-              {REMINDER_DELAY_OPTIONS.map((minutes) => <option key={minutes} value={minutes}>{minutes === 0 ? '予定時刻になったら' : `予定開始から${minutes}分後`}</option>)}
-            </select>
-          </label>
-          {!isNativeShell && (
-            <details className="group mt-3 rounded-xl border border-slate-100 bg-white">
-              <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between px-3 text-[10px] font-extrabold text-slate-500">
-                <span className="flex items-center gap-2">{notificationPermission === 'granted' ? <Bell className="h-3.5 w-3.5 text-emerald-500" /> : <BellOff className="h-3.5 w-3.5 text-slate-400" />}Web版のOS通知</span><ChevronRight className="h-3.5 w-3.5 text-slate-300 transition group-open:rotate-90" />
-              </summary>
-              <div className="border-t border-slate-100 p-3"><p className="text-[9px] leading-relaxed text-slate-400">Web版では許可時にブラウザ通知を利用します。</p><button type="button" onClick={requestNotifications} className="mt-2 min-h-10 w-full rounded-xl bg-indigo-50 px-3 text-[10px] font-extrabold text-indigo-600">{notificationPermission === 'granted' ? '通知許可を確認済み' : 'OS通知を確認する'}</button></div>
-            </details>
-          )}
-        </section>
+        <section>
+          <SectionLabel icon={Bell}>記録</SectionLabel>
+          <div className="app-group divide-y divide-slate-100">
+            <label className="flex min-h-14 items-center justify-between gap-4 px-3.5 py-2.5">
+              <span><span className="block text-[11px] font-semibold text-slate-700">アプリ内の記録待ち</span><span className="mt-0.5 block text-[8px] leading-relaxed text-slate-400">今日の未記録予定だけを表示</span></span>
+              <Toggle checked={reminderPreferences.enabled} onChange={(checked) => onChangeReminderPreferences((current) => ({ ...current, enabled: checked }))} />
+            </label>
 
-        <section className="app-card rounded-[1.25rem] p-3.5">
-          <div className="mb-2 flex items-center gap-2"><HardDriveDownload className="h-4 w-4 text-indigo-500" /><h3 className="text-[13px] font-black text-slate-800">バックアップ</h3></div>
-          <p className="text-[9px] leading-relaxed text-slate-400">予定・実績・テンプレートなどをJSONに保存します。ファイル自体は暗号化されません。</p>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <button type="button" onClick={exportBackup} disabled={storageBlocked} className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-3 text-[10px] font-extrabold text-white disabled:cursor-not-allowed disabled:bg-slate-300"><Download className="h-3.5 w-3.5" />書き出す</button>
-            <button type="button" onClick={() => fileInputRef.current?.click()} className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-indigo-100 bg-white px-3 text-[10px] font-extrabold text-indigo-600"><Upload className="h-3.5 w-3.5" />復元する</button>
-          </div>
-          <input ref={fileInputRef} type="file" accept="application/json,.json" onChange={importBackup} className="hidden" />
-        </section>
+            <label className="flex min-h-12 items-center justify-between gap-3 px-3.5 py-2.5">
+              <span className="text-[10px] font-medium text-slate-600">記録待ちのタイミング</span>
+              <select value={reminderPreferences.delayMinutes} disabled={!reminderPreferences.enabled} onChange={(event) => onChangeReminderPreferences((current) => ({ ...current, delayMinutes: Number(event.target.value) }))} className="max-w-[11.5rem] rounded-lg border-0 bg-slate-50 px-2.5 py-2 text-right text-[10px] font-medium text-slate-700 outline-none disabled:opacity-45">
+                {REMINDER_DELAY_OPTIONS.map((minutes) => <option key={minutes} value={minutes}>{minutes === 0 ? '予定時刻になったら' : `開始から${minutes}分後`}</option>)}
+              </select>
+            </label>
 
-        <section className="app-card overflow-hidden rounded-[1.25rem]">
-          <div className="flex items-center gap-2 px-3.5 pb-2 pt-3.5"><ShieldCheck className="h-4 w-4 text-indigo-500" /><h3 className="text-[13px] font-black text-slate-800">プライバシーとサポート</h3></div>
-          <p className="px-3.5 pb-3 text-[9px] leading-relaxed text-slate-400">現行版は予定や実績を端末内に保存し、広告・解析・トラッキング・クラウド同期を使いません。</p>
-          <div className="divide-y divide-slate-100 border-t border-slate-100">
-            <button type="button" onClick={() => openLegal('privacy')} className="flex min-h-11 w-full items-center justify-between px-3.5 text-left text-[11px] font-extrabold text-slate-700"><span className="flex items-center gap-2"><ShieldCheck className="h-3.5 w-3.5 text-indigo-400" />プライバシーポリシー</span><ChevronRight className="h-4 w-4 text-slate-300" /></button>
-            <button type="button" onClick={() => openLegal('terms')} className="flex min-h-11 w-full items-center justify-between px-3.5 text-left text-[11px] font-extrabold text-slate-700"><span className="flex items-center gap-2"><FileText className="h-3.5 w-3.5 text-indigo-400" />利用規約</span><ChevronRight className="h-4 w-4 text-slate-300" /></button>
-            <a href={SUPPORT_PAGE_URL} target="_blank" rel="noreferrer" className="flex min-h-11 w-full items-center justify-between px-3.5 text-[11px] font-extrabold text-slate-700"><span>サポート</span><ExternalLink className="h-3.5 w-3.5 text-slate-300" /></a>
+            {!isNativeShell && (
+              <details className="group">
+                <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-3.5 text-[10px] font-medium text-slate-600">
+                  <span className="flex items-center gap-2">{notificationPermission === 'granted' ? <Bell className="h-3.5 w-3.5 text-emerald-500" /> : <BellOff className="h-3.5 w-3.5 text-slate-400" />}Web版のOS通知</span><ChevronRight className="h-3.5 w-3.5 text-slate-300 transition group-open:rotate-90" />
+                </summary>
+                <div className="border-t border-slate-100 bg-slate-50/60 p-3"><p className="text-[8px] leading-relaxed text-slate-400">Web版では許可時にブラウザ通知を利用します。</p><button type="button" onClick={requestNotifications} className="mt-2 min-h-10 w-full rounded-xl bg-white px-3 text-[9px] font-semibold text-indigo-600 ring-1 ring-slate-200">{notificationPermission === 'granted' ? '通知許可を確認済み' : 'OS通知を確認する'}</button></div>
+              </details>
+            )}
           </div>
         </section>
 
-        <section className="app-card rounded-[1.25rem] p-3.5">
-          <div className="flex items-center gap-2"><Smartphone className="h-4 w-4 text-indigo-500" /><h3 className="text-[13px] font-black text-slate-800">RealitySync</h3></div>
-          <div className="mt-2 flex items-center justify-between gap-3 text-[9px] text-slate-400"><span>バージョン {APP_VERSION}</span>{isNativeShell ? <span className="font-bold text-emerald-600">App Store版</span> : isInstalled ? <span className="font-bold text-emerald-600">インストール済み</span> : null}</div>
-          {!isNativeShell && !isInstalled && canInstall && <button type="button" onClick={onInstall} className="mt-3 min-h-10 w-full rounded-xl bg-slate-900 px-4 text-[10px] font-extrabold text-white">この端末にインストール</button>}
+        <section>
+          <SectionLabel icon={HardDriveDownload}>データ</SectionLabel>
+          <div className="app-group divide-y divide-slate-100">
+            <div className="px-3.5 py-3"><p className="text-[10px] font-semibold text-slate-700">バックアップ</p><p className="mt-1 text-[8px] leading-relaxed text-slate-400">予定・実績・テンプレートなどをJSONに保存します。ファイル自体は暗号化されません。</p></div>
+            <button type="button" onClick={exportBackup} disabled={storageBlocked} className="flex min-h-12 w-full items-center justify-between px-3.5 text-left text-[10px] font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"><span className="flex items-center gap-2.5"><Download className="h-4 w-4 text-indigo-500" />バックアップを書き出す</span><ChevronRight className="h-4 w-4 text-slate-300" /></button>
+            <button type="button" onClick={() => fileInputRef.current?.click()} className="flex min-h-12 w-full items-center justify-between px-3.5 text-left text-[10px] font-medium text-slate-700"><span className="flex items-center gap-2.5"><Upload className="h-4 w-4 text-indigo-500" />バックアップから復元</span><ChevronRight className="h-4 w-4 text-slate-300" /></button>
+            <input ref={fileInputRef} type="file" accept="application/json,.json" onChange={importBackup} className="hidden" />
+          </div>
         </section>
 
-        <button type="button" onClick={eraseAllData} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 text-[10px] font-extrabold text-rose-500 transition hover:bg-rose-50"><Trash2 className="h-4 w-4" />この端末のデータをすべて削除</button>
+        <section>
+          <SectionLabel icon={ShieldCheck}>プライバシーとサポート</SectionLabel>
+          <div className="app-group divide-y divide-slate-100">
+            <div className="px-3.5 py-3 text-[8px] leading-relaxed text-slate-400">現行版は予定や実績を端末内に保存し、広告・解析・トラッキング・クラウド同期を使いません。</div>
+            <button type="button" onClick={() => openLegal('privacy')} className="flex min-h-12 w-full items-center justify-between px-3.5 text-left text-[10px] font-medium text-slate-700"><span>プライバシーポリシー</span><ChevronRight className="h-4 w-4 text-slate-300" /></button>
+            <button type="button" onClick={() => openLegal('terms')} className="flex min-h-12 w-full items-center justify-between px-3.5 text-left text-[10px] font-medium text-slate-700"><span className="flex items-center gap-2"><FileText className="h-3.5 w-3.5 text-slate-400" />利用規約</span><ChevronRight className="h-4 w-4 text-slate-300" /></button>
+            <a href={SUPPORT_PAGE_URL} target="_blank" rel="noreferrer" className="flex min-h-12 w-full items-center justify-between px-3.5 text-[10px] font-medium text-slate-700"><span>サポート</span><ExternalLink className="h-3.5 w-3.5 text-slate-300" /></a>
+          </div>
+        </section>
+
+        <section>
+          <SectionLabel icon={Smartphone}>アプリ</SectionLabel>
+          <div className="app-group divide-y divide-slate-100">
+            <div className="flex min-h-12 items-center justify-between gap-3 px-3.5 text-[10px] text-slate-600"><span>RealitySync</span><span className="text-[9px] text-slate-400">v{APP_VERSION}</span></div>
+            <div className="flex min-h-12 items-center justify-between gap-3 px-3.5 text-[10px] text-slate-600"><span>状態</span><span className="text-[9px] font-medium text-emerald-600">{isNativeShell ? 'App Store版' : isInstalled ? 'インストール済み' : 'Web版'}</span></div>
+            {!isNativeShell && !isInstalled && canInstall && <button type="button" onClick={onInstall} className="flex min-h-12 w-full items-center justify-between px-3.5 text-left text-[10px] font-medium text-indigo-600"><span>この端末にインストール</span><ChevronRight className="h-4 w-4 text-indigo-300" /></button>}
+          </div>
+        </section>
+
+        <section>
+          <p className="app-section-label text-rose-400">データの削除</p>
+          <div className="app-group">
+            <button type="button" onClick={eraseAllData} className="flex min-h-12 w-full items-center justify-between px-3.5 text-left text-[10px] font-medium text-rose-500 transition hover:bg-rose-50"><span className="flex items-center gap-2.5"><Trash2 className="h-4 w-4" />この端末のデータをすべて削除</span><ChevronRight className="h-4 w-4 text-rose-200" /></button>
+          </div>
+          <p className="mt-1.5 px-1 text-[8px] leading-relaxed text-slate-400">外部へ書き出したバックアップは削除されません。</p>
+        </section>
       </div>
     </ModalDialog>
+  );
+}
+
+function SectionLabel({ icon: Icon, children }) {
+  return <p className="app-section-label flex items-center gap-1.5"><Icon className="h-3 w-3 text-indigo-400" aria-hidden="true" />{children}</p>;
+}
+
+function Toggle({ checked, onChange }) {
+  return (
+    <span className="relative shrink-0">
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="peer sr-only" />
+      <span className="block h-6 w-11 rounded-full bg-slate-200 transition peer-checked:bg-indigo-600" />
+      <span className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition peer-checked:translate-x-5" />
+    </span>
   );
 }

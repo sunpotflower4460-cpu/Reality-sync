@@ -1,0 +1,82 @@
+name: Phase 20 UI Screenshots
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npm install --no-save --no-package-lock playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Capture iPhone screenshots
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/realitysync-preview.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173 >/dev/null; then break; fi
+            sleep 1
+          done
+          cat > capture.mjs <<'EOF'
+          import { chromium, devices } from 'playwright';
+          const browser = await chromium.launch();
+          const context = await browser.newContext({
+            ...devices['iPhone 13'],
+            reducedMotion: 'reduce',
+            timezoneId: 'UTC',
+          });
+          const page = await context.newPage();
+          const today = new Date().toISOString().slice(0, 10);
+          await page.addInitScript(({ today }) => {
+            const schedules = [
+              { id:'morning', time:'08:00', title:'朝の準備', category:'その他', duration:45, plannedStress:25, status:'as_planned', plannedSnapshot:{time:'08:00',title:'朝の準備',category:'その他',duration:45,plannedStress:25}, actualTitle:'朝の準備', actualCategory:'その他', actualDuration:50, actualStartTime:'08:05', actualStartDateKey:today, deviationReason:null, mood:'good', actualStress:22, appliedExperimentIds:[] },
+              { id:'work', time:'10:00', title:'集中して作業', category:'仕事', duration:120, plannedStress:65, status:'changed', plannedSnapshot:{time:'10:00',title:'集中して作業',category:'仕事',duration:120,plannedStress:65}, actualTitle:'作業', actualCategory:'仕事', actualDuration:90, actualStartTime:'10:20', actualStartDateKey:today, deviationReason:'予定より集中が切れた', mood:'normal', actualStress:72, appliedExperimentIds:[] },
+              { id:'break', time:'13:00', title:'休憩', category:'休憩', duration:45, plannedStress:10, status:'pending', plannedSnapshot:null, actualTitle:'', actualCategory:null, actualDuration:null, actualStartTime:null, actualStartDateKey:null, deviationReason:null, mood:null, actualStress:null, appliedExperimentIds:[] },
+              { id:'walk', time:'17:00', title:'散歩', category:'運動', duration:30, plannedStress:30, status:'pending', plannedSnapshot:null, actualTitle:'', actualCategory:null, actualDuration:null, actualStartTime:null, actualStartDateKey:null, deviationReason:null, mood:null, actualStress:null, appliedExperimentIds:[] }
+            ];
+            localStorage.setItem('reality-sync:days:v2', JSON.stringify({ version:2, days:{ [today]:schedules } }));
+          }, { today });
+          await page.goto('http://127.0.0.1:4173', { waitUntil:'networkidle' });
+          await page.evaluate(() => scrollTo(0, 0));
+          await page.screenshot({ path:'record.png', fullPage:true });
+
+          await page.getByRole('button', { name:'13:00 休憩 の実績を記録する', exact:true }).click();
+          await page.waitForTimeout(50);
+          await page.screenshot({ path:'record-modal.png' });
+          await page.getByRole('button', { name:'記録画面を閉じる' }).click();
+
+          await page.getByRole('button', { name:/計画/ }).click();
+          await page.evaluate(() => scrollTo(0, 0));
+          await page.waitForTimeout(50);
+          await page.screenshot({ path:'plan.png', fullPage:true });
+
+          await page.getByRole('button', { name:/分析/ }).click();
+          await page.evaluate(() => scrollTo(0, 0));
+          await page.waitForTimeout(50);
+          await page.screenshot({ path:'analytics.png', fullPage:true });
+
+          await page.getByRole('button', { name:'設定とデータを開く' }).click();
+          await page.waitForTimeout(50);
+          await page.screenshot({ path:'settings.png' });
+          await browser.close();
+          EOF
+          node capture.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: realitysync-phase20-ui
+          path: |
+            record.png
+            record-modal.png
+            plan.png
+            analytics.png
+            settings.png
+          if-no-files-found: error
