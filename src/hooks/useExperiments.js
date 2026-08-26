@@ -10,10 +10,10 @@ import {
   finishExperiment,
   nextLearningVersion,
   normalizeExperiments,
-  parseStoredExperimentsResult,
   removeExperimentTrial,
   serializeExperiments,
 } from '../utils/experiment.js';
+import { parseStoredExperimentsForPersistence } from '../utils/experimentStorage.js';
 
 function createExperimentId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -23,7 +23,7 @@ function createExperimentId() {
 function loadExperimentState() {
   if (typeof window === 'undefined') return { experiments: [], persistenceBlocked: false, unsupportedVersion: null };
   try {
-    const result = parseStoredExperimentsResult(window.localStorage.getItem(EXPERIMENT_STORAGE_KEY));
+    const result = parseStoredExperimentsForPersistence(window.localStorage.getItem(EXPERIMENT_STORAGE_KEY));
     return {
       experiments: result.experiments,
       persistenceBlocked: !result.ok,
@@ -46,7 +46,7 @@ export function useExperiments() {
   useEffect(() => {
     const sync = (event) => {
       if (event.key !== EXPERIMENT_STORAGE_KEY) return;
-      const result = parseStoredExperimentsResult(event.newValue);
+      const result = parseStoredExperimentsForPersistence(event.newValue);
       setState({
         experiments: result.experiments,
         persistenceBlocked: !result.ok,
