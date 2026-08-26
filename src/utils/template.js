@@ -1,21 +1,42 @@
 import { CATEGORIES } from '../constants.js';
 import { isValidTime, normalizeSchedules } from './schedule.js';
 
+function finiteNumber(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function appliedExperimentIdsInputValid(value) {
+  if (value === undefined) return true;
+  if (!Array.isArray(value) || value.length > 50) return false;
+  const seen = new Set();
+  for (const item of value) {
+    if (typeof item !== 'string') return false;
+    const id = item.trim();
+    if (!id || item !== id || seen.has(id)) return false;
+    seen.add(id);
+  }
+  return true;
+}
+
 function templateScheduleInputValid(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const title = typeof value.title === 'string' ? value.title.trim() : '';
-  const duration = Number(value.duration);
-  const plannedStress = Number(value.plannedStress);
+  const duration = finiteNumber(value.duration);
+  const plannedStress = finiteNumber(value.plannedStress);
   return Boolean(
     isValidTime(value.time)
     && title
     && CATEGORIES.includes(value.category)
-    && Number.isFinite(duration)
+    && duration !== null
     && duration >= 0
     && duration <= 1440
-    && Number.isFinite(plannedStress)
+    && plannedStress !== null
     && plannedStress >= 0
     && plannedStress <= 100
+    && appliedExperimentIdsInputValid(value.appliedExperimentIds)
   );
 }
 
@@ -67,6 +88,8 @@ export function parseStoredTemplatesResult(raw) {
   for (let index = 0; index < parsed.length; index += 1) {
     const rawTemplate = parsed[index];
     const normalized = templates[index];
+    const rawId = typeof rawTemplate?.id === 'string' ? rawTemplate.id.trim() : '';
+    if (!rawId || normalized.id !== rawId) return { ok: false, templates: [] };
     if (!Array.isArray(rawTemplate?.schedules) || rawTemplate.schedules.length !== normalized.schedules.length) {
       return { ok: false, templates: [] };
     }
