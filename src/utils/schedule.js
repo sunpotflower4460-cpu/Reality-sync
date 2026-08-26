@@ -105,10 +105,9 @@ function normalizePlannedSnapshot(value) {
   if (!isValidTime(value.time)) return null;
   const title = normalizeText(value.title);
   if (!title || !VALID_CATEGORIES.has(value.category)) return null;
-  const duration = Number(value.duration);
-  const plannedStress = Number(value.plannedStress);
-  if (!Number.isFinite(duration) || duration < 0 || duration > 1440) return null;
-  if (!Number.isFinite(plannedStress) || plannedStress < 0 || plannedStress > 100) return null;
+  const duration = normalizeOptionalNumber(value.duration, 0, 1440);
+  const plannedStress = normalizeOptionalNumber(value.plannedStress, 0, 100);
+  if (duration === null || plannedStress === null) return null;
   return {
     time: value.time,
     title,
