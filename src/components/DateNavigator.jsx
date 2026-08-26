@@ -17,7 +17,7 @@ export function DateNavigator({ dateKey, onChange }) {
           <ChevronLeft className="h-[1.15rem] w-[1.15rem]" aria-hidden="true" />
         </button>
 
-        <label className="relative flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-[0.8rem] px-2 text-center transition hover:bg-white/65 active:bg-white">
+        <label className="date-picker-target relative flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-[0.8rem] px-2 text-center transition hover:bg-white/65 active:bg-white">
           <CalendarDays className="h-4 w-4 shrink-0 text-indigo-500" aria-hidden="true" />
           <span className="min-w-0">
             <span className="block truncate text-[12px] font-semibold tracking-tight text-slate-800">{formatDateLabel(dateKey)}</span>
