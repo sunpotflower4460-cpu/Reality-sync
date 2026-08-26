@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Plus, Settings } from 'lucide-react';
 import {
   EXPERIMENT_STORAGE_KEY,
@@ -86,6 +86,7 @@ export default function App() {
   const monthlyInsights = useMemo(() => calculateMonthlyInsights(store.days, selectedDate), [selectedDate, store.days]);
   const longitudinalInsights = useMemo(() => calculateLongitudinalInsights(store.days, selectedDate), [selectedDate, store.days]);
   const todayKey = dateKeyFromDate();
+  const previousTodayKeyRef = useRef(todayKey);
   const canRecordSelectedDate = selectedDate <= todayKey;
   const isNativeShell = typeof window !== 'undefined' && window.location.protocol === 'file:';
   const planFeedbackSuggestions = useMemo(
@@ -119,6 +120,18 @@ export default function App() {
 
   const selectedSchedule = useMemo(() => schedules.find((schedule) => schedule.id === selectedScheduleId) ?? null, [schedules, selectedScheduleId]);
   const editingSchedule = useMemo(() => editorState?.type === 'edit' ? schedules.find((schedule) => schedule.id === editorState.id) ?? null : null, [editorState, schedules]);
+
+  useEffect(() => {
+    const previousTodayKey = previousTodayKeyRef.current;
+    if (previousTodayKey === todayKey) return;
+    previousTodayKeyRef.current = todayKey;
+    if (selectedDate !== previousTodayKey) return;
+    setSelectedScheduleId(null);
+    setSelectedPlanFeedbackId(null);
+    setEditorState(null);
+    setIsTemplateModalOpen(false);
+    setSelectedDate(todayKey);
+  }, [selectedDate, todayKey]);
 
   const changeDate = (dateKey) => {
     setSelectedScheduleId(null);
@@ -207,7 +220,8 @@ export default function App() {
     setEditorState(null);
     setIsTemplateModalOpen(false);
     const dayKeys = Object.keys(scheduleStore.days).sort();
-    if (!(selectedDate in scheduleStore.days) && dayKeys.length > 0) setSelectedDate(dayKeys.at(-1));
+    if (dayKeys.length === 0) setSelectedDate(dateKeyFromDate());
+    else if (!(selectedDate in scheduleStore.days)) setSelectedDate(dayKeys.at(-1));
   };
 
   const eraseAllData = () => {
