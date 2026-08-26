@@ -10,7 +10,7 @@ import {
   finishExperiment,
   nextLearningVersion,
   normalizeExperiments,
-  parseStoredExperiments,
+  parseStoredExperimentsResult,
   removeExperimentTrial,
   serializeExperiments,
 } from '../utils/experiment.js';
@@ -20,32 +20,61 @@ function createExperimentId() {
   return `experiment-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function loadExperiments() {
-  if (typeof window === 'undefined') return [];
-  try { return parseStoredExperiments(window.localStorage.getItem(EXPERIMENT_STORAGE_KEY)); } catch { return []; }
+function loadExperimentState() {
+  if (typeof window === 'undefined') return { experiments: [], persistenceBlocked: false, unsupportedVersion: null };
+  try {
+    const result = parseStoredExperimentsResult(window.localStorage.getItem(EXPERIMENT_STORAGE_KEY));
+    return {
+      experiments: result.experiments,
+      persistenceBlocked: !result.ok,
+      unsupportedVersion: result.unsupportedVersion,
+    };
+  } catch {
+    return { experiments: [], persistenceBlocked: false, unsupportedVersion: null };
+  }
 }
 
 export function useExperiments() {
-  const [experiments, setExperiments] = useState(loadExperiments);
+  const [state, setState] = useState(loadExperimentState);
+  const { experiments, persistenceBlocked, unsupportedVersion } = state;
 
   useEffect(() => {
+    if (persistenceBlocked) return;
     try { window.localStorage.setItem(EXPERIMENT_STORAGE_KEY, serializeExperiments(experiments)); } catch { /* in-memory mode */ }
-  }, [experiments]);
+  }, [experiments, persistenceBlocked]);
 
   useEffect(() => {
-    const sync = (event) => { if (event.key === EXPERIMENT_STORAGE_KEY) setExperiments(parseStoredExperiments(event.newValue)); };
+    const sync = (event) => {
+      if (event.key !== EXPERIMENT_STORAGE_KEY) return;
+      const result = parseStoredExperimentsResult(event.newValue);
+      setState({
+        experiments: result.experiments,
+        persistenceBlocked: !result.ok,
+        unsupportedVersion: result.unsupportedVersion,
+      });
+    };
     window.addEventListener('storage', sync);
     return () => window.removeEventListener('storage', sync);
   }, []);
 
-  const startExperiment = useCallback((candidate, options) => {
-    const experiment = createExperimentFromCandidate(candidate, { ...options, id: createExperimentId() });
-    if (!experiment) return false;
-    setExperiments((current) => [experiment, ...current]);
-    return true;
+  const updateExperiments = useCallback((updater) => {
+    setState((current) => {
+      if (current.persistenceBlocked) return current;
+      const next = typeof updater === 'function' ? updater(current.experiments) : updater;
+      return { ...current, experiments: normalizeExperiments(next) };
+    });
   }, []);
 
+  const startExperiment = useCallback((candidate, options) => {
+    if (persistenceBlocked) return false;
+    const experiment = createExperimentFromCandidate(candidate, { ...options, id: createExperimentId() });
+    if (!experiment) return false;
+    updateExperiments((current) => [experiment, ...current]);
+    return true;
+  }, [persistenceBlocked, updateExperiments]);
+
   const startRevalidation = useCallback((sourceExperimentId, retentionSummary, options = {}) => {
+    if (persistenceBlocked) return false;
     const today = dateKeyFromDate();
     if (!retentionSummary?.reviewCandidate || retentionSummary.throughDateKey !== today) return false;
     const source = experiments.find((experiment) => experiment.id === sourceExperimentId);
@@ -72,33 +101,46 @@ export function useExperiments() {
       createdAt: new Date().toISOString(),
     });
     if (!experiment) return false;
-    setExperiments((current) => [experiment, ...current]);
+    updateExperiments((current) => [experiment, ...current]);
     return true;
-  }, [experiments]);
+  }, [experiments, persistenceBlocked, updateExperiments]);
 
   const captureTrial = useCallback((experimentId, eligibleRecord) => {
-    setExperiments((current) => current.map((experiment) => experiment.id === experimentId ? addExperimentTrial(experiment, eligibleRecord) : experiment));
-  }, []);
+    updateExperiments((current) => current.map((experiment) => experiment.id === experimentId ? addExperimentTrial(experiment, eligibleRecord) : experiment));
+  }, [updateExperiments]);
 
   const removeTrial = useCallback((experimentId, recordKey) => {
-    setExperiments((current) => current.map((experiment) => experiment.id === experimentId ? removeExperimentTrial(experiment, recordKey) : experiment));
-  }, []);
+    updateExperiments((current) => current.map((experiment) => experiment.id === experimentId ? removeExperimentTrial(experiment, recordKey) : experiment));
+  }, [updateExperiments]);
 
   const finish = useCallback((experimentId, decision) => {
     const completedAt = new Date().toISOString();
     const decisionDateKey = dateKeyFromDate();
-    setExperiments((current) => current.map((experiment) => experiment.id === experimentId ? finishExperiment(experiment, decision, completedAt, decisionDateKey) : experiment));
-  }, []);
+    updateExperiments((current) => current.map((experiment) => experiment.id === experimentId ? finishExperiment(experiment, decision, completedAt, decisionDateKey) : experiment));
+  }, [updateExperiments]);
 
   const abandon = useCallback((experimentId) => {
-    setExperiments((current) => current.map((experiment) => experiment.id === experimentId ? abandonExperiment(experiment) : experiment));
-  }, []);
+    updateExperiments((current) => current.map((experiment) => experiment.id === experimentId ? abandonExperiment(experiment) : experiment));
+  }, [updateExperiments]);
 
   const deleteExperiment = useCallback((experimentId) => {
-    setExperiments((current) => current.filter((experiment) => experiment.id !== experimentId));
+    updateExperiments((current) => current.filter((experiment) => experiment.id !== experimentId));
+  }, [updateExperiments]);
+
+  const replaceExperiments = useCallback((next) => {
+    setState({ experiments: normalizeExperiments(next), persistenceBlocked: false, unsupportedVersion: null });
   }, []);
 
-  const replaceExperiments = useCallback((next) => setExperiments(normalizeExperiments(next)), []);
-
-  return { experiments, startExperiment, startRevalidation, captureTrial, removeTrial, finish, abandon, deleteExperiment, replaceExperiments };
+  return {
+    experiments,
+    startExperiment,
+    startRevalidation,
+    captureTrial,
+    removeTrial,
+    finish,
+    abandon,
+    deleteExperiment,
+    replaceExperiments,
+    storageProtection: { persistenceBlocked, unsupportedVersion },
+  };
 }
