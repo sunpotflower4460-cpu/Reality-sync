@@ -74,6 +74,20 @@ a:focus-visible {
   box-shadow: 0 5px 22px rgba(15, 23, 42, 0.025);
 }
 
+fieldset.app-group {
+  overflow: visible;
+}
+
+.app-group > button:focus-visible,
+.app-group > summary:focus-visible,
+.app-group > a:focus-visible {
+  outline-offset: -3px;
+}
+
+.app-group fieldset button {
+  min-height: 44px;
+}
+
 .app-section-label {
   margin: 0 0.2rem 0.4rem;
   color: #94a3b8;
