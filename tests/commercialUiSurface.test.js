@@ -44,9 +44,9 @@ test('timeline never presents missing recorded duration or load as a synthetic z
   assert.doesNotMatch(text, /actualDuration \?\? 0/);
 });
 
-test('analytics makes today and ideal-versus-reality time the primary commercial reading order', () => {
+test('analytics makes the selected day and ideal-versus-reality time the primary commercial reading order', () => {
   const text = source('src/components/AnalyticsView.jsx');
-  const completion = text.indexOf('今日の記録');
+  const completion = text.indexOf('この日の記録');
   const comparison = text.indexOf('理想と現実の時間');
   const weekMonth = text.indexOf('週・月の振り返り');
   assert.ok(completion > -1);
