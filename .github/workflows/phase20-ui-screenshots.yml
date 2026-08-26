@@ -29,7 +29,11 @@ jobs:
           cat > capture.mjs <<'EOF'
           import { chromium, devices } from 'playwright';
           const browser = await chromium.launch();
-          const context = await browser.newContext({ ...devices['iPhone 13'] });
+          const context = await browser.newContext({
+            ...devices['iPhone 13'],
+            reducedMotion: 'reduce',
+            timezoneId: 'UTC',
+          });
           const page = await context.newPage();
           const today = new Date().toISOString().slice(0, 10);
           await page.addInitScript(({ today }) => {
@@ -45,23 +49,23 @@ jobs:
           await page.evaluate(() => scrollTo(0, 0));
           await page.screenshot({ path:'record.png', fullPage:true });
 
-          await page.getByRole('button', { name:/13:00 休憩/ }).click();
-          await page.waitForTimeout(160);
+          await page.getByRole('button', { name:'13:00 休憩 の実績を記録する', exact:true }).click();
+          await page.waitForTimeout(50);
           await page.screenshot({ path:'record-modal.png' });
           await page.getByRole('button', { name:'記録画面を閉じる' }).click();
 
           await page.getByRole('button', { name:/計画/ }).click();
           await page.evaluate(() => scrollTo(0, 0));
-          await page.waitForTimeout(120);
+          await page.waitForTimeout(50);
           await page.screenshot({ path:'plan.png', fullPage:true });
 
           await page.getByRole('button', { name:/分析/ }).click();
           await page.evaluate(() => scrollTo(0, 0));
-          await page.waitForTimeout(120);
+          await page.waitForTimeout(50);
           await page.screenshot({ path:'analytics.png', fullPage:true });
 
           await page.getByRole('button', { name:'設定とデータを開く' }).click();
-          await page.waitForTimeout(160);
+          await page.waitForTimeout(50);
           await page.screenshot({ path:'settings.png' });
           await browser.close();
           EOF
