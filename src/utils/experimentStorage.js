@@ -23,6 +23,10 @@ function sameJson(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function explicitTextPreserved(rawValue, normalizedValue) {
+  return typeof rawValue === 'string' && normalizedValue === rawValue.trim();
+}
+
 function trialMetadataPreserved(rawTrials, normalizedTrials) {
   if (!Array.isArray(rawTrials)) return rawTrials === undefined;
   if (rawTrials.length !== normalizedTrials.length) return false;
@@ -34,6 +38,11 @@ function trialMetadataPreserved(rawTrials, normalizedTrials) {
       const numeric = optionalFiniteNumber(raw.observedValue);
       if (numeric === null || normalized.observedValue !== numeric) return false;
     }
+    if (raw.capturedAt !== undefined && !explicitTextPreserved(raw.capturedAt, normalized.capturedAt)) return false;
+    if (raw.planTitle !== undefined && !explicitTextPreserved(raw.planTitle, normalized.planTitle)) return false;
+    if (raw.scheduleId !== undefined) {
+      if ((typeof raw.scheduleId !== 'string' && typeof raw.scheduleId !== 'number') || normalized.scheduleId !== String(raw.scheduleId).trim()) return false;
+    }
   }
   return true;
 }
@@ -41,7 +50,13 @@ function trialMetadataPreserved(rawTrials, normalizedTrials) {
 function explicitMetadataPreserved(raw, normalized) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !normalized) return false;
 
+  if (typeof raw.id !== 'string' || !raw.id.trim() || normalized.id !== raw.id.trim()) return false;
   if (!trialMetadataPreserved(raw.trials, normalized.trials)) return false;
+
+  if (raw.targetRuns !== undefined) {
+    const targetRuns = optionalFiniteNumber(raw.targetRuns);
+    if (!Number.isInteger(targetRuns) || targetRuns < 3 || targetRuns > 10 || normalized.targetRuns !== targetRuns) return false;
+  }
 
   if (raw.planAdjustment !== undefined) {
     if (raw.planAdjustment === null) {
@@ -70,12 +85,18 @@ function explicitMetadataPreserved(raw, normalized) {
     }
   }
 
-  if (raw.decisionDateKey !== undefined && raw.decisionDateKey !== null) {
-    if (!isValidDateKey(raw.decisionDateKey) || normalized.decisionDateKey !== raw.decisionDateKey) return false;
+  if (raw.decisionDateKey !== undefined) {
+    if (raw.decisionDateKey === null) {
+      if (normalized.decisionDateKey !== null) return false;
+    } else if (!isValidDateKey(raw.decisionDateKey) || normalized.decisionDateKey !== raw.decisionDateKey) return false;
   }
 
-  if (raw.status !== undefined && !VALID_STATUSES.has(raw.status)) return false;
-  if (raw.decision !== undefined && raw.decision !== null && !VALID_DECISIONS.has(raw.decision)) return false;
+  if (raw.status !== undefined && (!VALID_STATUSES.has(raw.status) || normalized.status !== raw.status)) return false;
+  if (raw.decision !== undefined) {
+    if (raw.decision === null) {
+      if (normalized.decision !== null) return false;
+    } else if (!VALID_DECISIONS.has(raw.decision) || normalized.decision !== raw.decision) return false;
+  }
 
   if (raw.learningRootId !== undefined) {
     if (typeof raw.learningRootId !== 'string' || !raw.learningRootId.trim() || normalized.learningRootId !== raw.learningRootId.trim()) return false;
@@ -91,17 +112,24 @@ function explicitMetadataPreserved(raw, normalized) {
     if (!Number.isInteger(version) || version < 1 || version > 999 || normalized.learningVersion !== version) return false;
   }
   if (raw.revalidationReason !== undefined) {
-    if (typeof raw.revalidationReason !== 'string' || normalized.revalidationReason !== raw.revalidationReason.trim()) return false;
+    if (!explicitTextPreserved(raw.revalidationReason, normalized.revalidationReason)) return false;
   }
 
-  if (raw.baselineFailureRate !== undefined && raw.baselineFailureRate !== null && raw.baselineFailureRate !== '') {
-    const rate = optionalFiniteNumber(raw.baselineFailureRate);
-    if (rate === null || rate < 0 || rate > 1 || normalized.baselineFailureRate !== rate) return false;
+  if (raw.baselineFailureRate !== undefined) {
+    if (raw.baselineFailureRate === null) {
+      if (normalized.baselineFailureRate !== null) return false;
+    } else {
+      const rate = optionalFiniteNumber(raw.baselineFailureRate);
+      if (rate === null || rate < 0 || rate > 1 || normalized.baselineFailureRate !== rate) return false;
+    }
   }
-  if (raw.baselineSampleCount !== undefined && raw.baselineSampleCount !== null && raw.baselineSampleCount !== '') {
+  if (raw.baselineSampleCount !== undefined) {
     const count = optionalFiniteNumber(raw.baselineSampleCount);
-    if (!Number.isInteger(count) || count < 0 || normalized.baselineSampleCount !== count) return false;
+    if (!Number.isInteger(count) || count < 0 || count > 100000 || normalized.baselineSampleCount !== count) return false;
   }
+
+  if (raw.createdAt !== undefined && !explicitTextPreserved(raw.createdAt, normalized.createdAt)) return false;
+  if (raw.completedAt !== undefined && !explicitTextPreserved(raw.completedAt, normalized.completedAt)) return false;
 
   return true;
 }
