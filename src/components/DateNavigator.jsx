@@ -47,7 +47,7 @@ export function DateNavigator({ dateKey, onChange }) {
         <button
           type="button"
           onClick={() => onChange(today)}
-          className="mx-auto mt-0.5 flex min-h-7 items-center justify-center rounded-full px-4 text-[9px] font-semibold text-indigo-600 transition hover:bg-indigo-50 active:bg-indigo-100"
+          className="mx-auto mt-0.5 flex min-h-11 items-center justify-center rounded-full px-4 text-[9px] font-semibold text-indigo-600 transition hover:bg-indigo-50 active:bg-indigo-100"
         >
           今日に戻る
         </button>
