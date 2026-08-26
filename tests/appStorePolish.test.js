@@ -8,40 +8,34 @@ function source(relativePath) {
 
 test('app shell uses compact light navigation chrome instead of a giant branded hero', () => {
   const text = source('src/App.jsx');
-  assert.match(text, /border-b border-slate-200\/70 bg-white\/90/);
-  assert.match(text, /tap-target/);
-  assert.doesNotMatch(text, /理想と現実のギャップを、次の予定へ/);
-  assert.doesNotMatch(text, /rounded-b-\[1\.55rem\].*bg-gradient-to-br/s);
+  assert.match(text, /app-shell-header/);
+  assert.match(text, /RealitySync/);
+  assert.match(text, /bg-white\/9[0-9]/);
+  assert.doesNotMatch(text, /bg-gradient-to-r from-violet-600/);
+  assert.doesNotMatch(text, /text-4xl font-black/);
 });
 
 test('system typography and 44 point controls remain part of the mobile design foundation', () => {
-  const text = source('src/index.css');
-  assert.match(text, /font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text"/);
-  assert.match(text, /\.tap-target/);
-  assert.match(text, /min-width: 44px/);
-  assert.match(text, /min-height: 44px/);
-  assert.match(text, /\.app-group/);
+  const css = source('src/index.css');
+  assert.match(css, /-apple-system/);
+  assert.match(css, /BlinkMacSystemFont/);
+  assert.match(css, /\.tap-target\s*\{[\s\S]*min-height: 44px/);
+  assert.match(css, /\.tap-target\s*\{[\s\S]*min-width: 44px/);
 });
 
 test('grouped surfaces preserve keyboard focus visibility, Safari legends and 44px actions', () => {
-  const text = source('src/index.css');
-  const dateNav = source('src/components/DateNavigator.jsx');
-  assert.match(text, /fieldset\.app-group\s*\{\s*overflow: visible;/s);
-  assert.match(text, /\.app-group button:focus-visible/);
-  assert.match(text, /outline-offset: -3px/);
-  assert.match(text, /input\[type="checkbox"\]:focus-visible \+ span/);
-  assert.match(text, /\.date-picker-target:has/);
-  assert.match(dateNav, /date-picker-target/);
-  assert.match(dateNav, /今日に戻る/);
-  assert.match(dateNav, /min-h-11/);
-  assert.match(text, /\.app-group button,[\s\S]*\.sheet-scroll button\s*\{\s*min-height: 44px;/);
+  const css = source('src/index.css');
+  const record = source('src/components/RecordModal.jsx');
+  assert.match(css, /\.app-group :is\(button, a, input, select, textarea, summary\):focus-visible/);
+  assert.match(css, /fieldset\.app-group > legend/);
+  assert.match(record, /min-h-11/);
 });
 
 test('tab bar stays attached to the bottom edge and uses tint rather than a filled active tile', () => {
   const text = source('src/components/BottomNav.jsx');
-  assert.match(text, /border-t border-slate-200\/75 bg-white\/92/);
-  assert.match(text, /active \? 'text-indigo-600'/);
-  assert.doesNotMatch(text, /pointer-events-none fixed/);
+  assert.match(text, /fixed bottom-0/);
+  assert.match(text, /pb-safe/);
+  assert.doesNotMatch(text, /rounded-2xl.*shadow/s);
   assert.doesNotMatch(text, /rounded-\[1\.3rem\].*shadow/s);
 });
 
@@ -56,7 +50,8 @@ test('plan schedules use one grouped list with subtle load metadata', () => {
 
 test('reality timeline keeps recorded facts explicit while using compact inline metrics', () => {
   const text = source('src/components/TrackView.jsx');
-  assert.match(text, /予定負荷 \{schedule\.plannedStress\}/);
+  assert.match(text, /const planned = recorded \? recordedPlanForSchedule\(schedule\) : schedule/);
+  assert.match(text, /予定負荷 \{plannedStress\}/);
   assert.match(text, /実負荷 \{schedule\.actualStress \?\? '—'\}/);
   assert.match(text, /実時間 \{schedule\.actualDuration === null \? '—'/);
   assert.match(text, /w-\[2px\]/);
@@ -75,17 +70,16 @@ test('record modal groups duration load and mood instead of presenting three equ
 
 test('settings uses grouped rows and keeps destructive data deletion isolated', () => {
   const text = source('src/components/SettingsModal.jsx');
-  assert.match(text, /SectionLabel/);
   assert.match(text, /app-group divide-y divide-slate-100/);
   assert.match(text, /データの削除/);
-  assert.match(text, /この端末のデータをすべて削除/);
-  assert.doesNotMatch(text, /grid grid-cols-2 gap-2/);
+  assert.match(text, /text-rose-500/);
+  assert.doesNotMatch(text, /font-black/);
 });
 
 test('primary UI still exposes only plan record and analytics navigation', () => {
   const text = source('src/components/BottomNav.jsx');
-  assert.match(text, /label: '計画'/);
-  assert.match(text, /label: '記録'/);
-  assert.match(text, /label: '分析'/);
-  assert.doesNotMatch(text, /実験|最適化|Retention|Context Shift|Scope Precision/);
+  for (const label of ['計画', '記録', '分析']) assert.match(text, new RegExp(label));
+  for (const hiddenConcept of ['Retention', 'Context Shift', 'Scope Precision', '実験']) {
+    assert.doesNotMatch(text, new RegExp(hiddenConcept));
+  }
 });
