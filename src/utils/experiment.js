@@ -22,6 +22,12 @@ const BASELINE_WINDOW_DAYS = 180;
 
 function text(value, fallback = '') { if (typeof value !== 'string') return fallback; return value.trim() || fallback; }
 function clampInteger(value, min, max, fallback) { const parsed = Number(value); return Number.isFinite(parsed) ? Math.min(max, Math.max(min, Math.round(parsed))) : fallback; }
+function optionalNumber(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 function normalizeRate(value) { if (value === null || value === undefined || value === '') return null; const parsed = Number(value); return Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : null; }
 function optionalId(value) { const normalized = text(value); return normalized || null; }
 
@@ -43,12 +49,12 @@ export function planAdjustmentLabel(value) {
 function normalizeCondition(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value) || !VALID_CONDITIONS.has(value.kind)) return null;
   if (value.kind === 'weekday') {
-    const weekday = Number(value.value);
+    const weekday = optionalNumber(value.value);
     return Number.isInteger(weekday) && weekday >= 0 && weekday <= 6 ? { kind: 'weekday', value: weekday } : null;
   }
   if (value.kind === 'planned-stress-min') {
-    const minimum = Number(value.value);
-    return Number.isFinite(minimum) && minimum >= 0 && minimum <= 100 ? { kind: 'planned-stress-min', value: Math.round(minimum) } : null;
+    const minimum = optionalNumber(value.value);
+    return minimum !== null && minimum >= 0 && minimum <= 100 ? { kind: 'planned-stress-min', value: Math.round(minimum) } : null;
   }
   const category = text(value.value);
   return category ? { kind: 'planned-category', value: category } : null;
@@ -63,7 +69,7 @@ function normalizeTrial(value, index) {
   return {
     id: text(value.id, `trial-${index + 1}`), recordKey, dateKey,
     scheduleId: text(String(value.scheduleId ?? '')), planTitle: text(value.planTitle, '予定'), outcome,
-    observedValue: Number.isFinite(Number(value.observedValue)) ? Number(value.observedValue) : null,
+    observedValue: optionalNumber(value.observedValue),
     observedLabel: text(value.observedLabel), capturedAt: text(value.capturedAt),
   };
 }
@@ -75,8 +81,8 @@ export function normalizeRetentionSnapshot(value) {
   const experimentFailureRate = normalizeRate(value.experimentFailureRate);
   const assessmentCount = clampInteger(value.assessmentCount, 0, 100000, 0);
   const weekCount = clampInteger(value.weekCount, 0, 100000, 0);
-  const difference = Number(value.differenceFromExperimentPoints);
-  if (!throughDateKey || failureRate === null || experimentFailureRate === null || assessmentCount <= 0 || weekCount <= 0 || !Number.isFinite(difference)) return null;
+  const difference = optionalNumber(value.differenceFromExperimentPoints);
+  if (!throughDateKey || failureRate === null || experimentFailureRate === null || assessmentCount <= 0 || weekCount <= 0 || difference === null) return null;
   return {
     experimentId: text(value.experimentId),
     throughDateKey,
@@ -135,10 +141,31 @@ export function normalizeExperiments(value) {
   return experiments;
 }
 
-export function parseStoredExperiments(raw) {
-  if (!raw) return [];
-  try { const parsed = JSON.parse(raw); if (Array.isArray(parsed)) return normalizeExperiments(parsed); if (!parsed || parsed.version !== EXPERIMENT_STORAGE_VERSION || !Array.isArray(parsed.experiments)) return []; return normalizeExperiments(parsed.experiments); } catch { return []; }
+export function parseStoredExperimentsResult(raw) {
+  if (!raw) return { ok: true, experiments: [], unsupportedVersion: null };
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch { return { ok: false, experiments: [], unsupportedVersion: null }; }
+
+  if (Array.isArray(parsed)) {
+    const experiments = normalizeExperiments(parsed);
+    return experiments.length === parsed.length
+      ? { ok: true, experiments, unsupportedVersion: null }
+      : { ok: false, experiments: [], unsupportedVersion: null };
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { ok: false, experiments: [], unsupportedVersion: null };
+  }
+  if (parsed.version !== EXPERIMENT_STORAGE_VERSION) {
+    return { ok: false, experiments: [], unsupportedVersion: parsed.version ?? 'unknown' };
+  }
+  if (!Array.isArray(parsed.experiments)) return { ok: false, experiments: [], unsupportedVersion: null };
+  const experiments = normalizeExperiments(parsed.experiments);
+  if (experiments.length !== parsed.experiments.length) return { ok: false, experiments: [], unsupportedVersion: null };
+  return { ok: true, experiments, unsupportedVersion: null };
 }
+
+export function parseStoredExperiments(raw) { return parseStoredExperimentsResult(raw).experiments; }
 export function serializeExperiments(experiments) { return JSON.stringify({ version: EXPERIMENT_STORAGE_VERSION, experiments: normalizeExperiments(experiments) }); }
 
 export function experimentBlueprintForCandidate(candidate) {
