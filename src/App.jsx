@@ -66,7 +66,13 @@ export default function App() {
     replaceStore,
     storageProtection: scheduleStorageProtection,
   } = usePersistentSchedules(selectedDate);
-  const { templates, saveTemplate, deleteTemplate, replaceTemplates } = useScheduleTemplates();
+  const {
+    templates,
+    saveTemplate,
+    deleteTemplate,
+    replaceTemplates,
+    storageProtection: templateStorageProtection,
+  } = useScheduleTemplates();
   const {
     experiments,
     replaceExperiments,
@@ -95,13 +101,20 @@ export default function App() {
   const storageProtection = useMemo(() => {
     const protectedDomains = [];
     if (scheduleStorageProtection.persistenceBlocked) protectedDomains.push('予定・実績');
+    if (templateStorageProtection.persistenceBlocked) protectedDomains.push('テンプレート');
     if (experimentStorageProtection.persistenceBlocked) protectedDomains.push('実験履歴');
     return {
       persistenceBlocked: protectedDomains.length > 0,
       unsupportedVersion: scheduleStorageProtection.unsupportedVersion ?? experimentStorageProtection.unsupportedVersion,
       protectedDomains,
     };
-  }, [experimentStorageProtection.persistenceBlocked, experimentStorageProtection.unsupportedVersion, scheduleStorageProtection.persistenceBlocked, scheduleStorageProtection.unsupportedVersion]);
+  }, [
+    experimentStorageProtection.persistenceBlocked,
+    experimentStorageProtection.unsupportedVersion,
+    scheduleStorageProtection.persistenceBlocked,
+    scheduleStorageProtection.unsupportedVersion,
+    templateStorageProtection.persistenceBlocked,
+  ]);
   const protectedMode = storageProtection.persistenceBlocked;
 
   const selectedSchedule = useMemo(() => schedules.find((schedule) => schedule.id === selectedScheduleId) ?? null, [schedules, selectedScheduleId]);
