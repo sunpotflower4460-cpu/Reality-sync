@@ -25,9 +25,15 @@ test('system typography and 44 point controls remain part of the mobile design f
 
 test('grouped surfaces preserve keyboard focus visibility, Safari legends and 44px actions', () => {
   const text = source('src/index.css');
+  const dateNav = source('src/components/DateNavigator.jsx');
   assert.match(text, /fieldset\.app-group\s*\{\s*overflow: visible;/s);
-  assert.match(text, /\.app-group > button:focus-visible/);
+  assert.match(text, /\.app-group button:focus-visible/);
   assert.match(text, /outline-offset: -3px/);
+  assert.match(text, /input\[type="checkbox"\]:focus-visible \+ span/);
+  assert.match(text, /\.date-picker-target:has/);
+  assert.match(dateNav, /date-picker-target/);
+  assert.match(dateNav, /今日に戻る/);
+  assert.match(dateNav, /min-h-11/);
   assert.match(text, /\.app-group button,[\s\S]*\.sheet-scroll button\s*\{\s*min-height: 44px;/);
 });
 
