@@ -84,7 +84,9 @@ fieldset.app-group {
   outline-offset: -3px;
 }
 
-.app-group fieldset button {
+.app-group button,
+.app-group a,
+.sheet-scroll button {
   min-height: 44px;
 }
 
