@@ -1,9 +1,8 @@
 import { useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, ChevronDown, Clock, Frown, Meh, Smile, X } from 'lucide-react';
 import { CATEGORIES, MOOD, STATUS } from '../constants.js';
-import { isValidDateKey } from '../utils/date.js';
+import { dateKeyFromDate, isValidDateKey } from '../utils/date.js';
 import {
-  clampNumber,
   createPlannedSnapshot,
   durationAfterStatusChange,
   isValidTime,
@@ -12,6 +11,10 @@ import {
   replacementTitleForEditing,
 } from '../utils/schedule.js';
 import { ModalDialog } from './ModalDialog.jsx';
+
+function isBlankValue(value) {
+  return value === null || value === undefined || (typeof value === 'string' && value.trim() === '');
+}
 
 export function RecordModal({ schedule, dateKey, onClose, onSave }) {
   const recordedPlan = recordedPlanForSchedule(schedule);
@@ -23,9 +26,11 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
   const [recordMode, setRecordMode] = useState(schedule.status !== STATUS.PENDING ? schedule.status : STATUS.AS_PLANNED);
   const [actualTitle, setActualTitle] = useState(() => replacementTitleForEditing(schedule));
   const [actualCategory, setActualCategory] = useState(schedule.actualCategory || recordedPlan.category || 'その他');
-  const [mood, setMood] = useState(schedule.mood || MOOD.NORMAL);
-  const [actualStress, setActualStress] = useState(schedule.actualStress ?? recordedPlan.plannedStress);
-  const [actualDuration, setActualDuration] = useState(schedule.actualDuration ?? (schedule.status === STATUS.SKIPPED ? 0 : recordedPlan.duration));
+  const [mood, setMood] = useState(schedule.mood ?? null);
+  const [actualStress, setActualStress] = useState(Number.isFinite(schedule.actualStress) ? schedule.actualStress : null);
+  const [actualDuration, setActualDuration] = useState(
+    schedule.status === STATUS.SKIPPED ? 0 : (schedule.actualDuration ?? ''),
+  );
   const [actualStartTime, setActualStartTime] = useState(schedule.actualStartTime || '');
   const [actualStartDateKey, setActualStartDateKey] = useState(schedule.actualStartDateKey || dateKey || '');
   const [deviationReason, setDeviationReason] = useState(schedule.deviationReason || '');
@@ -42,7 +47,10 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
   }, [actualTitle, recordMode, recordedPlan.title, schedule.actualTitle, schedule.status]);
 
   const selectMode = (nextMode) => {
-    setActualDuration((current) => durationAfterStatusChange(current, recordMode, nextMode, recordedPlan.duration));
+    setActualDuration((current) => {
+      const next = durationAfterStatusChange(current, recordMode, nextMode, recordedPlan.duration);
+      return next ?? '';
+    });
     setRecordMode(nextMode);
     setError('');
   };
@@ -53,9 +61,10 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
       return;
     }
 
+    const durationBlank = recordMode !== STATUS.SKIPPED && isBlankValue(actualDuration);
     const parsedDuration = recordMode === STATUS.SKIPPED ? 0 : parseActualDuration(actualDuration);
-    if (recordMode !== STATUS.SKIPPED && parsedDuration === null) {
-      setError('実際に費やした時間を0〜1440分の範囲で入力してください。');
+    if (recordMode !== STATUS.SKIPPED && !durationBlank && parsedDuration === null) {
+      setError('実際に費やした時間は0〜1440分の範囲で入力してください。覚えていなければ空欄で保存できます。');
       return;
     }
 
@@ -66,6 +75,11 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
 
     if (recordMode !== STATUS.SKIPPED && actualStartTime && !isValidDateKey(actualStartDateKey)) {
       setError('実際の開始日を正しい日付で入力してください。');
+      return;
+    }
+
+    if (recordMode !== STATUS.SKIPPED && actualStartTime && actualStartDateKey > dateKeyFromDate()) {
+      setError('実際の開始日に未来の日付は保存できません。');
       return;
     }
 
@@ -85,8 +99,8 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
       actualTitle: title,
       actualCategory: recordedCategory,
       mood,
-      actualStress: clampNumber(actualStress, 0, 100),
-      actualDuration: parsedDuration,
+      actualStress: Number.isFinite(actualStress) ? actualStress : null,
+      actualDuration: recordMode === STATUS.SKIPPED ? 0 : (durationBlank ? null : parsedDuration),
       actualStartTime: recordMode === STATUS.SKIPPED ? null : (actualStartTime || null),
       actualStartDateKey: recordMode === STATUS.SKIPPED || !actualStartTime ? null : actualStartDateKey,
       deviationReason: recordMode === STATUS.CHANGED || recordMode === STATUS.SKIPPED
@@ -114,7 +128,7 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
           <div>
             <p className="text-[8px] font-semibold tracking-[0.16em] text-indigo-500">RECORD</p>
             <h3 id="record-modal-title" className="mt-0.5 text-[16px] font-semibold tracking-[-0.02em] text-slate-900">実際どうだった？</h3>
-            <p className="mt-0.5 text-[9px] font-normal text-slate-400">評価ではなく、今日の現実を残す</p>
+            <p className="mt-0.5 text-[9px] font-normal text-slate-400">評価ではなく、この日の現実を残す</p>
           </div>
           <button type="button" onClick={onClose} aria-label="記録画面を閉じる" className="tap-target flex items-center justify-center rounded-full bg-slate-100 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600"><X className="h-4.5 w-4.5" /></button>
         </div>
@@ -146,9 +160,9 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
           {recordMode !== STATUS.SKIPPED && (
             <label className="block p-3.5">
               <span className="flex items-center justify-between gap-4">
-                <span><span className="block text-[12px] font-semibold text-slate-800">実際にかかった時間</span><span className="mt-0.5 block text-[8px] font-normal text-slate-400">予定は {recordedPlan.duration}分</span></span>
+                <span><span className="block text-[12px] font-semibold text-slate-800">実際にかかった時間 <span className="font-normal text-slate-400">（任意）</span></span><span className="mt-0.5 block text-[8px] font-normal text-slate-400">予定は {recordedPlan.duration}分。覚えていなければ空欄でOK</span></span>
                 <span className="relative flex shrink-0 items-center rounded-lg bg-slate-50 ring-1 ring-slate-200/80 focus-within:ring-indigo-300">
-                  <input type="number" inputMode="numeric" min="0" max="1440" step="5" value={actualDuration} onChange={(event) => { setActualDuration(event.target.value); setError(''); }} aria-label="実際にかかった時間（分）" className="w-[5.25rem] bg-transparent py-2 pl-3 pr-7 text-right text-base font-semibold text-slate-800 outline-none" />
+                  <input type="number" inputMode="numeric" min="0" max="1440" step="5" value={actualDuration ?? ''} onChange={(event) => { setActualDuration(event.target.value); setError(''); }} aria-label="実際にかかった時間（分・任意）" placeholder="—" className="w-[5.25rem] bg-transparent py-2 pl-3 pr-7 text-right text-base font-semibold text-slate-800 outline-none" />
                   <span className="pointer-events-none absolute right-2 text-[9px] font-medium text-slate-400">分</span>
                 </span>
               </span>
@@ -156,14 +170,21 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
           )}
 
           <div className="space-y-2.5 p-3.5">
-            <div className="flex items-end justify-between"><div><p className="text-[12px] font-semibold text-slate-800">実際の負荷</p><p className="mt-0.5 text-[8px] font-normal text-slate-400">予定では {recordedPlan.plannedStress}</p></div><span className={`text-[18px] font-semibold ${actualStress > 80 ? 'text-rose-500' : 'text-indigo-600'}`}>{actualStress}</span></div>
-            <input type="range" min="0" max="100" value={actualStress} onChange={(event) => setActualStress(Number(event.target.value))} className="reality-range w-full" />
-            <div className="flex justify-between text-[8px] font-medium text-slate-400"><span>楽だった</span><span>かなり重かった</span></div>
+            <div className="flex items-end justify-between gap-3"><div><p className="text-[12px] font-semibold text-slate-800">実際の負荷 <span className="font-normal text-slate-400">（任意）</span></p><p className="mt-0.5 text-[8px] font-normal text-slate-400">予定では {recordedPlan.plannedStress}。未記録は予定値で補いません</p></div><span className={`text-[18px] font-semibold ${actualStress === null ? 'text-slate-300' : actualStress > 80 ? 'text-rose-500' : 'text-indigo-600'}`}>{actualStress ?? '—'}</span></div>
+            {actualStress === null ? (
+              <button type="button" onClick={() => setActualStress(50)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] font-medium text-indigo-600">負荷を記録する</button>
+            ) : (
+              <>
+                <input type="range" min="0" max="100" value={actualStress} onChange={(event) => setActualStress(Number(event.target.value))} className="reality-range w-full" />
+                <div className="flex items-center justify-between text-[8px] font-medium text-slate-400"><span>楽だった</span><button type="button" onClick={() => setActualStress(null)} className="min-h-11 px-2 text-[8px] font-medium text-slate-400">未記録に戻す</button><span>かなり重かった</span></div>
+              </>
+            )}
           </div>
 
           <fieldset className="p-3.5">
-            <legend className="text-[12px] font-semibold text-slate-800">終わった時の気分</legend>
-            <div className="mt-2 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1"><MoodButton active={mood === MOOD.GOOD} onClick={() => setMood(MOOD.GOOD)} Icon={Smile} label="良い" /><MoodButton active={mood === MOOD.NORMAL} onClick={() => setMood(MOOD.NORMAL)} Icon={Meh} label="普通" /><MoodButton active={mood === MOOD.BAD} onClick={() => setMood(MOOD.BAD)} Icon={Frown} label="疲れた" /></div>
+            <legend className="text-[12px] font-semibold text-slate-800">終わった時の気分 <span className="font-normal text-slate-400">（任意）</span></legend>
+            <div className="mt-2 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1"><MoodButton active={mood === MOOD.GOOD} onClick={() => setMood((current) => current === MOOD.GOOD ? null : MOOD.GOOD)} Icon={Smile} label="良い" /><MoodButton active={mood === MOOD.NORMAL} onClick={() => setMood((current) => current === MOOD.NORMAL ? null : MOOD.NORMAL)} Icon={Meh} label="普通" /><MoodButton active={mood === MOOD.BAD} onClick={() => setMood((current) => current === MOOD.BAD ? null : MOOD.BAD)} Icon={Frown} label="疲れた" /></div>
+            <p className="mt-1.5 text-[8px] leading-relaxed text-slate-400">選ばなければ未記録のまま保存します。選択中の気分をもう一度押すと解除できます。</p>
           </fieldset>
         </section>
 
@@ -175,7 +196,7 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
             {recordMode !== STATUS.SKIPPED && (
               <div>
                 <div className="grid grid-cols-2 gap-3">
-                  <label className="block"><span className="mb-1.5 block text-[9px] font-medium text-slate-600">開始日</span><input type="date" value={actualStartDateKey} onChange={(event) => { setActualStartDateKey(event.target.value); setError(''); }} className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>
+                  <label className="block"><span className="mb-1.5 block text-[9px] font-medium text-slate-600">開始日</span><input type="date" value={actualStartDateKey} max={dateKeyFromDate()} onChange={(event) => { setActualStartDateKey(event.target.value); setError(''); }} className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>
                   <label className="block"><span className="mb-1.5 block text-[9px] font-medium text-slate-600">開始時刻</span><input type="time" value={actualStartTime} onChange={(event) => { setActualStartTime(event.target.value); setError(''); }} className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>
                 </div>
                 <p className="mt-1.5 text-[8px] leading-relaxed text-slate-400">覚えていなければ空欄でOKです。時刻を入れた時だけ開始日とセットで保存します。</p>
@@ -205,5 +226,5 @@ function ModeButton({ active, onClick, Icon, activeClass, label }) {
 }
 
 function MoodButton({ active, onClick, Icon, label }) {
-  return <button type="button" onClick={onClick} aria-pressed={active} className={`flex min-h-10 items-center justify-center gap-1 rounded-[0.65rem] px-1.5 text-[9px] font-medium transition ${active ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:bg-white/60'}`}><Icon className={`h-4 w-4 ${active ? 'text-indigo-500' : 'text-slate-400'}`} aria-hidden="true" />{label}</button>;
+  return <button type="button" onClick={onClick} aria-pressed={active} className={`flex min-h-11 items-center justify-center gap-1 rounded-[0.65rem] px-1.5 text-[9px] font-medium transition ${active ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:bg-white/60'}`}><Icon className={`h-4 w-4 ${active ? 'text-indigo-500' : 'text-slate-400'}`} aria-hidden="true" />{label}</button>;
 }
