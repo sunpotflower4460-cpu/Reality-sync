@@ -1,7 +1,7 @@
 import { BellRing, ChevronRight, Clock3, Frown, Meh, Smile } from 'lucide-react';
 import { MOOD, STATUS } from '../constants.js';
 import { formatShortDateLabel, isToday } from '../utils/date.js';
-import { sortSchedulesByTime } from '../utils/schedule.js';
+import { recordedPlanForSchedule, timeToHours } from '../utils/schedule.js';
 import { StressGraph } from './StressGraph.jsx';
 
 function MoodIcon({ mood }) {
@@ -18,21 +18,28 @@ function statusStyle(status) {
   return { accent: 'bg-indigo-300', badge: 'bg-slate-100 text-slate-500', label: '未記録' };
 }
 
-function TimelineTitle({ schedule, recorded }) {
+function TimelineTitle({ schedule, recorded, planned }) {
   if (!recorded) return schedule.title;
   if (schedule.status === STATUS.CHANGED) {
-    return <span className="flex flex-col"><span className="text-[8px] font-normal text-slate-400 line-through">{schedule.title}</span><span className="break-words">{schedule.actualTitle}<span className="ml-1 text-[8px] font-medium text-amber-600">{schedule.actualCategory ? `・${schedule.actualCategory}` : ''}</span></span></span>;
+    return <span className="flex flex-col"><span className="text-[8px] font-normal text-slate-400 line-through">{planned.title}</span><span className="break-words">{schedule.actualTitle}<span className="ml-1 text-[8px] font-medium text-amber-600">{schedule.actualCategory ? `・${schedule.actualCategory}` : ''}</span></span></span>;
   }
-  if (schedule.status === STATUS.SKIPPED) return <span className="text-slate-500 line-through">{schedule.title}</span>;
-  const recordedTitle = schedule.actualTitle || schedule.title;
-  const recordedCategory = schedule.actualCategory || schedule.category;
-  const planChangedAfterRecord = recordedTitle !== schedule.title || recordedCategory !== schedule.category;
-  if (!planChangedAfterRecord) return schedule.title;
+  if (schedule.status === STATUS.SKIPPED) return <span className="text-slate-500 line-through">{planned.title}</span>;
+  const recordedTitle = schedule.actualTitle || planned.title;
+  const recordedCategory = schedule.actualCategory || planned.category;
+  const planChangedAfterRecord = planned.title !== schedule.title || planned.category !== schedule.category;
+  if (!planChangedAfterRecord) return recordedTitle;
   return <span className="flex flex-col"><span className="text-[8px] font-normal text-slate-400">現在: {schedule.title}</span><span className="break-words">記録時: {recordedTitle}<span className="ml-1 text-[8px] font-medium text-emerald-700">{recordedCategory ? `・${recordedCategory}` : ''}</span></span></span>;
 }
 
+function sortSchedulesByRecordedPlanTime(schedules) {
+  const list = Array.isArray(schedules) ? schedules : [];
+  return [...list].sort((a, b) => (
+    timeToHours(recordedPlanForSchedule(a)?.time) - timeToHours(recordedPlanForSchedule(b)?.time)
+  ));
+}
+
 export function TrackView({ schedules, dueSchedules = [], dateKey, canRecord = true, onRecord }) {
-  const orderedSchedules = sortSchedulesByTime(schedules);
+  const orderedSchedules = sortSchedulesByRecordedPlanTime(schedules);
   const firstDue = canRecord ? (dueSchedules[0] ?? null) : null;
   const today = isToday(dateKey);
 
@@ -84,6 +91,10 @@ export function TrackView({ schedules, dueSchedules = [], dateKey, canRecord = t
         <div className="relative ml-2 space-y-2.5 border-l border-indigo-100/80 pb-2">
           {orderedSchedules.map((schedule) => {
             const recorded = schedule.status !== STATUS.PENDING;
+            const planned = recorded ? recordedPlanForSchedule(schedule) : schedule;
+            const plannedTime = planned?.time ?? schedule.time;
+            const plannedTitle = planned?.title ?? schedule.title;
+            const plannedStress = planned?.plannedStress ?? schedule.plannedStress;
             const actualDateDiffers = schedule.actualStartDateKey && schedule.actualStartDateKey !== dateKey;
             const style = statusStyle(schedule.status);
             const cardClassName = `app-card relative w-full overflow-hidden rounded-[1.05rem] px-3 py-2.5 text-left ${canRecord ? 'transition hover:shadow-[0_10px_28px_rgba(15,23,42,0.055)] active:scale-[0.99]' : 'cursor-default'}`;
@@ -91,7 +102,7 @@ export function TrackView({ schedules, dueSchedules = [], dateKey, canRecord = t
               <>
                 <span className={`absolute inset-y-3 left-0 w-[2px] rounded-r-full ${style.accent}`} aria-hidden="true" />
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 text-[13px] font-semibold text-slate-800"><TimelineTitle schedule={schedule} recorded={recorded} /></div>
+                  <div className="min-w-0 text-[13px] font-semibold text-slate-800"><TimelineTitle schedule={schedule} recorded={recorded} planned={planned} /></div>
                   <div className="flex shrink-0 items-center gap-1.5">
                     {recorded && <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-50"><MoodIcon mood={schedule.mood} /></span>}
                     <span className={`rounded-full px-2 py-1 text-[8px] font-semibold ${style.badge}`}>{style.label}</span>
@@ -110,12 +121,12 @@ export function TrackView({ schedules, dueSchedules = [], dateKey, canRecord = t
                 <div className="mt-2 flex min-h-8 items-center justify-between gap-3 border-t border-slate-100 pt-2">
                   {recorded ? (
                     <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-[9px] font-medium text-slate-400">
-                      <span>予定負荷 {schedule.plannedStress}</span>
+                      <span>予定負荷 {plannedStress}</span>
                       <span className={schedule.actualStress > 80 ? 'text-rose-500' : schedule.actualStress === null ? 'text-slate-400' : 'text-indigo-600'}>実負荷 {schedule.actualStress ?? '—'}</span>
                       <span className="text-slate-600">実時間 {schedule.actualDuration === null ? '—' : `${schedule.actualDuration}分`}</span>
                     </div>
                   ) : (
-                    <span className="text-[9px] font-medium text-slate-400">予定負荷 {schedule.plannedStress}</span>
+                    <span className="text-[9px] font-medium text-slate-400">予定負荷 {plannedStress}</span>
                   )}
                   <span className={`flex shrink-0 items-center gap-0.5 text-[9px] font-semibold ${canRecord ? (recorded ? 'text-slate-400' : 'text-indigo-600') : 'text-slate-300'}`}>{canRecord ? (recorded ? '編集' : '記録する') : '予定'}{canRecord && <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />}</span>
                 </div>
@@ -125,14 +136,14 @@ export function TrackView({ schedules, dueSchedules = [], dateKey, canRecord = t
               <article key={schedule.id} className="relative pl-4">
                 <div className={`absolute -left-[4px] top-4 h-2 w-2 rounded-full ring-[3px] ring-[#f6f7fb] ${style.accent}`} aria-hidden="true" />
                 <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold text-indigo-600">
-                  <time dateTime={`${dateKey}T${schedule.time}`}>{schedule.time}</time>
+                  <time dateTime={`${dateKey}T${plannedTime}`}>{plannedTime}</time>
                   {recorded && schedule.actualStartTime && schedule.status !== STATUS.SKIPPED && <><span className="text-slate-300">→</span><span className="flex items-center gap-1 text-pink-600"><Clock3 className="h-3 w-3" aria-hidden="true" />{actualDateDiffers ? `${formatShortDateLabel(schedule.actualStartDateKey)} ` : ''}{schedule.actualStartTime}</span></>}
                 </div>
 
                 {canRecord ? (
-                  <button type="button" onClick={() => onRecord(schedule)} className={cardClassName} aria-label={`${schedule.time} ${schedule.title} の実績を${recorded ? '編集' : '記録'}する`}>{cardContent}</button>
+                  <button type="button" onClick={() => onRecord(schedule)} className={cardClassName} aria-label={`${plannedTime} ${plannedTitle} の実績を${recorded ? '編集' : '記録'}する`}>{cardContent}</button>
                 ) : (
-                  <div className={cardClassName} aria-label={`${schedule.time} ${schedule.title}。未来日のため実績はまだ記録できません`}>{cardContent}</div>
+                  <div className={cardClassName} aria-label={`${plannedTime} ${plannedTitle}。未来日のため実績はまだ記録できません`}>{cardContent}</div>
                 )}
               </article>
             );
