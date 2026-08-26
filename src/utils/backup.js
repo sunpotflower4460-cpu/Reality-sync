@@ -1,59 +1,12 @@
 import { BACKUP_FORMAT, BACKUP_VERSION } from '../constants.js';
-import { normalizeContextRule } from './contextRule.js';
 import { isValidDateKey } from './date.js';
-import { normalizeExperiments, normalizePlanAdjustment, normalizeRetentionSnapshot } from './experiment.js';
-import { normalizeReminderPreferences } from './reminder.js';
-import { normalizeScheduleStore } from './storage.js';
-import { normalizeTemplates } from './template.js';
+import { normalizeExperiments } from './experiment.js';
+import { parseStoredExperimentsForPersistence } from './experimentStorage.js';
+import { normalizeReminderPreferences, REMINDER_DELAY_OPTIONS } from './reminder.js';
+import { normalizeScheduleStore, parseStoredScheduleStoreResult } from './storage.js';
+import { normalizeTemplates, parseStoredTemplatesResult } from './template.js';
 
 function countSchedules(store) { return Object.values(store.days).reduce((sum, schedules) => sum + schedules.length, 0); }
-function rawScheduleCount(days) { return Object.values(days).reduce((sum, schedules) => sum + schedules.length, 0); }
-function experimentTrialCount(experiments) { return experiments.reduce((sum, experiment) => sum + (Array.isArray(experiment.trials) ? experiment.trials.length : 0), 0); }
-
-function experimentMetadataPreserved(rawExperiments, experiments) {
-  for (let index = 0; index < rawExperiments.length; index += 1) {
-    const raw = rawExperiments[index];
-    const normalized = experiments[index];
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !normalized) return false;
-
-    if (raw.planAdjustment !== undefined && raw.planAdjustment !== null) {
-      const validatedAdjustment = normalizePlanAdjustment(raw.planAdjustment);
-      if (!validatedAdjustment || JSON.stringify(validatedAdjustment) !== JSON.stringify(normalized.planAdjustment)) return false;
-    }
-
-    if (raw.contextRule !== undefined && raw.contextRule !== null) {
-      const validatedRule = normalizeContextRule(raw.contextRule);
-      if (!validatedRule || JSON.stringify(validatedRule) !== JSON.stringify(normalized.contextRule)) return false;
-    }
-    if (raw.contextRule === null && normalized.contextRule !== null) return false;
-
-    if (raw.decisionDateKey !== undefined && raw.decisionDateKey !== null) {
-      if (!isValidDateKey(raw.decisionDateKey) || normalized.decisionDateKey !== raw.decisionDateKey) return false;
-    }
-
-    if (raw.learningRootId !== undefined) {
-      if (typeof raw.learningRootId !== 'string' || !raw.learningRootId.trim() || normalized.learningRootId !== raw.learningRootId.trim()) return false;
-    }
-    if (raw.parentExperimentId !== undefined) {
-      const parent = raw.parentExperimentId === null ? null : (typeof raw.parentExperimentId === 'string' ? raw.parentExperimentId.trim() : null);
-      if (raw.parentExperimentId !== null && !parent) return false;
-      if (normalized.parentExperimentId !== parent) return false;
-    }
-    if (raw.learningVersion !== undefined) {
-      const version = Number(raw.learningVersion);
-      if (!Number.isInteger(version) || version < 1 || version > 999 || normalized.learningVersion !== version) return false;
-    }
-    if (raw.revalidationReason !== undefined) {
-      if (typeof raw.revalidationReason !== 'string' || normalized.revalidationReason !== raw.revalidationReason.trim()) return false;
-    }
-    if (raw.sourceRetention !== undefined && raw.sourceRetention !== null) {
-      const snapshot = normalizeRetentionSnapshot(raw.sourceRetention);
-      if (!snapshot || JSON.stringify(snapshot) !== JSON.stringify(normalized.sourceRetention)) return false;
-    }
-    if (raw.sourceRetention === null && normalized.sourceRetention !== null) return false;
-  }
-  return true;
-}
 
 function experimentLineageValid(experiments) {
   const byId = new Map(experiments.map((experiment) => [experiment.id, experiment]));
@@ -64,6 +17,20 @@ function experimentLineageValid(experiments) {
     if ((parent.learningRootId || parent.id) !== (experiment.learningRootId || experiment.id)) return false;
     if ((experiment.learningVersion || 1) <= (parent.learningVersion || 1)) return false;
   }
+  return true;
+}
+
+function reminderPreferencesPreserved(raw, normalized) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+  if (raw.enabled !== undefined && typeof raw.enabled !== 'boolean') return false;
+  if (raw.browserNotifications !== undefined && typeof raw.browserNotifications !== 'boolean') return false;
+  if (raw.delayMinutes !== undefined) {
+    if (raw.delayMinutes === null || (typeof raw.delayMinutes === 'string' && raw.delayMinutes.trim() === '')) return false;
+    const delay = Number(raw.delayMinutes);
+    if (!REMINDER_DELAY_OPTIONS.includes(delay) || normalized.delayMinutes !== delay) return false;
+  }
+  if (typeof raw.enabled === 'boolean' && normalized.enabled !== raw.enabled) return false;
+  if (typeof raw.browserNotifications === 'boolean' && normalized.browserNotifications !== raw.browserNotifications) return false;
   return true;
 }
 
@@ -97,23 +64,28 @@ export function parseBackup(raw) {
     if (!isValidDateKey(dateKey) || !Array.isArray(schedules)) return { ok: false, error: '予定・実績データに不正な日付または日別データがあります。' };
   }
 
-  const scheduleStore = normalizeScheduleStore(parsed.scheduleStore);
-  if (scheduleStore.version !== parsed.scheduleStore.version) return { ok: false, error: '予定・実績データの保存バージョンに対応していません。' };
-  if (countSchedules(scheduleStore) !== rawScheduleCount(parsed.scheduleStore.days)) return { ok: false, error: '予定・実績データに復元できない項目があります。' };
+  const scheduleResult = parseStoredScheduleStoreResult(JSON.stringify(parsed.scheduleStore));
+  if (!scheduleResult.ok) {
+    if (scheduleResult.unsupportedVersion !== null) return { ok: false, error: '予定・実績データの保存バージョンに対応していません。' };
+    return { ok: false, error: '予定・実績データに復元できない項目があります。' };
+  }
+  const scheduleStore = scheduleResult.store;
 
-  const templates = normalizeTemplates(parsed.templates);
-  if (templates.length !== parsed.templates.length) return { ok: false, error: 'テンプレートデータに復元できない項目があります。' };
+  const templateResult = parseStoredTemplatesResult(JSON.stringify(parsed.templates));
+  if (!templateResult.ok) return { ok: false, error: 'テンプレートデータに復元できない項目があります。' };
+  const templates = templateResult.templates;
+
   const rawExperiments = parsed.experiments ?? [];
-  const experiments = normalizeExperiments(rawExperiments);
-  if (
-    experiments.length !== rawExperiments.length
-    || experimentTrialCount(experiments) !== experimentTrialCount(rawExperiments)
-    || !experimentMetadataPreserved(rawExperiments, experiments)
-    || !experimentLineageValid(experiments)
-  ) {
+  const experimentResult = parseStoredExperimentsForPersistence(JSON.stringify(rawExperiments));
+  if (!experimentResult.ok || !experimentLineageValid(experimentResult.experiments)) {
     return { ok: false, error: '実験履歴に復元できない項目があります。' };
   }
+  const experiments = experimentResult.experiments;
+
   const reminderPreferences = normalizeReminderPreferences(parsed.reminderPreferences);
+  if (!reminderPreferencesPreserved(parsed.reminderPreferences, reminderPreferences)) {
+    return { ok: false, error: 'リマインダー設定に復元できない項目があります。' };
+  }
 
   return {
     ok: true,
