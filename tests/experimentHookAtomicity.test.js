@@ -32,15 +32,25 @@ test('starting an experiment rechecks active candidate identity inside the atomi
   assert.match(block, /createUniqueId\('experiment', current\.map\(\(experiment\) => experiment\.id\)\)/);
 });
 
-test('revalidation derives source, active-lineage guard, id and next version from the atomic current list', () => {
+test('revalidation requires the exact reviewed parent revision and derives lineage facts atomically', () => {
   const hook = source('src/hooks/useExperiments.js');
   const start = hook.indexOf('const startRevalidation');
   const end = hook.indexOf('const captureTrial', start);
   const block = hook.slice(start, end);
+  assert.match(block, /const sourceRevision = typeof options\.sourceRevision === 'string'/);
+  assert.match(block, /if \(!sourceRevision\) return false/);
   assert.match(block, /const source = current\.find\(\(experiment\) => experiment\.id === sourceExperimentId\)/);
+  assert.match(block, /!source \|\| JSON\.stringify\(source\) !== sourceRevision/);
   assert.match(block, /experiment\.status === 'active' && \(experiment\.learningRootId \|\| experiment\.id\) === rootId/);
   assert.match(block, /createUniqueId\('experiment', current\.map\(\(item\) => item\.id\)\)/);
   assert.match(block, /learningVersion: nextLearningVersion\(current, source\)/);
+});
+
+test('revalidation modal snapshots the parent revision at open time and passes it to submit', () => {
+  const modal = source('src/components/RevalidationSetupModal.jsx');
+  assert.match(modal, /const sourceRevisionRef = useRef\(JSON\.stringify\(sourceExperiment\)\)/);
+  assert.match(modal, /sourceRevision: sourceRevisionRef\.current/);
+  assert.match(modal, /親の学習履歴または最新の「今日」の傾向/);
 });
 
 test('trial capture cannot pass the target count or accept a forged record identity', () => {
