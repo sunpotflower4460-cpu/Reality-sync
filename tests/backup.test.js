@@ -61,7 +61,7 @@ test('structured adopted experiment metadata survives backup round-trip', () => 
   assert.equal(parsed.data.experiments[0].decisionDateKey, '2026-09-01');
 });
 
-test('backup rejects applied-experiment markers whose provenance is missing or not adopted', () => {
+test('backup preserves orphaned applied-experiment markers from older app versions but rejects contradictory live provenance', () => {
   const base = {
     format: 'reality-sync-backup',
     version: 1,
@@ -79,8 +79,8 @@ test('backup rejects applied-experiment markers whose provenance is missing or n
   };
 
   const missing = parseBackup(JSON.stringify({ ...base, experiments: [] }));
-  assert.equal(missing.ok, false);
-  assert.match(missing.error, /適用済みの学習/);
+  assert.equal(missing.ok, true);
+  assert.deepEqual(missing.data.scheduleStore.days['2026-09-02'][0].appliedExperimentIds, ['exp-source']);
 
   const active = parseBackup(JSON.stringify({
     ...base,
@@ -94,7 +94,7 @@ test('backup rejects applied-experiment markers whose provenance is missing or n
   assert.match(active.error, /適用済みの学習/);
 });
 
-test('backup rejects template markers whose adopted experiment provenance is missing', () => {
+test('backup preserves legacy orphaned template markers without inventing missing experiment details', () => {
   const parsed = parseBackup(JSON.stringify({
     format: 'reality-sync-backup',
     version: 1,
@@ -110,8 +110,8 @@ test('backup rejects template markers whose adopted experiment provenance is mis
     experiments: [],
     reminderPreferences: { enabled: true, delayMinutes: 15, browserNotifications: false },
   }));
-  assert.equal(parsed.ok, false);
-  assert.match(parsed.error, /適用済みの学習/);
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.data.templates[0].schedules[0].appliedExperimentIds, ['missing-adopted-experiment']);
 });
 
 test('older v1 backups without experiment history remain readable as an empty experiment list', () => {
