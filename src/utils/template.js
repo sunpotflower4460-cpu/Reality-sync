@@ -68,6 +68,10 @@ function storedTemplateSchedulePreserved(raw, normalized) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !normalized) return false;
   if (Object.keys(raw).some((key) => !TEMPLATE_SCHEDULE_FIELDS.has(key))) return false;
   if (!templateScheduleInputValid(raw)) return false;
+  // Stored template facts are versioned app data, not a loose form payload.
+  // Reject type-changing coercion such as "60" -> 60 so future writes cannot
+  // silently rewrite a fact that was not stored in the current schema type.
+  if (typeof raw.duration !== 'number' || typeof raw.plannedStress !== 'number') return false;
 
   const duration = finiteNumber(raw.duration);
   const plannedStress = finiteNumber(raw.plannedStress);
