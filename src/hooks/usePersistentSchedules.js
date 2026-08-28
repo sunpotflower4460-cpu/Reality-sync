@@ -105,8 +105,8 @@ export function usePersistentSchedules(dateKey) {
 
   useEffect(() => {
     if (persistenceBlocked || writeConflict || !needsWrite) return;
+    let persistedStore = store;
     try {
-      let persistedStore = store;
       if (dirtyDateKeys.length > 0) {
         const latest = parseStoredScheduleStoreResult(window.localStorage.getItem(STORAGE_KEY));
         if (!latest.ok) {
@@ -134,27 +134,38 @@ export function usePersistentSchedules(dateKey) {
       }
 
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persistedStore));
-      window.localStorage.removeItem(LEGACY_STORAGE_KEY);
-
-      applyState((current) => {
-        const written = new Set(dirtyDateKeys);
-        const remainingDirty = current.dirtyDateKeys.filter((key) => !written.has(key));
-        const remainingBaseDays = Object.fromEntries(
-          remainingDirty.map((key) => [key, current.baseDays[key] ?? []]),
-        );
-        return {
-          ...current,
-          store: remainingDirty.length > 0
-            ? overlayDirtyDays(persistedStore, current.store, remainingDirty)
-            : persistedStore,
-          writeFailed: false,
-          needsWrite: remainingDirty.length > 0,
-          dirtyDateKeys: remainingDirty,
-          baseDays: remainingBaseDays,
-        };
-      });
     } catch {
       applyState((current) => current.writeFailed ? current : { ...current, writeFailed: true });
+      return;
+    }
+
+    // The primary versioned store is already durable at this point. Commit the
+    // successful write before attempting to remove an obsolete legacy key, so a
+    // cleanup-only failure cannot make the next retry conflict with our own data.
+    applyState((current) => {
+      const written = new Set(dirtyDateKeys);
+      const remainingDirty = current.dirtyDateKeys.filter((key) => !written.has(key));
+      const remainingBaseDays = Object.fromEntries(
+        remainingDirty.map((key) => [key, current.baseDays[key] ?? []]),
+      );
+      return {
+        ...current,
+        store: remainingDirty.length > 0
+          ? overlayDirtyDays(persistedStore, current.store, remainingDirty)
+          : persistedStore,
+        writeFailed: false,
+        needsWrite: remainingDirty.length > 0,
+        dirtyDateKeys: remainingDirty,
+        baseDays: remainingBaseDays,
+      };
+    });
+
+    try {
+      window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+    } catch {
+      // Legacy data is ignored whenever the versioned store exists. Failure to
+      // remove this obsolete copy must not turn a successful primary save into a
+      // write failure or trigger a self-conflict on retry.
     }
   }, [applyState, baseDays, dirtyDateKeys, needsWrite, persistenceBlocked, store, writeConflict]);
 
