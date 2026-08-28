@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, ChevronDown, Clock, Frown, Meh, Smile, X } from 'lucide-react';
 import { CATEGORIES, MOOD, STATUS } from '../constants.js';
 import { dateKeyFromDate, isValidDateKey } from '../utils/date.js';
@@ -16,6 +16,10 @@ function isBlankValue(value) {
   return value === null || value === undefined || (typeof value === 'string' && value.trim() === '');
 }
 
+function draftValueKey(value) {
+  return value === null || value === undefined ? '' : String(value);
+}
+
 export function RecordModal({ schedule, dateKey, stale = false, onClose, onSave }) {
   const recordedPlan = recordedPlanForSchedule(schedule);
   const planReferenceLabel = schedule.plannedSnapshot
@@ -24,24 +28,46 @@ export function RecordModal({ schedule, dateKey, stale = false, onClose, onSave 
       ? '予定'
       : '現在の予定（記録時は不明）';
   const hasRecordedStress = Number.isFinite(schedule.actualStress);
-  const [recordMode, setRecordMode] = useState(schedule.status !== STATUS.PENDING ? schedule.status : STATUS.AS_PLANNED);
-  const [actualTitle, setActualTitle] = useState(() => replacementTitleForEditing(schedule));
-  const [actualCategory, setActualCategory] = useState(
-    schedule.status === STATUS.CHANGED ? (schedule.actualCategory ?? '') : '',
-  );
-  const [mood, setMood] = useState(schedule.mood ?? null);
-  const [actualStress, setActualStress] = useState(hasRecordedStress ? schedule.actualStress : null);
+  const initialRecordMode = schedule.status !== STATUS.PENDING ? schedule.status : STATUS.AS_PLANNED;
+  const initialActualTitle = replacementTitleForEditing(schedule);
+  const initialActualCategory = schedule.status === STATUS.CHANGED ? (schedule.actualCategory ?? '') : '';
+  const initialMood = schedule.mood ?? null;
+  const initialActualStress = hasRecordedStress ? schedule.actualStress : null;
+  const initialActualDuration = schedule.status === STATUS.SKIPPED ? 0 : (schedule.actualDuration ?? '');
+  const initialActualStartTime = schedule.actualStartTime || '';
+  const initialActualStartDateKey = schedule.actualStartDateKey || (schedule.actualStartTime ? '' : (dateKey || ''));
+  const initialDeviationReason = schedule.deviationReason || '';
+  const [recordMode, setRecordMode] = useState(initialRecordMode);
+  const [actualTitle, setActualTitle] = useState(initialActualTitle);
+  const [actualCategory, setActualCategory] = useState(initialActualCategory);
+  const [mood, setMood] = useState(initialMood);
+  const [actualStress, setActualStress] = useState(initialActualStress);
   const [stressEditing, setStressEditing] = useState(hasRecordedStress);
   const [stressDraft, setStressDraft] = useState(hasRecordedStress ? schedule.actualStress : 50);
-  const [actualDuration, setActualDuration] = useState(
-    schedule.status === STATUS.SKIPPED ? 0 : (schedule.actualDuration ?? ''),
-  );
-  const [actualStartTime, setActualStartTime] = useState(schedule.actualStartTime || '');
-  const [actualStartDateKey, setActualStartDateKey] = useState(
-    schedule.actualStartDateKey || (schedule.actualStartTime ? '' : (dateKey || '')),
-  );
-  const [deviationReason, setDeviationReason] = useState(schedule.deviationReason || '');
+  const [actualDuration, setActualDuration] = useState(initialActualDuration);
+  const [actualStartTime, setActualStartTime] = useState(initialActualStartTime);
+  const [actualStartDateKey, setActualStartDateKey] = useState(initialActualStartDateKey);
+  const [deviationReason, setDeviationReason] = useState(initialDeviationReason);
   const [error, setError] = useState('');
+  const dirty = recordMode !== initialRecordMode
+    || actualTitle !== initialActualTitle
+    || actualCategory !== initialActualCategory
+    || mood !== initialMood
+    || actualStress !== initialActualStress
+    || draftValueKey(actualDuration) !== draftValueKey(initialActualDuration)
+    || actualStartTime !== initialActualStartTime
+    || actualStartDateKey !== initialActualStartDateKey
+    || deviationReason !== initialDeviationReason;
+
+  useEffect(() => {
+    if (!dirty || window.location.protocol === 'file:') return undefined;
+    const guardUnsavedInput = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', guardUnsavedInput);
+    return () => window.removeEventListener('beforeunload', guardUnsavedInput);
+  }, [dirty]);
 
   const title = useMemo(() => {
     if (recordMode === STATUS.AS_PLANNED) {
@@ -52,6 +78,11 @@ export function RecordModal({ schedule, dateKey, stale = false, onClose, onSave 
     if (recordMode === STATUS.SKIPPED) return 'スキップ';
     return actualTitle.trim();
   }, [actualTitle, recordMode, recordedPlan.title, schedule.actualTitle, schedule.status]);
+
+  const requestClose = () => {
+    if (dirty && !window.confirm('入力途中の実績があります。保存せずに閉じますか？')) return;
+    onClose();
+  };
 
   const selectMode = (nextMode) => {
     setActualDuration((current) => {
@@ -148,7 +179,7 @@ export function RecordModal({ schedule, dateKey, stale = false, onClose, onSave 
 
   return (
     <ModalDialog
-      onClose={onClose}
+      onClose={requestClose}
       labelledBy="record-modal-title"
       placement="sheet"
       className="sheet-scroll max-h-[94dvh] w-full max-w-sm overflow-y-auto rounded-t-[1.65rem] rounded-b-none bg-[#f7f8fb] shadow-[0_22px_64px_rgba(15,23,42,0.24)] sm:rounded-[1.65rem]"
@@ -161,7 +192,7 @@ export function RecordModal({ schedule, dateKey, stale = false, onClose, onSave 
             <h3 id="record-modal-title" className="mt-0.5 text-[16px] font-semibold tracking-[-0.02em] text-slate-900">実際どうだった？</h3>
             <p className="mt-0.5 text-[9px] font-normal text-slate-400">評価ではなく、この日の現実を残す</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="記録画面を閉じる" className="tap-target flex items-center justify-center rounded-full bg-slate-100 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600"><X className="h-4.5 w-4.5" /></button>
+          <button type="button" onClick={requestClose} aria-label="記録画面を閉じる" className="tap-target flex items-center justify-center rounded-full bg-slate-100 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600"><X className="h-4.5 w-4.5" /></button>
         </div>
       </div>
 
