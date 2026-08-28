@@ -25,6 +25,14 @@ test('service worker scopes runtime caching, awaits writes and bounds old hashed
   assert.match(worker, /Response\.error\(\)/);
 });
 
+test('service worker activation deletes only obsolete RealitySync-owned caches', async () => {
+  const worker = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
+  assert.match(worker, /const CACHE_PREFIX = 'reality-sync-shell-'/);
+  assert.match(worker, /const CACHE_NAME = `\$\{CACHE_PREFIX\}v3`/);
+  assert.match(worker, /key\.startsWith\(CACHE_PREFIX\) && key !== CACHE_NAME/);
+  assert.doesNotMatch(worker, /keys\.filter\(\(key\) => key !== CACHE_NAME\)/);
+});
+
 test('navigation caching uses canonical app-shell keys instead of accumulating query-specific HTML snapshots', async () => {
   const worker = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
   assert.match(worker, /async function putNavigationResponse\(response\)/);
