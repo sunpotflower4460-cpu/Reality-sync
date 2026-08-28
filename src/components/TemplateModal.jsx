@@ -33,8 +33,9 @@ export function TemplateModal({ templates, currentSchedules, onClose, onSaveTemp
   };
 
   const deleteTemplate = (template) => {
+    const reviewedRevision = JSON.stringify(template);
     if (!window.confirm(`「${template.name}」を削除しますか？`)) return;
-    const deleted = onDeleteTemplate(template.id);
+    const deleted = onDeleteTemplate(template.id, reviewedRevision);
     if (deleted === false) {
       setError('削除直前にテンプレートの保存状態が変わりました。最新の一覧を確認してからもう一度削除してください。');
     }
