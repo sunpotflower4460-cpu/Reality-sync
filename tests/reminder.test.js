@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { STATUS } from '../src/constants.js';
 import {
   getDuePendingSchedules,
@@ -41,6 +42,15 @@ test('due reminders only include today pending plans after the configured delay'
   assert.deepEqual(due.map((schedule) => schedule.id), ['due']);
   assert.deepEqual(getDuePendingSchedules(schedules, '2026-08-22', now, { enabled: true, delayMinutes: 15 }), []);
   assert.deepEqual(getDuePendingSchedules(schedules, '2026-08-23', now, { enabled: false, delayMinutes: 15 }), []);
+});
+
+test('browser reminder monitoring reads today plans independently when another date is displayed', () => {
+  const hook = readFileSync(new URL('../src/hooks/useDueRecordReminders.js', import.meta.url), 'utf8');
+  assert.match(hook, /if \(dateKey === todayKey\) return schedules;/);
+  assert.match(hook, /return readTodaySchedules\(todayKey\);/);
+  assert.match(hook, /parseStoredScheduleStoreResult\(window\.localStorage\.getItem\(STORAGE_KEY\)\)/);
+  assert.match(hook, /getDuePendingSchedules\(notificationSourceSchedules, todayKey, now, preferences\)/);
+  assert.match(hook, /reminderNotificationKey\(todayKey, schedule\.id\)/);
 });
 
 test('reminder notification keys are date scoped and old-day dedupe keys are discarded', () => {
