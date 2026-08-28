@@ -37,6 +37,19 @@ test('cross-tab reminder dedupe merges retained remote keys and verifies the mer
   assert.match(block, /return merged\.every\(\(key\) => readBack\.includes\(key\)\)/);
 });
 
+test('cross-tab backup restore clears the in-memory notification ledger when the persisted ledger is removed', () => {
+  const hook = source('src/hooks/useDueRecordReminders.js');
+  const start = hook.indexOf('const resetAfterExternalRestore');
+  const end = hook.indexOf('const dueSchedules', start);
+  const block = hook.slice(start, end);
+  assert.ok(start >= 0, 'external restore listener should exist');
+  assert.match(block, /event\.key !== REMINDER_NOTIFIED_STORAGE_KEY \|\| event\.newValue !== null/);
+  assert.match(block, /sessionNotifiedRef\.current\.clear\(\)/);
+  assert.match(block, /setNow\(new Date\(\)\)/);
+  assert.match(block, /window\.addEventListener\('storage', resetAfterExternalRestore\)/);
+  assert.match(block, /window\.removeEventListener\('storage', resetAfterExternalRestore\)/);
+});
+
 test('cross-midnight carryover notifications retain the previous-day dedupe key for the whole notification pass', () => {
   const hook = source('src/hooks/useDueRecordReminders.js');
   assert.match(hook, /const retainedDateKeys = \[todayKey, previousDateKey\]/);
