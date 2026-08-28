@@ -115,3 +115,23 @@ test('synchronous preflight read failures also keep the pending write marker for
     );
   }
 });
+
+test('once a storage conflict is frozen, later malformed storage events cannot disable rescue export', () => {
+  const handlers = [
+    ['src/hooks/usePersistentSchedules.js', 'const syncFromStorage = (event) => {'],
+    ['src/hooks/useScheduleTemplates.js', 'const syncTemplates = (event) => {'],
+    ['src/hooks/useExperiments.js', 'const sync = (event) => {'],
+    ['src/hooks/useReminderPreferences.js', 'const syncPreferences = (event) => {'],
+  ];
+
+  for (const [path, marker] of handlers) {
+    const handler = bracedBlockAfter(source(path), marker);
+    const conflictGuard = handler.indexOf('if (current.writeConflict) return current;');
+    const invalidGuard = handler.indexOf('if (!result.ok) {');
+    assert.ok(conflictGuard >= 0, `${path} should freeze conflict state against later events`);
+    assert.ok(
+      conflictGuard < invalidGuard,
+      `${path} must ignore malformed remote values after conflict before adding persistenceBlocked`,
+    );
+  }
+});
