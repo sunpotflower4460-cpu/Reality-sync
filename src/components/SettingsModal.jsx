@@ -17,7 +17,11 @@ import {
 import { APP_VERSION, SUPPORT_PAGE_URL } from '../config/app.js';
 import { MAX_BACKUP_BYTES, serializeBackup, parseBackup } from '../utils/backup.js';
 import { REMINDER_DELAY_OPTIONS } from '../utils/reminder.js';
-import { BACKUP_RESTORED_EVENT, persistRestoredBackup } from '../utils/restore.js';
+import {
+  BACKUP_RESTORED_EVENT,
+  eraseStoredRealitySyncData,
+  persistRestoredBackup,
+} from '../utils/restore.js';
 import { ModalDialog } from './ModalDialog.jsx';
 
 function backupFilename() {
@@ -220,12 +224,15 @@ export function SettingsModal({
     if (!first) return;
     const second = window.confirm('最終確認です。外部へ書き出したバックアップ以外のRealitySync端末内データを削除します。実行しますか？');
     if (!second) return;
-    const erased = onEraseAllData();
-    if (erased === false) {
+
+    onEraseAllData();
+    const erased = eraseStoredRealitySyncData();
+    if (!erased) {
       setMessage('');
-      setError('画面上のデータは消しましたが、端末保存領域から削除できたことを確認できませんでした。再読み込みすると以前のデータが戻る可能性があります。');
+      setError('画面上のデータは消しましたが、端末保存領域からすべて削除できたことを確認できませんでした。再読み込みすると以前のデータが戻る可能性があります。');
       return;
     }
+    window.dispatchEvent(new Event(BACKUP_RESTORED_EVENT));
     setError('');
     setMessage('この端末のRealitySyncデータを削除しました。');
   };
