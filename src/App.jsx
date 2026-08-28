@@ -43,7 +43,7 @@ function timeKeyFromDate(date) {
 export default function App() {
   const [activeTab, setActiveTab] = useState(TABS.TRACK);
   const [selectedDate, setSelectedDate] = useState(() => dateKeyFromDate());
-  const [selectedScheduleId, setSelectedScheduleId] = useState(null);
+  const [recordSession, setRecordSession] = useState(null);
   const [selectedPlanFeedbackId, setSelectedPlanFeedbackId] = useState(null);
   const [editorState, setEditorState] = useState(null);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
@@ -152,15 +152,28 @@ export default function App() {
   ]);
   const protectedMode = storageProtection.persistenceBlocked || storageProtection.writeConflict;
 
-  const selectedSchedule = useMemo(() => schedules.find((schedule) => schedule.id === selectedScheduleId) ?? null, [schedules, selectedScheduleId]);
-  const editingSchedule = useMemo(() => editorState?.type === 'edit' ? schedules.find((schedule) => schedule.id === editorState.id) ?? null : null, [editorState, schedules]);
+  const currentRecordSchedule = useMemo(() => (
+    recordSession ? schedules.find((schedule) => schedule.id === recordSession.id) ?? null : null
+  ), [recordSession, schedules]);
+  const recordSessionStale = Boolean(recordSession && (
+    !currentRecordSchedule || scheduleRevisionKey(currentRecordSchedule) !== recordSession.baseRevision
+  ));
+  const currentEditingSchedule = useMemo(() => (
+    editorState?.type === 'edit'
+      ? schedules.find((schedule) => schedule.id === editorState.id) ?? null
+      : null
+  ), [editorState, schedules]);
+  const editorSessionStale = Boolean(editorState?.type === 'edit' && (
+    !currentEditingSchedule || scheduleRevisionKey(currentEditingSchedule) !== editorState.baseRevision
+  ));
+  const editingSchedule = editorState?.type === 'edit' ? editorState.schedule : null;
 
   useEffect(() => {
     const previousTodayKey = previousTodayKeyRef.current;
     if (previousTodayKey === todayKey) return;
     previousTodayKeyRef.current = todayKey;
     if (selectedDate !== previousTodayKey) return;
-    setSelectedScheduleId(null);
+    setRecordSession(null);
     setSelectedPlanFeedbackId(null);
     setEditorState(null);
     setIsTemplateModalOpen(false);
@@ -168,22 +181,49 @@ export default function App() {
   }, [selectedDate, todayKey]);
 
   const changeDate = (dateKey) => {
-    setSelectedScheduleId(null);
+    setRecordSession(null);
     setSelectedPlanFeedbackId(null);
     setEditorState(null);
     setIsTemplateModalOpen(false);
     setSelectedDate(dateKey);
   };
 
+  const openRecord = (schedule) => {
+    if (!schedule || protectedMode || !canRecordSelectedDate) return;
+    setRecordSession({
+      id: schedule.id,
+      dateKey: selectedDate,
+      baseRevision: scheduleRevisionKey(schedule),
+      schedule,
+    });
+  };
+
+  const openScheduleEditor = (scheduleId) => {
+    if (protectedMode) return;
+    const schedule = schedules.find((item) => item.id === scheduleId);
+    if (!schedule) return;
+    setEditorState({
+      type: 'edit',
+      id: schedule.id,
+      baseRevision: scheduleRevisionKey(schedule),
+      schedule,
+    });
+  };
+
   const saveRecord = (record) => {
-    if (selectedScheduleId === null || protectedMode || !canRecordSelectedDate) return;
-    setSchedules((current) => current.map((schedule) => schedule.id === selectedScheduleId ? { ...schedule, ...record } : schedule));
-    setSelectedScheduleId(null);
+    if (!recordSession || protectedMode || !canRecordSelectedDate || recordSession.dateKey !== selectedDate) return false;
+    const currentSchedule = schedules.find((schedule) => schedule.id === recordSession.id);
+    if (!currentSchedule || scheduleRevisionKey(currentSchedule) !== recordSession.baseRevision) return false;
+    setSchedules((current) => current.map((schedule) => schedule.id === recordSession.id ? { ...schedule, ...record } : schedule));
+    setRecordSession(null);
+    return true;
   };
 
   const saveSchedule = (draft) => {
-    if (protectedMode) return;
+    if (protectedMode) return false;
     if (editorState?.type === 'edit') {
+      const currentSchedule = schedules.find((schedule) => schedule.id === editorState.id);
+      if (!currentSchedule || scheduleRevisionKey(currentSchedule) !== editorState.baseRevision) return false;
       setSchedules((current) => current.map((schedule) => schedule.id === editorState.id ? { ...schedule, ...draft } : schedule));
     } else {
       setSchedules((current) => {
@@ -206,14 +246,20 @@ export default function App() {
       });
     }
     setEditorState(null);
+    return true;
   };
 
   const deleteSchedule = (scheduleId) => {
-    if (protectedMode) return;
+    if (protectedMode) return false;
+    if (editorState?.type === 'edit' && editorState.id === scheduleId) {
+      const currentSchedule = schedules.find((schedule) => schedule.id === scheduleId);
+      if (!currentSchedule || scheduleRevisionKey(currentSchedule) !== editorState.baseRevision) return false;
+    }
     setSchedules((current) => current.filter((schedule) => schedule.id !== scheduleId));
-    if (selectedScheduleId === scheduleId) setSelectedScheduleId(null);
+    if (recordSession?.id === scheduleId) setRecordSession(null);
     setSelectedPlanFeedbackId(null);
     setEditorState(null);
+    return true;
   };
 
   const confirmReplaceDay = (sourceLabel) => {
@@ -253,7 +299,7 @@ export default function App() {
     replaceTemplates(restoredTemplates);
     replaceReminderPreferences(restoredReminders);
     replaceExperiments(restoredExperiments);
-    setSelectedScheduleId(null);
+    setRecordSession(null);
     setSelectedPlanFeedbackId(null);
     setEditorState(null);
     setIsTemplateModalOpen(false);
@@ -269,7 +315,7 @@ export default function App() {
     replaceExperiments([]);
     replaceReminderPreferences(DEFAULT_REMINDER_PREFERENCES);
     setSelectedDate(today);
-    setSelectedScheduleId(null);
+    setRecordSession(null);
     setSelectedPlanFeedbackId(null);
     setEditorState(null);
     setIsTemplateModalOpen(false);
@@ -343,17 +389,17 @@ export default function App() {
           )
         ) : (
           <>
-            {activeTab === TABS.PLAN && <PlanView schedules={schedules} onCreate={() => setEditorState({ type: 'create' })} onEdit={(id) => setEditorState({ type: 'edit', id })} onCopyPrevious={copyPreviousDay} hasPreviousSchedules={previousSchedules.length > 0} onOpenTemplates={() => setIsTemplateModalOpen(true)} templateCount={templates.length} planFeedbackSuggestions={planFeedbackSuggestions} onReviewPlanFeedback={(suggestion) => setSelectedPlanFeedbackId(suggestion.id)} />}
-            {activeTab === TABS.TRACK && <TrackView schedules={schedules} dueSchedules={dueSchedules} dateKey={selectedDate} canRecord={canRecordSelectedDate} onRecord={(schedule) => setSelectedScheduleId(schedule.id)} />}
+            {activeTab === TABS.PLAN && <PlanView schedules={schedules} onCreate={() => setEditorState({ type: 'create' })} onEdit={openScheduleEditor} onCopyPrevious={copyPreviousDay} hasPreviousSchedules={previousSchedules.length > 0} onOpenTemplates={() => setIsTemplateModalOpen(true)} templateCount={templates.length} planFeedbackSuggestions={planFeedbackSuggestions} onReviewPlanFeedback={(suggestion) => setSelectedPlanFeedbackId(suggestion.id)} />}
+            {activeTab === TABS.TRACK && <TrackView schedules={schedules} dueSchedules={dueSchedules} dateKey={selectedDate} canRecord={canRecordSelectedDate} onRecord={openRecord} />}
             {activeTab === TABS.ANALYTICS && <AnalyticsView stats={stats} plannedCount={schedules.length} weeklyInsights={weeklyInsights} monthlyInsights={monthlyInsights} longitudinalInsights={longitudinalInsights} selectedDate={selectedDate} onChangeDate={changeDate} />}
           </>
         )}
       </main>
 
       {!protectedMode && <BottomNav activeTab={activeTab} onChange={setActiveTab} />}
-      {!protectedMode && canRecordSelectedDate && selectedSchedule && <RecordModal key={`record:${selectedDate}:${scheduleRevisionKey(selectedSchedule)}`} schedule={selectedSchedule} dateKey={selectedDate} onClose={() => setSelectedScheduleId(null)} onSave={saveRecord} />}
+      {!protectedMode && canRecordSelectedDate && recordSession && <RecordModal key={`record:${recordSession.dateKey}:${String(recordSession.id)}:${recordSession.baseRevision}`} schedule={recordSession.schedule} dateKey={recordSession.dateKey} stale={recordSessionStale} onClose={() => setRecordSession(null)} onSave={saveRecord} />}
       {!protectedMode && selectedPlanFeedback && <PlanFeedbackModal preview={selectedPlanFeedback.preview} onApply={applySelectedPlanFeedback} onClose={() => setSelectedPlanFeedbackId(null)} />}
-      {!protectedMode && editorState && (editorState.type !== 'edit' || editingSchedule) && <ScheduleEditorModal key={`editor:${selectedDate}:${editorState.type}:${scheduleRevisionKey(editingSchedule)}`} schedule={editingSchedule} onClose={() => setEditorState(null)} onSave={saveSchedule} onDelete={editorState.type === 'edit' ? deleteSchedule : undefined} />}
+      {!protectedMode && editorState && <ScheduleEditorModal key={`editor:${selectedDate}:${editorState.type}:${editorState.type === 'edit' ? editorState.baseRevision : 'new'}`} schedule={editingSchedule} stale={editorSessionStale} onClose={() => setEditorState(null)} onSave={saveSchedule} onDelete={editorState.type === 'edit' ? deleteSchedule : undefined} />}
       {!protectedMode && isTemplateModalOpen && <TemplateModal templates={templates} currentSchedules={schedules} onClose={() => setIsTemplateModalOpen(false)} onSaveTemplate={(name) => saveTemplate(name, schedules)} onApplyTemplate={applyTemplate} onDeleteTemplate={deleteTemplate} />}
       {isSettingsOpen && <SettingsModal store={store} templates={templates} experiments={experiments} reminderPreferences={reminderPreferences} storageProtection={storageProtection} onChangeReminderPreferences={setReminderPreferences} onRestoreBackup={restoreBackup} onEraseAllData={eraseAllData} onOpenLegal={openLegal} canInstall={canInstall} isInstalled={isInstalled} isNativeShell={isNativeShell} onInstall={install} onClose={() => setIsSettingsOpen(false)} />}
       {legalPage && <LegalModal page={legalPage} onClose={() => setLegalPage(null)} />}
