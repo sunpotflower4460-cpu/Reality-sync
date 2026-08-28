@@ -41,7 +41,7 @@ function templateScheduleInputValid(value) {
     && title
     && CATEGORIES.includes(value.category)
     && duration !== null
-    && duration >= 0
+    && duration >= 1
     && duration <= 1440
     && plannedStress !== null
     && plannedStress >= 0
