@@ -86,13 +86,16 @@ export function useReminderPreferences() {
         window.localStorage.getItem(REMINDER_STORAGE_KEY),
       );
       if (!latest.ok) {
-        applyState((current) => ({ ...current, persistenceBlocked: true, needsWrite: false }));
+        // Keep pending local preferences dirty until storage becomes readable
+        // again, so recovery cannot silently replace an unsaved user change.
+        applyState((current) => ({ ...current, persistenceBlocked: true }));
         return;
       }
       const latestSerialized = serializePreferences(latest.preferences);
       if (latestSerialized !== baseSerialized) {
         applyState((current) => ({
           ...current,
+          persistenceBlocked: false,
           writeConflict: true,
           writeFailed: false,
           needsWrite: false,
@@ -105,13 +108,14 @@ export function useReminderPreferences() {
         window.localStorage.getItem(REMINDER_STORAGE_KEY),
       );
       if (!preWrite.ok) {
-        applyState((current) => ({ ...current, persistenceBlocked: true, needsWrite: false }));
+        applyState((current) => ({ ...current, persistenceBlocked: true }));
         return;
       }
       const preWriteSerialized = serializePreferences(preWrite.preferences);
       if (preWriteSerialized !== latestSerialized) {
         applyState((current) => ({
           ...current,
+          persistenceBlocked: false,
           writeConflict: true,
           writeFailed: false,
           needsWrite: false,
@@ -124,7 +128,7 @@ export function useReminderPreferences() {
         window.localStorage.getItem(REMINDER_STORAGE_KEY),
       );
       if (!readBack.ok) {
-        applyState((current) => ({ ...current, persistenceBlocked: true, needsWrite: false }));
+        applyState((current) => ({ ...current, persistenceBlocked: true }));
         return;
       }
       const readBackSerialized = serializePreferences(readBack.preferences);
@@ -134,6 +138,7 @@ export function useReminderPreferences() {
         } else {
           applyState((current) => ({
             ...current,
+            persistenceBlocked: false,
             writeConflict: true,
             writeFailed: false,
             needsWrite: false,
@@ -147,6 +152,7 @@ export function useReminderPreferences() {
         const changedAgain = currentSerialized !== writtenSerialized;
         return {
           ...current,
+          persistenceBlocked: false,
           writeFailed: false,
           needsWrite: changedAgain,
           baseSerialized: writtenSerialized,
@@ -163,14 +169,24 @@ export function useReminderPreferences() {
       const result = parseStoredReminderPreferencesResult(event.newValue);
       applyState((current) => {
         if (!result.ok) {
-          return { ...current, persistenceBlocked: true, writeFailed: false, needsWrite: false };
+          return { ...current, persistenceBlocked: true };
         }
         const externalSerialized = serializePreferences(result.preferences);
         if (current.needsWrite) {
           if (externalSerialized !== current.baseSerialized) {
-            return { ...current, writeConflict: true, writeFailed: false, needsWrite: false };
+            return {
+              ...current,
+              persistenceBlocked: false,
+              writeConflict: true,
+              writeFailed: false,
+              needsWrite: false,
+            };
           }
-          return current;
+          return {
+            ...current,
+            persistenceBlocked: false,
+            writeFailed: false,
+          };
         }
         if (current.writeConflict) return current;
         return {
@@ -195,13 +211,19 @@ export function useReminderPreferences() {
         window.localStorage.getItem(REMINDER_STORAGE_KEY),
       );
       if (!latest.ok) {
-        applyState({ ...current, persistenceBlocked: true, needsWrite: false });
+        applyState({ ...current, persistenceBlocked: true });
         return null;
       }
       const latestSerialized = serializePreferences(latest.preferences);
       if (latestSerialized === current.baseSerialized) return current;
       if (current.needsWrite) {
-        applyState({ ...current, writeConflict: true, writeFailed: false, needsWrite: false });
+        applyState({
+          ...current,
+          persistenceBlocked: false,
+          writeConflict: true,
+          writeFailed: false,
+          needsWrite: false,
+        });
         return null;
       }
       return {
@@ -213,7 +235,7 @@ export function useReminderPreferences() {
         writeConflict: false,
       };
     } catch {
-      applyState({ ...current, persistenceBlocked: true, needsWrite: false });
+      applyState({ ...current, persistenceBlocked: true });
       return null;
     }
   }, [applyState]);
