@@ -44,12 +44,16 @@ export function persistRestoredBackup(data, storage = globalThis.window?.localSt
     return { ok: false, rollbackOk: true };
   }
 
+  const changedKeys = [];
   try {
-    for (const [key, value] of entries) restoreRawValue(storage, key, value);
+    for (const [key, value] of entries) {
+      restoreRawValue(storage, key, value);
+      changedKeys.push(key);
+    }
     return { ok: true, rollbackOk: true };
   } catch {
     let rollbackOk = true;
-    for (const [key] of entries) {
+    for (const key of changedKeys.reverse()) {
       try {
         restoreRawValue(storage, key, previous.get(key) ?? null);
       } catch {
