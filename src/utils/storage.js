@@ -47,8 +47,8 @@ function storedPlanNumberInRange(value, min, max, strictStorage) {
   const number = storedNumberInRange(value, min, max, strictStorage);
   if (number === null) return null;
   // All current plan-writing paths use whole minutes and integer stress points.
-  // Keep the legacy migration permissive, but current versioned data must not
-  // introduce fractional plan facts that the editor itself could never create.
+  // Keep the legacy migration permissive about numeric representation, but never
+  // accept plan facts outside the range the editor itself can create.
   if (strictStorage && !Number.isInteger(number)) return null;
   return number;
 }
@@ -77,7 +77,7 @@ function validStoredSnapshot(value, normalized, strictStorage) {
   if (!isValidTime(value.time)) return false;
   if (typeof value.title !== 'string' || !value.title.trim()) return false;
   if (!VALID_CATEGORIES.has(value.category)) return false;
-  const duration = storedPlanNumberInRange(value.duration, 0, 1440, strictStorage);
+  const duration = storedPlanNumberInRange(value.duration, 1, 1440, strictStorage);
   const plannedStress = storedPlanNumberInRange(value.plannedStress, 0, 100, strictStorage);
   if (duration === null || plannedStress === null) return false;
   return normalized.time === value.time
@@ -115,7 +115,7 @@ function storedSchedulePreserved(raw, normalized, { strictStorage = true } = {})
   if (typeof raw.title !== 'string' || !raw.title.trim() || normalized.title !== raw.title.trim()) return false;
   if (!VALID_CATEGORIES.has(raw.category) || normalized.category !== raw.category) return false;
 
-  const duration = storedPlanNumberInRange(raw.duration, 0, 1440, strictStorage);
+  const duration = storedPlanNumberInRange(raw.duration, 1, 1440, strictStorage);
   const plannedStress = storedPlanNumberInRange(raw.plannedStress, 0, 100, strictStorage);
   if (duration === null || normalized.duration !== duration) return false;
   if (plannedStress === null || normalized.plannedStress !== plannedStress) return false;
