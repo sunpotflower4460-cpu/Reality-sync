@@ -38,7 +38,7 @@ test('PWA install prompt is consumed before awaiting and cannot reject into the 
 });
 
 test('HTML links install assets and uses light browser theme chrome', async () => {
-  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8'));
+  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
   assert.match(html, /name="theme-color" content="#ffffff"/);
   assert.match(html, /href="\.\/manifest\.webmanifest"/);
   assert.match(html, /href="\.\/icon\.svg"/);
