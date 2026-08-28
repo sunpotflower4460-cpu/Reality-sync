@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { REMINDER_NOTIFIED_STORAGE_KEY } from '../constants.js';
 import { dateKeyFromDate } from '../utils/date.js';
 import {
@@ -19,8 +19,9 @@ function readNotifiedKeys(todayKey) {
 function writeNotifiedKeys(keys) {
   try {
     window.localStorage.setItem(REMINDER_NOTIFIED_STORAGE_KEY, JSON.stringify([...new Set(keys)]));
+    return true;
   } catch {
-    // Notification deduplication becomes session-only if storage is unavailable.
+    return false;
   }
 }
 
@@ -55,6 +56,7 @@ async function showBrowserNotification(schedule, dateKey) {
 
 export function useDueRecordReminders({ schedules, dateKey, preferences }) {
   const [now, setNow] = useState(() => new Date());
+  const sessionNotifiedRef = useRef(new Set());
 
   useEffect(() => {
     const refresh = () => setNow(new Date());
@@ -81,7 +83,9 @@ export function useDueRecordReminders({ schedules, dateKey, preferences }) {
     if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
 
     const todayKey = dateKeyFromDate(now);
-    const notified = new Set(readNotifiedKeys(todayKey));
+    const sessionKeys = normalizeNotifiedReminderKeys([...sessionNotifiedRef.current], todayKey);
+    sessionNotifiedRef.current = new Set(sessionKeys);
+    const notified = new Set([...readNotifiedKeys(todayKey), ...sessionKeys]);
     const pendingNotifications = dueSchedules.filter((schedule) => !notified.has(reminderNotificationKey(dateKey, schedule.id)));
     if (pendingNotifications.length === 0) return;
 
@@ -93,6 +97,9 @@ export function useDueRecordReminders({ schedules, dateKey, preferences }) {
         if (!shown || cancelled) continue;
         const key = reminderNotificationKey(dateKey, schedule.id);
         notified.add(key);
+        sessionNotifiedRef.current.add(key);
+        // Persist when possible; the session ref remains authoritative for this
+        // tab if storage is unavailable so the same alert is not sent every minute.
         writeNotifiedKeys([...notified]);
       }
     };
