@@ -6,6 +6,7 @@ import {
   normalizeNotifiedReminderKeys,
   reminderNotificationKey,
 } from '../utils/reminder.js';
+import { BACKUP_RESTORED_EVENT } from '../utils/restore.js';
 
 function readNotifiedKeys(todayKey) {
   try {
@@ -71,6 +72,15 @@ export function useDueRecordReminders({ schedules, dateKey, preferences }) {
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', onVisibility);
     };
+  }, []);
+
+  useEffect(() => {
+    const resetAfterRestore = () => {
+      sessionNotifiedRef.current.clear();
+      setNow(new Date());
+    };
+    window.addEventListener(BACKUP_RESTORED_EVENT, resetAfterRestore);
+    return () => window.removeEventListener(BACKUP_RESTORED_EVENT, resetAfterRestore);
   }, []);
 
   const dueSchedules = useMemo(
