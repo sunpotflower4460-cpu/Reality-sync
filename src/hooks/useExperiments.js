@@ -25,7 +25,7 @@ function validatedExperiments(next) {
 }
 
 function loadExperimentState() {
-  if (typeof window === 'undefined') return { experiments: [], persistenceBlocked: false, unsupportedVersion: null, writeFailed: false };
+  if (typeof window === 'undefined') return { experiments: [], persistenceBlocked: false, unsupportedVersion: null, writeFailed: false, needsWrite: false };
   try {
     const result = parseStoredExperimentsForPersistence(window.localStorage.getItem(EXPERIMENT_STORAGE_KEY));
     return {
@@ -33,25 +33,26 @@ function loadExperimentState() {
       persistenceBlocked: !result.ok,
       unsupportedVersion: result.unsupportedVersion,
       writeFailed: false,
+      needsWrite: false,
     };
   } catch {
-    return { experiments: [], persistenceBlocked: true, unsupportedVersion: null, writeFailed: false };
+    return { experiments: [], persistenceBlocked: true, unsupportedVersion: null, writeFailed: false, needsWrite: false };
   }
 }
 
 export function useExperiments() {
   const [state, setState] = useState(loadExperimentState);
-  const { experiments, persistenceBlocked, unsupportedVersion, writeFailed } = state;
+  const { experiments, persistenceBlocked, unsupportedVersion, writeFailed, needsWrite } = state;
 
   useEffect(() => {
-    if (persistenceBlocked) return;
+    if (persistenceBlocked || !needsWrite) return;
     try {
       window.localStorage.setItem(EXPERIMENT_STORAGE_KEY, serializeExperiments(experiments));
-      setState((current) => current.writeFailed ? { ...current, writeFailed: false } : current);
+      setState((current) => ({ ...current, writeFailed: false, needsWrite: false }));
     } catch {
       setState((current) => current.writeFailed ? current : { ...current, writeFailed: true });
     }
-  }, [experiments, persistenceBlocked]);
+  }, [experiments, needsWrite, persistenceBlocked]);
 
   useEffect(() => {
     const sync = (event) => {
@@ -62,6 +63,7 @@ export function useExperiments() {
         persistenceBlocked: !result.ok,
         unsupportedVersion: result.unsupportedVersion,
         writeFailed: false,
+        needsWrite: false,
       });
     };
     window.addEventListener('storage', sync);
@@ -74,7 +76,7 @@ export function useExperiments() {
       const next = typeof updater === 'function' ? updater(current.experiments) : updater;
       const validated = validatedExperiments(next);
       if (!validated) return current;
-      return { ...current, experiments: validated };
+      return { ...current, experiments: validated, needsWrite: true };
     });
   }, []);
 
@@ -144,7 +146,7 @@ export function useExperiments() {
   const replaceExperiments = useCallback((next) => {
     const validated = validatedExperiments(Array.isArray(next) ? next : []);
     if (!validated) return;
-    setState({ experiments: validated, persistenceBlocked: false, unsupportedVersion: null, writeFailed: false });
+    setState({ experiments: validated, persistenceBlocked: false, unsupportedVersion: null, writeFailed: false, needsWrite: false });
   }, []);
 
   return {
