@@ -118,6 +118,25 @@ test('shorten feedback changes only the pending duration and preserves an applic
   assert.deepEqual(applied.schedules[0].appliedExperimentIds, ['stress-exp']);
 });
 
+test('feedback is blocked when the target cannot persist another application marker', () => {
+  const experiment = adoptedExperiment({
+    id: 'fifty-first',
+    condition: { kind: 'planned-stress-min', value: 70 },
+    planAdjustment: { kind: PLAN_ADJUSTMENT_KIND.SHORTEN_DURATION, minutes: 15 },
+  });
+  const markerIds = Array.from({ length: 50 }, (_, index) => `old-${index}`);
+  const schedules = [pending('full', { duration: 60, plannedStress: 80, appliedExperimentIds: markerIds })];
+
+  const preview = createPlanFeedbackPreview(experiment, '2026-08-24', schedules, 'full');
+  assert.equal(preview.canApply, false);
+  assert.match(preview.error, /適用済みの工夫が多すぎる/);
+
+  const applied = applyPlanFeedback(experiment, '2026-08-24', schedules, 'full', 'unused');
+  assert.equal(applied.ok, false);
+  assert.equal(applied.schedules[0].duration, 60);
+  assert.deepEqual(applied.schedules[0].appliedExperimentIds, markerIds);
+});
+
 test('shift feedback refuses a change that would cross the day boundary', () => {
   const experiment = adoptedExperiment({
     id: 'category-exp',
