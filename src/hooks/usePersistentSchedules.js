@@ -274,13 +274,28 @@ export function usePersistentSchedules(dateKey) {
 
   useEffect(() => {
     const syncFromStorage = (event) => {
-      if (event.key !== STORAGE_KEY) return;
+      if (event.key !== STORAGE_KEY && event.key !== null) return;
       const result = parseStoredScheduleStoreResult(event.newValue);
       applyState((current) => {
         // Once a conflict is detected, keep the local in-memory copy frozen for
         // rescue/export. Ignore every later event, even a malformed one, so the
         // rescue snapshot cannot become persistence-blocked by remote activity.
         if (current.writeConflict) return current;
+
+        // removeItem/clear represents an explicit destructive change. Even when
+        // this tab started from an empty day, do not let that coincidental base
+        // equality make an unsaved edit recreate data erased in another tab.
+        if (event.newValue === null && current.needsWrite) {
+          return {
+            ...current,
+            persistenceBlocked: false,
+            unsupportedVersion: null,
+            writeConflict: true,
+            conflictDateKeys: [...current.dirtyDateKeys],
+            writeFailed: false,
+            needsWrite: false,
+          };
+        }
 
         if (!result.ok) {
           // Preserve the local dirty store and dirtyDateKeys. If another tab later
