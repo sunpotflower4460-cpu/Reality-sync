@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { INITIAL_SCHEDULES } from '../data/demoSchedules.js';
 import { LEGACY_STORAGE_KEY, STORAGE_KEY } from '../constants.js';
 import { dateKeyFromDate } from '../utils/date.js';
+import { hasDuplicateIds } from '../utils/id.js';
 import { normalizeSchedules } from '../utils/schedule.js';
 import {
   createEmptyScheduleStore,
@@ -76,13 +77,16 @@ export function usePersistentSchedules(dateKey) {
       if (currentState.persistenceBlocked) return currentState;
       const currentDay = currentState.store.days[dateKey] ?? [];
       const nextDay = typeof nextValue === 'function' ? nextValue(currentDay) : nextValue;
+      if (!Array.isArray(nextDay) || hasDuplicateIds(nextDay)) return currentState;
+      const normalized = normalizeSchedules(nextDay, []);
+      if (normalized.length !== nextDay.length) return currentState;
       return {
         ...currentState,
         store: {
           ...currentState.store,
           days: {
             ...currentState.store.days,
-            [dateKey]: normalizeSchedules(nextDay, []),
+            [dateKey]: normalized,
           },
         },
       };
@@ -99,8 +103,10 @@ export function usePersistentSchedules(dateKey) {
   }, [dateKey]);
 
   const replaceStore = useCallback((nextStore) => {
+    const result = parseStoredScheduleStoreResult(JSON.stringify(nextStore));
+    if (!result.ok) return;
     setState({
-      store: normalizeScheduleStore(nextStore),
+      store: result.store,
       persistenceBlocked: false,
       unsupportedVersion: null,
     });
