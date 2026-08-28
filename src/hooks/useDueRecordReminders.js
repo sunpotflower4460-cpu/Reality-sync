@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { REMINDER_NOTIFIED_STORAGE_KEY } from '../constants.js';
+import { REMINDER_NOTIFIED_STORAGE_KEY, STORAGE_KEY } from '../constants.js';
 import { dateKeyFromDate } from '../utils/date.js';
 import {
   getDuePendingSchedules,
@@ -7,6 +7,7 @@ import {
   reminderNotificationKey,
 } from '../utils/reminder.js';
 import { BACKUP_RESTORED_EVENT } from '../utils/restore.js';
+import { parseStoredScheduleStoreResult } from '../utils/storage.js';
 
 function readNotifiedKeys(todayKey) {
   try {
@@ -23,6 +24,15 @@ function writeNotifiedKeys(keys) {
     return true;
   } catch {
     return false;
+  }
+}
+
+function readTodaySchedules(todayKey) {
+  try {
+    const result = parseStoredScheduleStoreResult(window.localStorage.getItem(STORAGE_KEY));
+    return result.ok ? (result.store.days[todayKey] ?? []) : [];
+  } catch {
+    return [];
   }
 }
 
@@ -55,7 +65,7 @@ async function showBrowserNotification(schedule, dateKey) {
   }
 }
 
-export function useDueRecordReminders({ schedules, dateKey, notificationSchedules = schedules, preferences }) {
+export function useDueRecordReminders({ schedules, dateKey, notificationSchedules, preferences }) {
   const [now, setNow] = useState(() => new Date());
   const sessionNotifiedRef = useRef(new Set());
 
@@ -88,9 +98,14 @@ export function useDueRecordReminders({ schedules, dateKey, notificationSchedule
     [dateKey, now, preferences, schedules],
   );
   const todayKey = dateKeyFromDate(now);
+  const notificationSourceSchedules = useMemo(() => {
+    if (Array.isArray(notificationSchedules)) return notificationSchedules;
+    if (dateKey === todayKey) return schedules;
+    return readTodaySchedules(todayKey);
+  }, [dateKey, notificationSchedules, now, schedules, todayKey]);
   const notificationDueSchedules = useMemo(
-    () => getDuePendingSchedules(notificationSchedules, todayKey, now, preferences),
-    [notificationSchedules, now, preferences, todayKey],
+    () => getDuePendingSchedules(notificationSourceSchedules, todayKey, now, preferences),
+    [notificationSourceSchedules, now, preferences, todayKey],
   );
 
   useEffect(() => {
