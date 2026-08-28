@@ -1,7 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EXPERIMENT_STORAGE_VERSION } from '../src/constants.js';
+import { contextRuleForShiftCandidate } from '../src/utils/contextRule.js';
 import { parseStoredExperimentsForPersistence } from '../src/utils/experimentStorage.js';
+
+function trial(dateKey, scheduleId, outcome = 'success', index = scheduleId) {
+  const failed = outcome === 'failure';
+  return {
+    id: `trial-${index}`,
+    recordKey: `${dateKey}::${scheduleId}`,
+    dateKey,
+    scheduleId,
+    planTitle: 'Work',
+    outcome,
+    observedValue: failed ? 1 : 0,
+    observedLabel: failed ? '変更・スキップ' : '予定通り',
+    capturedAt: `${dateKey}T10:00:00Z`,
+  };
+}
 
 function experiment(overrides = {}) {
   return {
@@ -32,6 +48,12 @@ function adoptedRoot(overrides = {}) {
     status: 'completed',
     decision: 'adopt',
     decisionDateKey: '2026-09-01',
+    completedAt: '2026-09-01T12:00:00Z',
+    trials: [
+      trial('2026-08-28', 'root-a', 'success', 'root-a'),
+      trial('2026-08-29', 'root-b', 'success', 'root-b'),
+      trial('2026-08-30', 'root-c', 'failure', 'root-c'),
+    ],
     ...overrides,
   });
 }
@@ -84,21 +106,52 @@ test('explicit experiment metadata cannot disappear because it has the wrong typ
 });
 
 test('explicit trial identity and observation metadata cannot be silently replaced', () => {
-  const baseTrial = {
-    id: 'trial-1',
-    recordKey: '2026-08-28::work',
-    dateKey: '2026-08-28',
-    scheduleId: 'work',
-    planTitle: 'Work',
-    outcome: 'success',
-    observedValue: 0,
-    observedLabel: '予定通り',
-    capturedAt: '2026-08-28T10:00:00Z',
-  };
-
+  const baseTrial = trial('2026-08-28', 'work');
   assert.equal(parse(experiment({ trials: [{ ...baseTrial, id: '' }] })).ok, false);
   assert.equal(parse(experiment({ trials: [{ ...baseTrial, observedLabel: 1 }] })).ok, false);
   assert.equal(parse(experiment({ trials: [{ ...baseTrial, outcome: 'maybe' }] })).ok, false);
+  assert.equal(parse(experiment({ trials: [{ ...baseTrial, planTitle: undefined }] })).ok, false);
+  assert.equal(parse(experiment({ trials: [{ ...baseTrial, capturedAt: undefined }] })).ok, false);
+});
+
+test('trial record identity, start date and target count are semantic persistence boundaries', () => {
+  const base = trial('2026-08-28', 'work');
+  assert.equal(parse(experiment({ trials: [{ ...base, recordKey: '2026-08-28::other' }] })).ok, false);
+  assert.equal(parse(experiment({ trials: [trial('2026-08-27', 'early')] })).ok, false);
+  assert.equal(parse(experiment({
+    targetRuns: 3,
+    trials: [
+      trial('2026-08-28', 'a'),
+      trial('2026-08-29', 'b'),
+      trial('2026-08-30', 'c'),
+      trial('2026-08-31', 'd'),
+    ],
+  })).ok, false);
+});
+
+test('completed and abandoned lifecycle states cannot omit their required facts', () => {
+  const threeTrials = [
+    trial('2026-08-28', 'a'),
+    trial('2026-08-29', 'b'),
+    trial('2026-08-30', 'c'),
+  ];
+  assert.equal(parse(experiment({ status: 'completed', trials: threeTrials, decision: null, decisionDateKey: '2026-08-31', completedAt: '2026-08-31T12:00:00Z' })).ok, false);
+  assert.equal(parse(experiment({ status: 'completed', trials: threeTrials, decision: 'adopt', decisionDateKey: null, completedAt: '2026-08-31T12:00:00Z' })).ok, false);
+  assert.equal(parse(experiment({ status: 'completed', trials: threeTrials, decision: 'adopt', decisionDateKey: '2026-08-31', completedAt: '' })).ok, false);
+  assert.equal(parse(experiment({ status: 'completed', trials: threeTrials.slice(0, 2), decision: 'adopt', decisionDateKey: '2026-08-31', completedAt: '2026-08-31T12:00:00Z' })).ok, false);
+  assert.equal(parse(experiment({ status: 'abandoned', completedAt: '' })).ok, false);
+  assert.equal(parse(experiment({ status: 'abandoned', completedAt: '2026-08-29T12:00:00Z', decision: 'adopt' })).ok, false);
+  assert.equal(parse(experiment({ status: 'abandoned', completedAt: '2026-08-29T12:00:00Z' })).ok, true);
+});
+
+test('completion date cannot precede the experiment or its latest trial', () => {
+  const threeTrials = [
+    trial('2026-08-28', 'a'),
+    trial('2026-08-29', 'b'),
+    trial('2026-08-30', 'c'),
+  ];
+  assert.equal(parse(experiment({ status: 'completed', trials: threeTrials, decision: 'adopt', decisionDateKey: '2026-08-27', completedAt: '2026-08-31T12:00:00Z' })).ok, false);
+  assert.equal(parse(experiment({ status: 'completed', trials: threeTrials, decision: 'adopt', decisionDateKey: '2026-08-29', completedAt: '2026-08-31T12:00:00Z' })).ok, false);
 });
 
 test('orphaned and root-mismatched learning versions are protected during normal storage load', () => {
@@ -133,29 +186,31 @@ test('revalidation lineage provenance must match an adopted parent and its reten
   assert.equal(parseMany([root, revalidationChild({ baselineSampleCount: 9 })]).ok, false);
 });
 
+test('context-scoped revalidation may use a contextual baseline while keeping parent provenance', () => {
+  const root = adoptedRoot();
+  const rule = contextRuleForShiftCandidate(
+    { id: 'target-planned-stress', previousValue: 40, recentValue: 70 },
+    '2026-09-10',
+  );
+  const result = parseMany([root, revalidationChild({
+    contextRule: rule,
+    baselineFailureRate: 0.75,
+    baselineSampleCount: 4,
+  })]);
+  assert.equal(result.ok, true);
+});
+
 test('root learning versions cannot claim a revalidation source snapshot', () => {
   const retention = revalidationChild().sourceRetention;
   assert.equal(parse(adoptedRoot({ sourceRetention: retention })).ok, false);
 });
 
 test('valid explicit experiment metadata and realistic revalidation lineage remain writable', () => {
-  const root = adoptedRoot({
-    trials: [{
-      id: 'trial-1',
-      recordKey: '2026-08-28::work',
-      dateKey: '2026-08-28',
-      scheduleId: 'work',
-      planTitle: 'Work',
-      outcome: 'success',
-      observedValue: 0,
-      observedLabel: '予定通り',
-      capturedAt: '2026-08-28T10:00:00Z',
-    }],
-  });
+  const root = adoptedRoot();
   const child = revalidationChild();
   const result = parseMany([root, child]);
   assert.equal(result.ok, true);
-  assert.equal(result.experiments[0].trials[0].id, 'trial-1');
+  assert.equal(result.experiments[0].trials[0].id, 'trial-root-a');
   assert.equal(result.experiments[1].parentExperimentId, 'root');
   assert.equal(result.experiments[1].sourceRetention.experimentId, 'root');
 });
