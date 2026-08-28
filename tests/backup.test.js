@@ -46,11 +46,11 @@ test('structured adopted experiment metadata survives backup round-trip', () => 
       condition: { kind: 'weekday', value: 0 }, startDateKey: '2026-08-24', targetRuns: 3,
       baselineFailureRate: 0.7, baselineSampleCount: 10,
       planAdjustment: { kind: 'buffer-before', minutes: 15 },
-      status: 'completed', decision: 'adopt', decisionDateKey: '2026-09-01', completedAt: '2026-08-31T15:00:00Z',
+      status: 'completed', decision: 'adopt', decisionDateKey: '2026-09-01', completedAt: '2026-09-01T15:00:00Z',
       trials: [
-        { recordKey: 'a', dateKey: '2026-08-24', scheduleId: 'a', planTitle: 'A', outcome: 'success' },
-        { recordKey: 'b', dateKey: '2026-08-31', scheduleId: 'b', planTitle: 'B', outcome: 'success' },
-        { recordKey: 'c', dateKey: '2026-08-31', scheduleId: 'c', planTitle: 'C', outcome: 'failure' },
+        { id: 'trial-a', recordKey: '2026-08-24::a', dateKey: '2026-08-24', scheduleId: 'a', planTitle: 'A', outcome: 'success', observedValue: 0, observedLabel: '予定通り', capturedAt: '2026-08-24T12:00:00Z' },
+        { id: 'trial-b', recordKey: '2026-08-31::b', dateKey: '2026-08-31', scheduleId: 'b', planTitle: 'B', outcome: 'success', observedValue: 0, observedLabel: '予定通り', capturedAt: '2026-08-31T12:00:00Z' },
+        { id: 'trial-c', recordKey: '2026-08-31::c', dateKey: '2026-08-31', scheduleId: 'c', planTitle: 'C', outcome: 'failure', observedValue: 1, observedLabel: '変更・スキップ', capturedAt: '2026-08-31T13:00:00Z' },
       ],
     }],
     reminderPreferences: {},
@@ -59,6 +59,59 @@ test('structured adopted experiment metadata survives backup round-trip', () => 
   assert.equal(parsed.ok, true);
   assert.deepEqual(parsed.data.experiments[0].planAdjustment, { kind: 'buffer-before', minutes: 15 });
   assert.equal(parsed.data.experiments[0].decisionDateKey, '2026-09-01');
+});
+
+test('backup preserves orphaned applied-experiment markers from older app versions but rejects contradictory live provenance', () => {
+  const base = {
+    format: 'reality-sync-backup',
+    version: 1,
+    scheduleStore: {
+      version: 2,
+      days: {
+        '2026-09-02': [{
+          id: 'plan', time: '09:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 40,
+          appliedExperimentIds: ['exp-source'], status: STATUS.PENDING,
+        }],
+      },
+    },
+    templates: [],
+    reminderPreferences: { enabled: true, delayMinutes: 15, browserNotifications: false },
+  };
+
+  const missing = parseBackup(JSON.stringify({ ...base, experiments: [] }));
+  assert.equal(missing.ok, true);
+  assert.deepEqual(missing.data.scheduleStore.days['2026-09-02'][0].appliedExperimentIds, ['exp-source']);
+
+  const active = parseBackup(JSON.stringify({
+    ...base,
+    experiments: [{
+      id: 'exp-source', title: 'Test', action: '余白', metricKind: 'deviation', metricLabel: '変更',
+      condition: { kind: 'weekday', value: 2 }, startDateKey: '2026-09-02', targetRuns: 3,
+      baselineFailureRate: 0.5, baselineSampleCount: 8, status: 'active', trials: [],
+    }],
+  }));
+  assert.equal(active.ok, false);
+  assert.match(active.error, /適用済みの学習/);
+});
+
+test('backup preserves legacy orphaned template markers without inventing missing experiment details', () => {
+  const parsed = parseBackup(JSON.stringify({
+    format: 'reality-sync-backup',
+    version: 1,
+    scheduleStore: { version: 2, days: {} },
+    templates: [{
+      id: 'template',
+      name: 'Saved plan',
+      schedules: [{
+        time: '09:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 40,
+        appliedExperimentIds: ['missing-adopted-experiment'],
+      }],
+    }],
+    experiments: [],
+    reminderPreferences: { enabled: true, delayMinutes: 15, browserNotifications: false },
+  }));
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.data.templates[0].schedules[0].appliedExperimentIds, ['missing-adopted-experiment']);
 });
 
 test('older v1 backups without experiment history remain readable as an empty experiment list', () => {

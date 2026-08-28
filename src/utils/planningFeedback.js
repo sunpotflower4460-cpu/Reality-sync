@@ -13,6 +13,8 @@ import {
 } from './experiment.js';
 import { normalizeSchedules } from './schedule.js';
 
+const MAX_APPLIED_EXPERIMENT_IDS = 50;
+
 function timeToMinutes(time) {
   if (typeof time !== 'string') return null;
   const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time);
@@ -48,11 +50,16 @@ function conflictsWithOtherSchedules(schedules, targetId, interval) {
   return null;
 }
 
+function canAddExperimentMarker(schedule, experimentId) {
+  const ids = Array.isArray(schedule?.appliedExperimentIds) ? schedule.appliedExperimentIds : [];
+  return ids.includes(experimentId) || ids.length < MAX_APPLIED_EXPERIMENT_IDS;
+}
+
 function addExperimentMarker(schedule, experimentId) {
   const ids = Array.isArray(schedule.appliedExperimentIds) ? schedule.appliedExperimentIds : [];
-  return ids.includes(experimentId)
-    ? schedule
-    : { ...schedule, appliedExperimentIds: [...ids, experimentId] };
+  if (ids.includes(experimentId)) return schedule;
+  if (ids.length >= MAX_APPLIED_EXPERIMENT_IDS) return null;
+  return { ...schedule, appliedExperimentIds: [...ids, experimentId] };
 }
 
 function pendingPlan(id, time, title, category, duration, plannedStress, appliedExperimentIds = []) {
@@ -105,6 +112,9 @@ export function createPlanFeedbackPreview(experimentValue, dateKey, schedulesVal
   if (schedule.status !== STATUS.PENDING) return { canApply: false, error: '実績がある予定は、過去を書き換えないため変更できません。' };
   if (!experimentMatchesSchedule(experiment, dateKey, schedule, schedules)) return { canApply: false, error: 'この予定は採用した実験条件または条件付きルールに一致しません。' };
   if (schedule.appliedExperimentIds.includes(experiment.id)) return { canApply: false, error: 'この予定にはすでに同じ工夫が反映されています。' };
+  if (!canAddExperimentMarker(schedule, experiment.id)) {
+    return { canApply: false, error: 'この予定には適用済みの工夫が多すぎるため、追加の自動変更は行いません。予定を作り直すか、手動で調整してください。' };
+  }
 
   const result = calculateExperimentResult(experiment);
   const base = {
@@ -228,7 +238,13 @@ export function applyPlanFeedback(experimentValue, dateKey, schedulesValue, sche
 
   if (preview.kind === PLAN_ADJUSTMENT_KIND.BUFFER_BEFORE) {
     if (!newScheduleId) return { ok: false, error: '新しい予定IDを作成できませんでした。', schedules };
-    const next = schedules.map((schedule) => String(schedule.id) === String(scheduleId) ? addExperimentMarker(schedule, experiment.id) : schedule);
+    if (schedules.some((schedule) => String(schedule.id) === String(newScheduleId))) {
+      return { ok: false, error: '新しい予定IDが既存予定と重複したため、変更を適用しませんでした。', schedules };
+    }
+    const next = schedules.map((schedule) => {
+      if (String(schedule.id) !== String(scheduleId)) return schedule;
+      return addExperimentMarker(schedule, experiment.id) ?? schedule;
+    });
     next.push(pendingPlan(
       newScheduleId,
       preview.inserted.time,
@@ -244,6 +260,7 @@ export function applyPlanFeedback(experimentValue, dateKey, schedulesValue, sche
   const next = schedules.map((schedule) => {
     if (String(schedule.id) !== String(scheduleId)) return schedule;
     const marked = addExperimentMarker(schedule, experiment.id);
+    if (!marked) return schedule;
     if (preview.kind === PLAN_ADJUSTMENT_KIND.SHORTEN_DURATION) return { ...marked, duration: preview.after.duration };
     if (preview.kind === PLAN_ADJUSTMENT_KIND.SHIFT_START_LATER) return { ...marked, time: preview.after.time };
     return marked;

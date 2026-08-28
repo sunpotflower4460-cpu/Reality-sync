@@ -1,10 +1,29 @@
-import { BACKUP_FORMAT, BACKUP_VERSION } from '../constants.js';
+import { BACKUP_FORMAT, BACKUP_VERSION, EXPERIMENT_STORAGE_VERSION } from '../constants.js';
 import { isValidDateKey } from './date.js';
-import { normalizeExperiments } from './experiment.js';
+import { EXPERIMENT_DECISION, EXPERIMENT_STATUS, normalizeExperiments } from './experiment.js';
 import { parseStoredExperimentsForPersistence } from './experimentStorage.js';
-import { normalizeReminderPreferences, REMINDER_DELAY_OPTIONS } from './reminder.js';
+import { normalizeReminderPreferences, parseStoredReminderPreferencesResult } from './reminder.js';
 import { normalizeScheduleStore, parseStoredScheduleStoreResult } from './storage.js';
 import { normalizeTemplates, parseStoredTemplatesResult } from './template.js';
+
+export const MAX_BACKUP_BYTES = 10 * 1024 * 1024;
+
+const BACKUP_FIELDS = new Set([
+  'format',
+  'version',
+  'exportedAt',
+  'scheduleStore',
+  'templates',
+  'experiments',
+  'reminderPreferences',
+]);
+
+function hasOnlyKeys(value, allowed) {
+  return Boolean(value)
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && Object.keys(value).every((key) => allowed.has(key));
+}
 
 function countSchedules(store) { return Object.values(store.days).reduce((sum, schedules) => sum + schedules.length, 0); }
 
@@ -20,18 +39,27 @@ function experimentLineageValid(experiments) {
   return true;
 }
 
-function reminderPreferencesPreserved(raw, normalized) {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
-  if (raw.enabled !== undefined && typeof raw.enabled !== 'boolean') return false;
-  if (raw.browserNotifications !== undefined && typeof raw.browserNotifications !== 'boolean') return false;
-  if (raw.delayMinutes !== undefined) {
-    if (raw.delayMinutes === null || (typeof raw.delayMinutes === 'string' && raw.delayMinutes.trim() === '')) return false;
-    const delay = Number(raw.delayMinutes);
-    if (!REMINDER_DELAY_OPTIONS.includes(delay) || normalized.delayMinutes !== delay) return false;
-  }
-  if (typeof raw.enabled === 'boolean' && normalized.enabled !== raw.enabled) return false;
-  if (typeof raw.browserNotifications === 'boolean' && normalized.browserNotifications !== raw.browserNotifications) return false;
-  return true;
+function appliedExperimentReferencesValid(scheduleStore, templates, experiments) {
+  const byId = new Map(experiments.map((experiment) => [experiment.id, experiment]));
+  const rows = [
+    ...Object.values(scheduleStore.days).flat(),
+    ...templates.flatMap((template) => template.schedules),
+  ];
+
+  return rows.every((row) => (
+    Array.isArray(row.appliedExperimentIds)
+    && row.appliedExperimentIds.every((id) => {
+      const experiment = byId.get(id);
+      // Older releases allowed an adopted leaf experiment to be deleted while
+      // schedules/templates kept its applied marker. Preserve that opaque legacy
+      // provenance instead of making a real historical backup unrestorable.
+      if (!experiment) return true;
+      // If the referenced experiment is present, however, its lifecycle is known
+      // and must agree with what an applied marker means.
+      return experiment.status === EXPERIMENT_STATUS.COMPLETED
+        && experiment.decision === EXPERIMENT_DECISION.ADOPT;
+    })
+  ));
 }
 
 export function createBackupPayload({ store, templates, experiments = [], reminderPreferences, exportedAt = new Date().toISOString() }) {
@@ -49,11 +77,16 @@ export function createBackupPayload({ store, templates, experiments = [], remind
 export function serializeBackup(input) { return `${JSON.stringify(createBackupPayload(input), null, 2)}\n`; }
 
 export function parseBackup(raw) {
+  if (typeof raw !== 'string' || new TextEncoder().encode(raw).byteLength > MAX_BACKUP_BYTES) {
+    return { ok: false, error: 'バックアップファイルが大きすぎます。10MB以下のファイルを選択してください。' };
+  }
+
   let parsed;
   try { parsed = JSON.parse(raw); } catch { return { ok: false, error: 'JSONとして読み込めませんでした。' }; }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { ok: false, error: 'RealitySyncのバックアップ形式ではありません。' };
+  if (!hasOnlyKeys(parsed, BACKUP_FIELDS)) return { ok: false, error: 'RealitySyncのバックアップ形式ではありません。' };
   if (parsed.format !== BACKUP_FORMAT) return { ok: false, error: 'RealitySyncのバックアップ識別子がありません。' };
   if (parsed.version !== BACKUP_VERSION) return { ok: false, error: 'このバックアップのバージョンにはまだ対応していません。' };
+  if (parsed.exportedAt !== undefined && typeof parsed.exportedAt !== 'string') return { ok: false, error: 'バックアップの書き出し日時が壊れています。' };
   if (!parsed.scheduleStore || typeof parsed.scheduleStore !== 'object' || Array.isArray(parsed.scheduleStore)) return { ok: false, error: '予定・実績データが見つかりません。' };
   if (!parsed.scheduleStore.days || typeof parsed.scheduleStore.days !== 'object' || Array.isArray(parsed.scheduleStore.days)) return { ok: false, error: '予定・実績データの構造が壊れています。' };
   if (!Array.isArray(parsed.templates)) return { ok: false, error: 'テンプレートデータの構造が壊れています。' };
@@ -76,16 +109,26 @@ export function parseBackup(raw) {
   const templates = templateResult.templates;
 
   const rawExperiments = parsed.experiments ?? [];
-  const experimentResult = parseStoredExperimentsForPersistence(JSON.stringify(rawExperiments));
+  // A backup is itself a current, versioned format. Do not route its experiment
+  // rows through the legacy bare-array compatibility path, which intentionally
+  // canonicalizes old form-shaped numeric strings during one-time migration.
+  const experimentResult = parseStoredExperimentsForPersistence(JSON.stringify({
+    version: EXPERIMENT_STORAGE_VERSION,
+    experiments: rawExperiments,
+  }));
   if (!experimentResult.ok || !experimentLineageValid(experimentResult.experiments)) {
     return { ok: false, error: '実験履歴に復元できない項目があります。' };
   }
   const experiments = experimentResult.experiments;
+  if (!appliedExperimentReferencesValid(scheduleStore, templates, experiments)) {
+    return { ok: false, error: '適用済みの学習を参照する予定またはテンプレートと、実験履歴の対応が壊れています。' };
+  }
 
-  const reminderPreferences = normalizeReminderPreferences(parsed.reminderPreferences);
-  if (!reminderPreferencesPreserved(parsed.reminderPreferences, reminderPreferences)) {
+  const reminderResult = parseStoredReminderPreferencesResult(JSON.stringify(parsed.reminderPreferences));
+  if (!reminderResult.ok) {
     return { ok: false, error: 'リマインダー設定に復元できない項目があります。' };
   }
+  const reminderPreferences = reminderResult.preferences;
 
   return {
     ok: true,

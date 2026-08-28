@@ -12,7 +12,7 @@ test('native iOS shell loads only the bundled web app and sends external links t
   assert.match(text, /loadFileURL\(indexURL, allowingReadAccessTo: root\)/);
   assert.match(text, /if url\.isFileURL/);
   assert.match(text, /UIApplication\.shared\.open\(url\)/);
-  assert.doesNotMatch(text, /load\(URLRequest\(url: URL\(string: "https?:\/\//);
+  assert.doesNotMatch(text, /load\(URLRequest\(/);
 });
 
 test('iOS privacy manifest declares no tracking or collected data for the current local-only release', () => {
@@ -60,8 +60,11 @@ test('unfinished browser notification control is hidden from the native App Stor
   assert.doesNotMatch(text, /ネイティブ通知は現在準備中/);
 });
 
-test('application-level erase clears every RealitySync storage domain and resets normalized state', () => {
-  const text = source('src/App.jsx');
+test('application-level erase verifies every RealitySync storage domain before resetting normalized state', () => {
+  const app = source('src/App.jsx');
+  const settings = source('src/components/SettingsModal.jsx');
+  const restore = source('src/utils/restore.js');
+
   for (const storageKey of [
     'STORAGE_KEY',
     'LEGACY_STORAGE_KEY',
@@ -70,13 +73,22 @@ test('application-level erase clears every RealitySync storage domain and resets
     'REMINDER_NOTIFIED_STORAGE_KEY',
     'EXPERIMENT_STORAGE_KEY',
   ]) {
-    assert.match(text, new RegExp(storageKey));
+    assert.match(restore, new RegExp(storageKey));
   }
-  assert.match(text, /replaceStore\(createEmptyScheduleStore\(\)\)/);
-  assert.match(text, /replaceTemplates\(\[\]\)/);
-  assert.match(text, /replaceExperiments\(\[\]\)/);
-  assert.match(text, /replaceReminderPreferences\(DEFAULT_REMINDER_PREFERENCES\)/);
-  assert.match(text, /window\.localStorage\.removeItem\(key\)/);
+  assert.match(restore, /eraseStoredRealitySyncDataResult/);
+  assert.match(restore, /storage\.removeItem\(key\)/);
+  assert.match(restore, /storage\.getItem\(key\) !== null/);
+  assert.match(settings, /const eraseResult = eraseStoredRealitySyncDataResult\(\)/);
+  assert.match(settings, /if \(!eraseResult\.ok\)/);
+  assert.match(settings, /eraseResult\.rollbackOk/);
+  assert.ok(
+    settings.indexOf('const eraseResult = eraseStoredRealitySyncDataResult()') < settings.indexOf('onEraseAllData();'),
+    'persistent erase and rollback status must be verified before React state is cleared',
+  );
+  assert.match(app, /replaceStore\(createEmptyScheduleStore\(\)\)/);
+  assert.match(app, /replaceTemplates\(\[\]\)/);
+  assert.match(app, /replaceExperiments\(\[\]\)/);
+  assert.match(app, /replaceReminderPreferences\(DEFAULT_REMINDER_PREFERENCES\)/);
 });
 
 test('native file bundle never attempts PWA service worker registration', () => {
@@ -95,16 +107,22 @@ test('public privacy, terms and support documents exist and match the current lo
   assert.match(privacy, /この端末のデータをすべて削除/);
   assert.match(terms, /医療・診断用途ではありません/);
   assert.match(support, /個人情報を公開しないでください/);
-  assert.match(support, /github\.com\/sunpotflower4460-cpu\/Reality-sync\/issues\/new/);
+  assert.match(support, /sunpotflower4460-cpu\/Reality-sync\/issues\/new/);
 });
 
-test('App Store icon is generated from source rather than relying on a missing committed release binary', () => {
+test('App Store icon is generated headlessly from source rather than relying on a committed release binary', () => {
   const contents = source('ios/RealitySync/Assets.xcassets/AppIcon.appiconset/Contents.json');
   const generator = source('scripts/generate-ios-icon.swift');
   const prepare = source('scripts/prepare-ios.sh');
   assert.match(contents, /AppIcon-1024\.png/);
-  assert.match(generator, /pixelsWide: Int\(size\.width\)/);
-  assert.match(generator, /hasAlpha: false/);
+  assert.match(generator, /let width = 1024/);
+  assert.match(generator, /let height = 1024/);
+  assert.match(generator, /CGContext\(/);
+  assert.match(generator, /CGImageAlphaInfo\.noneSkipLast/);
+  assert.match(generator, /CGImageDestinationCreateWithURL/);
+  assert.match(generator, /UTType\.png\.identifier/);
+  assert.doesNotMatch(generator, /NSGraphicsContext/);
+  assert.doesNotMatch(generator, /NSBitmapImageRep/);
   assert.match(prepare, /generate-ios-icon\.swift/);
   assert.match(prepare, /npm run build/);
 });

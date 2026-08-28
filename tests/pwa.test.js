@@ -13,11 +13,66 @@ test('PWA manifest uses relative install paths, light shell colors and a scalabl
   assert.equal(manifest.icons.some((icon) => icon.src === './icon.svg' && icon.type === 'image/svg+xml'), true);
 });
 
-test('service worker includes offline runtime caching and notification click handling', async () => {
+test('service worker scopes runtime caching, awaits writes and bounds old hashed assets', async () => {
   const worker = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
   assert.match(worker, /addEventListener\('fetch'/);
   assert.match(worker, /addEventListener\('notificationclick'/);
-  assert.match(worker, /CACHE_NAME/);
+  assert.match(worker, /MAX_RUNTIME_ASSET_ENTRIES/);
+  assert.match(worker, /if \(response\.ok\) await putResponse\(request, response\);/);
+  assert.doesNotMatch(worker, /then\(\(response\) => \{[\s\S]*?event\.waitUntil\(putResponse/);
+  assert.match(worker, /url\.href\.startsWith\(scopeUrl\.href\)/);
+  assert.match(worker, /client\.url\.startsWith\(scopeUrl\.href\)/);
+  assert.match(worker, /Response\.error\(\)/);
+});
+
+test('service worker activation deletes only obsolete RealitySync-owned caches', async () => {
+  const worker = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
+  assert.match(worker, /const CACHE_PREFIX = 'reality-sync-shell-'/);
+  assert.match(worker, /const CACHE_NAME = `\$\{CACHE_PREFIX\}v3`/);
+  assert.match(worker, /key\.startsWith\(CACHE_PREFIX\) && key !== CACHE_NAME/);
+  assert.doesNotMatch(worker, /keys\.filter\(\(key\) => key !== CACHE_NAME\)/);
+});
+
+test('navigation caching uses canonical app-shell keys instead of accumulating query-specific HTML snapshots', async () => {
+  const worker = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
+  assert.match(worker, /async function putNavigationResponse\(response\)/);
+  assert.match(worker, /cache\.put\(scopeUrl\.href, response\.clone\(\)\)/);
+  assert.match(worker, /cache\.put\(indexUrl\.href, response\.clone\(\)\)/);
+  const navigationStart = worker.indexOf("if (request.mode === 'navigate')");
+  const firstRespond = worker.indexOf('event.respondWith((async () => {', navigationStart);
+  const secondRespond = worker.indexOf('event.respondWith((async () => {', firstRespond + 1);
+  const navigationBlock = worker.slice(navigationStart, secondRespond);
+  assert.ok(navigationStart >= 0);
+  assert.ok(firstRespond > navigationStart);
+  assert.ok(secondRespond > firstRespond);
+  assert.match(navigationBlock, /await putNavigationResponse\(response\)/);
+  assert.doesNotMatch(navigationBlock, /cache\.match\(request\)/);
+  assert.doesNotMatch(navigationBlock, /putResponse\(request, response\)/);
+});
+
+test('privacy terms and support navigations cannot replace the cached SPA shell', async () => {
+  const worker = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
+  assert.match(worker, /function isAppShellNavigation\(url\)/);
+  assert.match(worker, /url\.pathname === scopeUrl\.pathname \|\| url\.pathname === indexUrl\.pathname/);
+  const navigationStart = worker.indexOf("if (request.mode === 'navigate')");
+  const firstRespond = worker.indexOf('event.respondWith((async () => {', navigationStart);
+  const guard = worker.indexOf('if (!isAppShellNavigation(url)) return;', navigationStart);
+  assert.ok(guard > navigationStart);
+  assert.ok(guard < firstRespond);
+});
+
+test('PWA install prompt is consumed before awaiting and cannot reject into the UI event loop', async () => {
+  const hook = await readFile(new URL('../src/hooks/usePwaInstall.js', import.meta.url), 'utf8');
+  const inFlightGuard = hook.indexOf('if (!promptEvent || installInFlightRef.current) return null;');
+  const consumePrompt = hook.indexOf('installInFlightRef.current = true;', inFlightGuard);
+  const promptCall = hook.indexOf('await promptEvent.prompt();', consumePrompt);
+  const catchBlock = hook.indexOf('} catch {', promptCall);
+  assert.ok(inFlightGuard >= 0);
+  assert.ok(consumePrompt > inFlightGuard);
+  assert.ok(promptCall > consumePrompt);
+  assert.ok(catchBlock > promptCall);
+  assert.match(hook, /setInstallPrompt\(\(current\) => current === promptEvent \? null : current\)/);
+  assert.match(hook, /finally \{\s*installInFlightRef\.current = false;/s);
 });
 
 test('HTML links install assets and uses light browser theme chrome', async () => {

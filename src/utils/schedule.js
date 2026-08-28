@@ -54,6 +54,11 @@ function normalizeCategory(value, fallback = 'その他') {
   return VALID_CATEGORIES.has(fallback) ? fallback : 'その他';
 }
 
+function normalizeOptionalCategory(value, fallback = null) {
+  if (VALID_CATEGORIES.has(value)) return value;
+  return VALID_CATEGORIES.has(fallback) ? fallback : null;
+}
+
 function normalizeId(value, fallback) {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string' && value.trim()) return value.trim();
@@ -191,8 +196,10 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
     : null;
 
   if (status === STATUS.AS_PLANNED) {
-    normalized.actualTitle = normalizeText(source.actualTitle, normalizeText(base.actualTitle, normalized.title));
-    normalized.actualCategory = normalizeCategory(source.actualCategory, base.actualCategory ?? normalized.category);
+    const recordedTitleFallback = normalized.plannedSnapshot?.title ?? normalized.title;
+    const recordedCategoryFallback = normalized.plannedSnapshot?.category ?? normalized.category;
+    normalized.actualTitle = normalizeText(source.actualTitle, normalizeText(base.actualTitle, recordedTitleFallback));
+    normalized.actualCategory = normalizeCategory(source.actualCategory, base.actualCategory ?? recordedCategoryFallback);
     normalized.actualDuration = normalizeOptionalNumber(actualField(source, base, 'actualDuration'), 0, 1440);
     normalized.deviationReason = null;
     return normalized;
@@ -216,7 +223,7 @@ export function normalizeSchedule(schedule, fallback = {}, generatedId = 'schedu
   }
 
   normalized.actualTitle = actualTitle;
-  normalized.actualCategory = normalizeCategory(source.actualCategory, base.actualCategory);
+  normalized.actualCategory = normalizeOptionalCategory(source.actualCategory, base.actualCategory);
   normalized.actualDuration = normalizeOptionalNumber(actualField(source, base, 'actualDuration'), 0, 1440);
   normalized.deviationReason = normalizeOptionalText(source.deviationReason, base.deviationReason);
   return normalized;
@@ -325,7 +332,7 @@ export function calculateStats(schedules) {
     }
 
     if (schedule.status === STATUS.CHANGED) {
-      const category = schedule.actualCategory || 'その他';
+      const category = schedule.actualCategory || '未分類';
       ensureCategory(category);
       if (Number.isFinite(schedule.actualDuration)) categories[category].actual += schedule.actualDuration;
       else unknownActualDurationCount += 1;

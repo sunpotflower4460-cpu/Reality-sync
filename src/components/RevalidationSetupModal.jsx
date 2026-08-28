@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { GitBranch, History, RefreshCcw, ShieldCheck, XCircle } from 'lucide-react';
 import { calculateContextShiftSummary } from '../utils/contextShift.js';
 import {
@@ -30,6 +30,10 @@ function percent(value) {
 
 export function RevalidationSetupModal({ sourceExperiment, retentionSummary, proposedVersion, dateKey, days = {}, onStart, onClose }) {
   const effectiveStartDate = shiftDateKey(dateKey, 1);
+  // Keep the exact parent revision that the user opened. If another tab replaces
+  // the same experiment id while this modal is open, the hook will reject the
+  // revalidation instead of attaching this old Retention snapshot to new facts.
+  const sourceRevisionRef = useRef(JSON.stringify(sourceExperiment));
   const [action, setAction] = useState(sourceExperiment.action);
   const [targetRuns, setTargetRuns] = useState(3);
   const [adjustmentValue, setAdjustmentValue] = useState(() => optionValue(sourceExperiment.planAdjustment));
@@ -65,8 +69,9 @@ export function RevalidationSetupModal({ sourceExperiment, retentionSummary, pro
       contextRule,
       days,
       targetRuns,
+      sourceRevision: sourceRevisionRef.current,
     });
-    if (!ok) { setError('現在の評価境界では安全に再検証を開始できませんでした。最新の「今日」の傾向を確認してください。'); return; }
+    if (!ok) { setError('現在の評価境界では安全に再検証を開始できませんでした。親の学習履歴または最新の「今日」の傾向が変わっていないか確認してください。'); return; }
     onClose();
   };
 

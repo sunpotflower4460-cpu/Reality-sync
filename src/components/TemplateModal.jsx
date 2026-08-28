@@ -1,10 +1,26 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Copy, Plus, Trash2, XCircle } from 'lucide-react';
 import { ModalDialog } from './ModalDialog.jsx';
 
 export function TemplateModal({ templates, currentSchedules, onClose, onSaveTemplate, onApplyTemplate, onDeleteTemplate }) {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
+  const dirty = name.length > 0;
+
+  useEffect(() => {
+    if (!dirty || window.location.protocol === 'file:') return undefined;
+    const guardUnsavedInput = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', guardUnsavedInput);
+    return () => window.removeEventListener('beforeunload', guardUnsavedInput);
+  }, [dirty]);
+
+  const requestClose = () => {
+    if (dirty && !window.confirm('入力途中のテンプレート名があります。保存せずに閉じますか？')) return;
+    onClose();
+  };
 
   const saveCurrent = () => {
     const trimmed = name.trim();
@@ -18,16 +34,33 @@ export function TemplateModal({ templates, currentSchedules, onClose, onSaveTemp
     }
     const saved = onSaveTemplate(trimmed);
     if (!saved) {
-      setError('テンプレートを保存できませんでした。');
+      setError('テンプレートを保存できませんでした。保存状態が別の画面で変わっていないか確認してください。');
       return;
     }
     setName('');
     setError('');
   };
 
+  const applyTemplate = (template) => {
+    if (dirty && !window.confirm('入力途中のテンプレート名は保存されていません。この名前を破棄してテンプレートを適用しますか？')) return;
+    const applied = onApplyTemplate(template);
+    if (applied === false) {
+      setError('適用直前にこの日の予定または保存状態が変わりました。最新の内容を確認してからもう一度適用してください。');
+    }
+  };
+
+  const deleteTemplate = (template) => {
+    const reviewedRevision = JSON.stringify(template);
+    if (!window.confirm(`「${template.name}」を削除しますか？`)) return;
+    const deleted = onDeleteTemplate(template.id, reviewedRevision);
+    if (deleted === false) {
+      setError('削除直前にテンプレートの保存状態が変わりました。最新の一覧を確認してからもう一度削除してください。');
+    }
+  };
+
   return (
     <ModalDialog
-      onClose={onClose}
+      onClose={requestClose}
       labelledBy="template-modal-title"
       placement="sheet"
       className="max-h-[94dvh] w-full max-w-sm overflow-y-auto rounded-t-[1.75rem] rounded-b-none bg-[#f7f8fb] shadow-[0_24px_70px_rgba(15,23,42,0.28)] sm:rounded-[1.75rem]"
@@ -39,7 +72,7 @@ export function TemplateModal({ templates, currentSchedules, onClose, onSaveTemp
             <h3 id="template-modal-title" className="text-[13px] font-black text-slate-900">1日のテンプレート</h3>
             <p className="mt-0.5 text-[9px] text-slate-400">よく使う予定だけを保存。実績は入りません。</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="テンプレート画面を閉じる" className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-400"><XCircle className="h-4 w-4" /></button>
+          <button type="button" onClick={requestClose} aria-label="テンプレート画面を閉じる" className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-400"><XCircle className="h-4 w-4" /></button>
         </div>
       </div>
 
@@ -67,9 +100,9 @@ export function TemplateModal({ templates, currentSchedules, onClose, onSaveTemp
             <div key={template.id} className="app-card rounded-[1.15rem] p-3">
               <div className="mb-2 flex items-start justify-between gap-3">
                 <div><div className="text-[12px] font-black text-slate-800">{template.name}</div><div className="mt-0.5 text-[9px] text-slate-400">{template.schedules.length}件の予定</div></div>
-                <button type="button" onClick={() => { if (window.confirm(`「${template.name}」を削除しますか？`)) onDeleteTemplate(template.id); }} aria-label={`${template.name} を削除`} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-rose-50 hover:text-rose-500"><Trash2 className="h-3.5 w-3.5" /></button>
+                <button type="button" onClick={() => deleteTemplate(template)} aria-label={`${template.name} を削除`} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-rose-50 hover:text-rose-500"><Trash2 className="h-3.5 w-3.5" /></button>
               </div>
-              <button type="button" onClick={() => onApplyTemplate(template)} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-indigo-50 text-[10px] font-extrabold text-indigo-600 hover:bg-indigo-100">
+              <button type="button" onClick={() => applyTemplate(template)} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-indigo-50 text-[10px] font-extrabold text-indigo-600 hover:bg-indigo-100">
                 <Copy className="h-3.5 w-3.5" />この日に適用する
               </button>
             </div>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, ChevronDown, Clock, Frown, Meh, Smile, X } from 'lucide-react';
 import { CATEGORIES, MOOD, STATUS } from '../constants.js';
 import { dateKeyFromDate, isValidDateKey } from '../utils/date.js';
@@ -16,7 +16,11 @@ function isBlankValue(value) {
   return value === null || value === undefined || (typeof value === 'string' && value.trim() === '');
 }
 
-export function RecordModal({ schedule, dateKey, onClose, onSave }) {
+function draftValueKey(value) {
+  return value === null || value === undefined ? '' : String(value);
+}
+
+export function RecordModal({ schedule, dateKey, stale = false, onClose, onSave }) {
   const recordedPlan = recordedPlanForSchedule(schedule);
   const planReferenceLabel = schedule.plannedSnapshot
     ? '記録時の予定'
@@ -24,20 +28,46 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
       ? '予定'
       : '現在の予定（記録時は不明）';
   const hasRecordedStress = Number.isFinite(schedule.actualStress);
-  const [recordMode, setRecordMode] = useState(schedule.status !== STATUS.PENDING ? schedule.status : STATUS.AS_PLANNED);
-  const [actualTitle, setActualTitle] = useState(() => replacementTitleForEditing(schedule));
-  const [actualCategory, setActualCategory] = useState(schedule.actualCategory || recordedPlan.category || 'その他');
-  const [mood, setMood] = useState(schedule.mood ?? null);
-  const [actualStress, setActualStress] = useState(hasRecordedStress ? schedule.actualStress : null);
+  const initialRecordMode = schedule.status !== STATUS.PENDING ? schedule.status : STATUS.AS_PLANNED;
+  const initialActualTitle = replacementTitleForEditing(schedule);
+  const initialActualCategory = schedule.status === STATUS.CHANGED ? (schedule.actualCategory ?? '') : '';
+  const initialMood = schedule.mood ?? null;
+  const initialActualStress = hasRecordedStress ? schedule.actualStress : null;
+  const initialActualDuration = schedule.status === STATUS.SKIPPED ? 0 : (schedule.actualDuration ?? '');
+  const initialActualStartTime = schedule.actualStartTime || '';
+  const initialActualStartDateKey = schedule.actualStartDateKey || (schedule.actualStartTime ? '' : (dateKey || ''));
+  const initialDeviationReason = schedule.deviationReason || '';
+  const [recordMode, setRecordMode] = useState(initialRecordMode);
+  const [actualTitle, setActualTitle] = useState(initialActualTitle);
+  const [actualCategory, setActualCategory] = useState(initialActualCategory);
+  const [mood, setMood] = useState(initialMood);
+  const [actualStress, setActualStress] = useState(initialActualStress);
   const [stressEditing, setStressEditing] = useState(hasRecordedStress);
   const [stressDraft, setStressDraft] = useState(hasRecordedStress ? schedule.actualStress : 50);
-  const [actualDuration, setActualDuration] = useState(
-    schedule.status === STATUS.SKIPPED ? 0 : (schedule.actualDuration ?? ''),
-  );
-  const [actualStartTime, setActualStartTime] = useState(schedule.actualStartTime || '');
-  const [actualStartDateKey, setActualStartDateKey] = useState(schedule.actualStartDateKey || dateKey || '');
-  const [deviationReason, setDeviationReason] = useState(schedule.deviationReason || '');
+  const [actualDuration, setActualDuration] = useState(initialActualDuration);
+  const [actualStartTime, setActualStartTime] = useState(initialActualStartTime);
+  const [actualStartDateKey, setActualStartDateKey] = useState(initialActualStartDateKey);
+  const [deviationReason, setDeviationReason] = useState(initialDeviationReason);
   const [error, setError] = useState('');
+  const dirty = recordMode !== initialRecordMode
+    || actualTitle !== initialActualTitle
+    || actualCategory !== initialActualCategory
+    || mood !== initialMood
+    || actualStress !== initialActualStress
+    || draftValueKey(actualDuration) !== draftValueKey(initialActualDuration)
+    || actualStartTime !== initialActualStartTime
+    || actualStartDateKey !== initialActualStartDateKey
+    || deviationReason !== initialDeviationReason;
+
+  useEffect(() => {
+    if (!dirty || window.location.protocol === 'file:') return undefined;
+    const guardUnsavedInput = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', guardUnsavedInput);
+    return () => window.removeEventListener('beforeunload', guardUnsavedInput);
+  }, [dirty]);
 
   const title = useMemo(() => {
     if (recordMode === STATUS.AS_PLANNED) {
@@ -49,6 +79,11 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
     return actualTitle.trim();
   }, [actualTitle, recordMode, recordedPlan.title, schedule.actualTitle, schedule.status]);
 
+  const requestClose = () => {
+    if (dirty && !window.confirm('入力途中の実績があります。保存せずに閉じますか？')) return;
+    onClose();
+  };
+
   const selectMode = (nextMode) => {
     setActualDuration((current) => {
       const next = durationAfterStatusChange(current, recordMode, nextMode, recordedPlan.duration);
@@ -59,6 +94,10 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
   };
 
   const submit = () => {
+    if (stale) {
+      setError('この予定は別の画面で変更されました。入力内容を守るため、この画面からの保存を停止しています。内容を控えて閉じ、最新の予定を開き直してください。');
+      return;
+    }
     if (recordMode === STATUS.CHANGED && !actualTitle.trim()) {
       setError('予定を変更した場合は、代わりに行ったことを入力してください。');
       return;
@@ -76,12 +115,12 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
       return;
     }
 
-    if (recordMode !== STATUS.SKIPPED && actualStartTime && !isValidDateKey(actualStartDateKey)) {
+    if (recordMode !== STATUS.SKIPPED && actualStartTime && actualStartDateKey && !isValidDateKey(actualStartDateKey)) {
       setError('実際の開始日を正しい日付で入力してください。');
       return;
     }
 
-    if (recordMode !== STATUS.SKIPPED && actualStartTime && actualStartDateKey > dateKeyFromDate()) {
+    if (recordMode !== STATUS.SKIPPED && actualStartTime && actualStartDateKey && actualStartDateKey > dateKeyFromDate()) {
       setError('実際の開始日に未来の日付は保存できません。');
       return;
     }
@@ -89,14 +128,14 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
     const recordedCategory = recordMode === STATUS.SKIPPED
       ? null
       : recordMode === STATUS.CHANGED
-        ? actualCategory
+        ? (actualCategory || null)
         : schedule.status === STATUS.AS_PLANNED
           ? schedule.actualCategory || recordedPlan.category
           : recordedPlan.category;
     const plannedSnapshot = schedule.plannedSnapshot
       ?? (schedule.status === STATUS.PENDING ? createPlannedSnapshot(schedule) : null);
 
-    onSave({
+    const saved = onSave({
       status: recordMode,
       plannedSnapshot,
       actualTitle: title,
@@ -105,11 +144,14 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
       actualStress: Number.isFinite(actualStress) ? actualStress : null,
       actualDuration: recordMode === STATUS.SKIPPED ? 0 : (durationBlank ? null : parsedDuration),
       actualStartTime: recordMode === STATUS.SKIPPED ? null : (actualStartTime || null),
-      actualStartDateKey: recordMode === STATUS.SKIPPED || !actualStartTime ? null : actualStartDateKey,
+      actualStartDateKey: recordMode === STATUS.SKIPPED || !actualStartTime || !actualStartDateKey ? null : actualStartDateKey,
       deviationReason: recordMode === STATUS.CHANGED || recordMode === STATUS.SKIPPED
         ? deviationReason.trim() || null
         : null,
     });
+    if (saved === false) {
+      setError('保存直前に予定の更新を検出しました。入力内容はこの画面に残しています。内容を控えて閉じ、最新の予定を開き直してください。');
+    }
   };
 
   const beginStressEntry = () => {
@@ -137,7 +179,7 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
 
   return (
     <ModalDialog
-      onClose={onClose}
+      onClose={requestClose}
       labelledBy="record-modal-title"
       placement="sheet"
       className="sheet-scroll max-h-[94dvh] w-full max-w-sm overflow-y-auto rounded-t-[1.65rem] rounded-b-none bg-[#f7f8fb] shadow-[0_22px_64px_rgba(15,23,42,0.24)] sm:rounded-[1.65rem]"
@@ -150,11 +192,18 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
             <h3 id="record-modal-title" className="mt-0.5 text-[16px] font-semibold tracking-[-0.02em] text-slate-900">実際どうだった？</h3>
             <p className="mt-0.5 text-[9px] font-normal text-slate-400">評価ではなく、この日の現実を残す</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="記録画面を閉じる" className="tap-target flex items-center justify-center rounded-full bg-slate-100 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600"><X className="h-4.5 w-4.5" /></button>
+          <button type="button" onClick={requestClose} aria-label="記録画面を閉じる" className="tap-target flex items-center justify-center rounded-full bg-slate-100 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600"><X className="h-4.5 w-4.5" /></button>
         </div>
       </div>
 
       <div className="space-y-3 p-3.5">
+        {stale && (
+          <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[9px] leading-relaxed text-amber-800">
+            <div className="font-semibold">別の画面でこの予定が更新されました</div>
+            <p className="mt-1">入力途中の内容はこの画面に保持しています。古い予定へ上書きしないため保存を停止しました。内容を控えて閉じ、最新の予定を開き直してください。</p>
+          </div>
+        )}
+
         <div className="app-group flex items-center gap-3 p-3">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-500"><Clock className="h-4 w-4" aria-hidden="true" /></div>
           <div className="min-w-0"><div className="text-[8px] font-medium text-slate-400">{planReferenceLabel} ・ {dateKey} {recordedPlan.time}</div><div className="mt-0.5 truncate text-[13px] font-semibold text-slate-800">{recordedPlan.title}</div></div>
@@ -172,7 +221,7 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
         {recordMode === STATUS.CHANGED && (
           <div className="animate-slide-down space-y-3 rounded-[1rem] border border-amber-100 bg-amber-50/65 p-3">
             <label className="block"><span className="mb-1.5 block text-[10px] font-semibold text-amber-800">代わりに行ったこと</span><input type="text" value={actualTitle} onChange={(event) => { setActualTitle(event.target.value); setError(''); }} placeholder="例: ベッドで本を読んだ" className="w-full rounded-xl border border-amber-200 bg-white p-3 text-sm outline-none focus:border-amber-400" /></label>
-            <label className="block"><span className="mb-1.5 block text-[10px] font-semibold text-amber-800">カテゴリ</span><select value={actualCategory} onChange={(event) => setActualCategory(event.target.value)} className="w-full rounded-xl border border-amber-200 bg-white p-3 text-sm text-slate-700 outline-none focus:border-amber-400">{CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
+            <label className="block"><span className="mb-1.5 block text-[10px] font-semibold text-amber-800">カテゴリ <span className="font-normal text-amber-600/70">（任意）</span></span><select value={actualCategory} onChange={(event) => setActualCategory(event.target.value)} className="w-full rounded-xl border border-amber-200 bg-white p-3 text-sm text-slate-700 outline-none focus:border-amber-400"><option value="">未記録</option>{CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
           </div>
         )}
 
@@ -190,7 +239,7 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
           )}
 
           <div className="space-y-2.5 p-3.5">
-            <div className="flex items-end justify-between gap-3"><div><p className="text-[12px] font-semibold text-slate-800">実際の負荷 <span className="font-normal text-slate-400">（任意）</span></p><p className="mt-0.5 text-[8px] font-normal text-slate-400">予定では {recordedPlan.plannedStress}。未記録は予定値で補いません</p></div><span className={`text-[18px] font-semibold ${actualStress === null ? 'text-slate-300' : actualStress > 80 ? 'text-rose-500' : 'text-indigo-600'}`}>{actualStress ?? '—'}</span></div>
+            <div className="flex items-end justify-between gap-3"><div><p className="text-[12px] font-semibold text-slate-800">実際の負荷 <span className="font-normal text-slate-400">（任意）</span></p><p className="mt-0.5 block text-[8px] font-normal text-slate-400">予定では {recordedPlan.plannedStress}。未記録は予定値で補いません</p></div><span className={`text-[18px] font-semibold ${actualStress === null ? 'text-slate-300' : actualStress > 80 ? 'text-rose-500' : 'text-indigo-600'}`}>{actualStress ?? '—'}</span></div>
             {!stressEditing ? (
               <button type="button" onClick={beginStressEntry} className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] font-medium text-indigo-600">負荷を記録する</button>
             ) : (
@@ -220,7 +269,7 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
                   <label className="block"><span className="mb-1.5 block text-[9px] font-medium text-slate-600">開始日</span><input type="date" value={actualStartDateKey} max={dateKeyFromDate()} onChange={(event) => { setActualStartDateKey(event.target.value); setError(''); }} className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>
                   <label className="block"><span className="mb-1.5 block text-[9px] font-medium text-slate-600">開始時刻</span><input type="time" value={actualStartTime} onChange={(event) => { setActualStartTime(event.target.value); setError(''); }} className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>
                 </div>
-                <p className="mt-1.5 text-[8px] leading-relaxed text-slate-400">覚えていなければ空欄でOKです。時刻を入れた時だけ開始日とセットで保存します。</p>
+                <p className="mt-1.5 text-[8px] leading-relaxed text-slate-400">覚えていなければ空欄でOKです。開始時刻だけ分かる旧記録は、開始日を推測せずそのまま保存します。</p>
               </div>
             )}
 
@@ -237,7 +286,7 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
         {error && <p role="alert" className="rounded-xl border border-rose-100 bg-rose-50 p-3 text-[10px] font-medium text-rose-600">{error}</p>}
       </div>
 
-      <div className="sticky bottom-0 z-10 border-t border-slate-100 bg-white/96 p-3 pb-modal-safe backdrop-blur-2xl"><button type="button" onClick={submit} className="min-h-12 w-full rounded-xl bg-indigo-600 px-4 text-[13px] font-semibold text-white shadow-[0_5px_16px_rgba(79,70,229,0.18)] transition hover:bg-indigo-700 active:scale-[0.99]">この内容で記録する</button></div>
+      <div className="sticky bottom-0 z-10 border-t border-slate-100 bg-white/96 p-3 pb-modal-safe backdrop-blur-2xl"><button type="button" onClick={submit} disabled={stale} className="min-h-12 w-full rounded-xl bg-indigo-600 px-4 text-[13px] font-semibold text-white shadow-[0_5px_16px_rgba(79,70,229,0.18)] transition hover:bg-indigo-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none">{stale ? '外部更新のため保存停止中' : 'この内容で記録する'}</button></div>
     </ModalDialog>
   );
 }

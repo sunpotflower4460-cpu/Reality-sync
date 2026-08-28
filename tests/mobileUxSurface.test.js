@@ -13,6 +13,9 @@ test('date navigation keeps the displayed date as the picker target with 44 poin
   assert.match(text, /absolute inset-0 h-full w-full cursor-pointer opacity-0/);
   assert.match(text, /日付を選ぶ/);
   assert.match(text, /今日に戻る/);
+  assert.match(text, /if \(!isValidDateKey\(nextDateKey\)\) return;/);
+  assert.match(text, /min="0100-01-01"/);
+  assert.match(text, /onChange=\{\(event\) => selectDate\(event\.target\.value\)\}/);
 });
 
 test('bottom navigation is edge attached, safe-area aware and never a floating selection card', () => {

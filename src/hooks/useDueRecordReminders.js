@@ -1,26 +1,64 @@
-import { useEffect, useMemo, useState } from 'react';
-import { REMINDER_NOTIFIED_STORAGE_KEY } from '../constants.js';
-import { dateKeyFromDate } from '../utils/date.js';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { REMINDER_NOTIFIED_STORAGE_KEY, STORAGE_KEY } from '../constants.js';
+import { dateKeyFromDate, shiftDateKey } from '../utils/date.js';
 import {
+  getCarryoverDuePendingSchedules,
   getDuePendingSchedules,
   normalizeNotifiedReminderKeys,
   reminderNotificationKey,
 } from '../utils/reminder.js';
+import { BACKUP_RESTORED_EVENT } from '../utils/restore.js';
+import { parseStoredScheduleStoreResult } from '../utils/storage.js';
 
-function readNotifiedKeys(todayKey) {
+function normalizedStoredNotificationKeys(rawValue, dateKeys) {
+  let parsed;
   try {
-    const raw = window.localStorage.getItem(REMINDER_NOTIFIED_STORAGE_KEY);
-    return normalizeNotifiedReminderKeys(raw ? JSON.parse(raw) : [], todayKey);
+    parsed = rawValue ? JSON.parse(rawValue) : [];
+  } catch {
+    parsed = [];
+  }
+  return [...new Set(dateKeys.flatMap((dateKey) => normalizeNotifiedReminderKeys(parsed, dateKey)))];
+}
+
+function readNotifiedKeys(dateKeys) {
+  try {
+    return normalizedStoredNotificationKeys(
+      window.localStorage.getItem(REMINDER_NOTIFIED_STORAGE_KEY),
+      dateKeys,
+    );
   } catch {
     return [];
   }
 }
 
-function writeNotifiedKeys(keys) {
+function writeNotifiedKeys(keys, dateKeys) {
   try {
-    window.localStorage.setItem(REMINDER_NOTIFIED_STORAGE_KEY, JSON.stringify([...new Set(keys)]));
+    // Merge with the latest retained keys immediately before writing. Without
+    // this, two tabs notifying different schedules can each overwrite the
+    // other's dedupe key and make a previously shown notification eligible
+    // again on a later pass.
+    const latest = normalizedStoredNotificationKeys(
+      window.localStorage.getItem(REMINDER_NOTIFIED_STORAGE_KEY),
+      dateKeys,
+    );
+    const merged = [...new Set([...latest, ...keys])];
+    window.localStorage.setItem(REMINDER_NOTIFIED_STORAGE_KEY, JSON.stringify(merged));
+    const readBack = normalizedStoredNotificationKeys(
+      window.localStorage.getItem(REMINDER_NOTIFIED_STORAGE_KEY),
+      dateKeys,
+    );
+    return merged.every((key) => readBack.includes(key));
   } catch {
-    // Notification deduplication becomes session-only if storage is unavailable.
+    return false;
+  }
+}
+
+function readSchedulesForDate(dateKey) {
+  try {
+    const result = parseStoredScheduleStoreResult(window.localStorage.getItem(STORAGE_KEY));
+    return result.ok ? (result.store.days[dateKey] ?? []) : [];
+  } catch {
+    return [];
   }
 }
 
@@ -53,8 +91,9 @@ async function showBrowserNotification(schedule, dateKey) {
   }
 }
 
-export function useDueRecordReminders({ schedules, dateKey, preferences }) {
+export function useDueRecordReminders({ schedules, dateKey, scheduleDays, preferences }) {
   const [now, setNow] = useState(() => new Date());
+  const sessionNotifiedRef = useRef(new Set());
 
   useEffect(() => {
     const refresh = () => setNow(new Date());
@@ -71,34 +110,97 @@ export function useDueRecordReminders({ schedules, dateKey, preferences }) {
     };
   }, []);
 
+  useEffect(() => {
+    const resetAfterRestore = () => {
+      sessionNotifiedRef.current.clear();
+      setNow(new Date());
+    };
+    window.addEventListener(BACKUP_RESTORED_EVENT, resetAfterRestore);
+    return () => window.removeEventListener(BACKUP_RESTORED_EVENT, resetAfterRestore);
+  }, []);
+
+  useEffect(() => {
+    const resetAfterExternalRestore = (event) => {
+      // Backup restore/erase removes the persisted notification ledger. Storage
+      // events do not fire in the tab that performed the change (handled by the
+      // custom event above), but they do fire in other open tabs. Clear the
+      // per-tab session ledger there too so restored schedules with the same
+      // date/id are not incorrectly treated as already notified.
+      if (event.key !== REMINDER_NOTIFIED_STORAGE_KEY || event.newValue !== null) return;
+      sessionNotifiedRef.current.clear();
+      setNow(new Date());
+    };
+    window.addEventListener('storage', resetAfterExternalRestore);
+    return () => window.removeEventListener('storage', resetAfterExternalRestore);
+  }, []);
+
   const dueSchedules = useMemo(
     () => getDuePendingSchedules(schedules, dateKey, now, preferences),
     [dateKey, now, preferences, schedules],
   );
+  const todayKey = dateKeyFromDate(now);
+  const previousDateKey = shiftDateKey(todayKey, -1);
+  const schedulesForDate = (targetDateKey) => {
+    if (dateKey === targetDateKey) return schedules;
+    const inMemory = scheduleDays?.[targetDateKey];
+    if (Array.isArray(inMemory)) return inMemory;
+    return readSchedulesForDate(targetDateKey);
+  };
+  const todaySchedules = useMemo(
+    () => schedulesForDate(todayKey),
+    [dateKey, scheduleDays, schedules, todayKey],
+  );
+  const previousSchedules = useMemo(
+    () => schedulesForDate(previousDateKey),
+    [dateKey, previousDateKey, scheduleDays, schedules],
+  );
+  const notificationCandidates = useMemo(() => [
+    ...getDuePendingSchedules(todaySchedules, todayKey, now, preferences)
+      .map((schedule) => ({ dateKey: todayKey, schedule })),
+    ...getCarryoverDuePendingSchedules(previousSchedules, previousDateKey, now, preferences)
+      .map((schedule) => ({ dateKey: previousDateKey, schedule })),
+  ], [now, preferences, previousDateKey, previousSchedules, todayKey, todaySchedules]);
 
   useEffect(() => {
-    if (!preferences.browserNotifications || dueSchedules.length === 0) return;
+    if (!preferences.browserNotifications || notificationCandidates.length === 0) return;
     if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
 
-    const todayKey = dateKeyFromDate(now);
-    const notified = new Set(readNotifiedKeys(todayKey));
-    const pendingNotifications = dueSchedules.filter((schedule) => !notified.has(reminderNotificationKey(dateKey, schedule.id)));
+    const retainedDateKeys = [todayKey, previousDateKey];
+    const sessionKeys = retainedDateKeys.flatMap((key) => (
+      normalizeNotifiedReminderKeys([...sessionNotifiedRef.current], key)
+    ));
+    sessionNotifiedRef.current = new Set(sessionKeys);
+    const notified = new Set([...readNotifiedKeys(retainedDateKeys), ...sessionKeys]);
+    const pendingNotifications = notificationCandidates.filter(({ dateKey: sourceDateKey, schedule }) => (
+      !notified.has(reminderNotificationKey(sourceDateKey, schedule.id))
+    ));
     if (pendingNotifications.length === 0) return;
 
     let cancelled = false;
     const notify = async () => {
-      for (const schedule of pendingNotifications) {
+      for (const { dateKey: sourceDateKey, schedule } of pendingNotifications) {
         if (cancelled) return;
-        const shown = await showBrowserNotification(schedule, dateKey);
-        if (!shown || cancelled) continue;
-        const key = reminderNotificationKey(dateKey, schedule.id);
+        const key = reminderNotificationKey(sourceDateKey, schedule.id);
+        // Reserve before awaiting the OS so a focus/visibility rerender cannot
+        // launch a second notification for the same schedule in parallel.
+        sessionNotifiedRef.current.add(key);
+        const shown = await showBrowserNotification(schedule, sourceDateKey);
+        if (!shown) {
+          sessionNotifiedRef.current.delete(key);
+          continue;
+        }
         notified.add(key);
-        writeNotifiedKeys([...notified]);
+        // Persist when possible; the session ref remains authoritative for this
+        // tab if storage is unavailable so the same alert is not sent every minute.
+        // The write helper merges retained keys from other tabs before replacing
+        // the bounded today/yesterday cache.
+        writeNotifiedKeys([...notified], retainedDateKeys);
+        if (cancelled) return;
       }
     };
     notify();
     return () => { cancelled = true; };
-  }, [dateKey, dueSchedules, now, preferences.browserNotifications]);
+  }, [notificationCandidates, preferences.browserNotifications, previousDateKey, todayKey]);
 
   return dueSchedules;
 }

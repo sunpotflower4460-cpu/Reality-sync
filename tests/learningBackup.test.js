@@ -11,9 +11,18 @@ function sourceExperiment() {
     learningRootId: 'v1', parentExperimentId: null, learningVersion: 1, revalidationReason: '', sourceRetention: null,
     status: 'completed', decision: 'adopt', decisionDateKey: '2026-09-01', completedAt: '2026-08-31T15:00:00Z',
     trials: [
-      { recordKey: 'a', dateKey: '2026-08-24', scheduleId: 'a', planTitle: 'A', outcome: 'success' },
-      { recordKey: 'b', dateKey: '2026-08-31', scheduleId: 'b', planTitle: 'B', outcome: 'success' },
-      { recordKey: 'c', dateKey: '2026-08-31', scheduleId: 'c', planTitle: 'C', outcome: 'failure' },
+      {
+        id: 'trial-a', recordKey: '2026-08-24::a', dateKey: '2026-08-24', scheduleId: 'a', planTitle: 'A',
+        outcome: 'success', observedValue: 0, observedLabel: '予定通り', capturedAt: '2026-08-24T10:00:00Z',
+      },
+      {
+        id: 'trial-b', recordKey: '2026-08-31::b', dateKey: '2026-08-31', scheduleId: 'b', planTitle: 'B',
+        outcome: 'success', observedValue: 0, observedLabel: '予定通り', capturedAt: '2026-08-31T10:00:00Z',
+      },
+      {
+        id: 'trial-c', recordKey: '2026-08-31::c', dateKey: '2026-08-31', scheduleId: 'c', planTitle: 'C',
+        outcome: 'failure', observedValue: 1, observedLabel: '変更・スキップ', capturedAt: '2026-08-31T11:00:00Z',
+      },
     ],
   };
 }
