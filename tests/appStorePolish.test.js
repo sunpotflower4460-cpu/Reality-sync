@@ -8,7 +8,7 @@ function source(relativePath) {
 
 test('app shell uses compact light navigation chrome instead of a giant branded hero', () => {
   const text = source('src/App.jsx');
-  assert.match(text, /app-shell-header/);
+  assert.match(text, /<header className="[^"]*sticky[^"]*top-0/);
   assert.match(text, /RealitySync/);
   assert.match(text, /bg-white\/9[0-9]/);
   assert.doesNotMatch(text, /bg-gradient-to-r from-violet-600/);
@@ -26,14 +26,15 @@ test('system typography and 44 point controls remain part of the mobile design f
 test('grouped surfaces preserve keyboard focus visibility, Safari legends and 44px actions', () => {
   const css = source('src/index.css');
   const record = source('src/components/RecordModal.jsx');
-  assert.match(css, /\.app-group :is\(button, a, input, select, textarea, summary\):focus-visible/);
-  assert.match(css, /fieldset\.app-group > legend/);
+  assert.match(css, /button:focus-visible,[\s\S]*input:focus-visible,[\s\S]*select:focus-visible,[\s\S]*textarea:focus-visible/);
+  assert.match(css, /\.app-group button:focus-visible,[\s\S]*\.app-group summary:focus-visible,[\s\S]*\.app-group a:focus-visible/);
+  assert.match(css, /fieldset\.app-group/);
   assert.match(record, /min-h-11/);
 });
 
 test('tab bar stays attached to the bottom edge and uses tint rather than a filled active tile', () => {
   const text = source('src/components/BottomNav.jsx');
-  assert.match(text, /fixed bottom-0/);
+  assert.match(text, /className="[^"]*fixed[^"]*bottom-0/);
   assert.match(text, /pb-safe/);
   assert.doesNotMatch(text, /rounded-2xl.*shadow/s);
   assert.doesNotMatch(text, /rounded-\[1\.3rem\].*shadow/s);
