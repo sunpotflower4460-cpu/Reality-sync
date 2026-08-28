@@ -222,9 +222,29 @@ export function SettingsModal({
       return;
     }
     setNotificationPermission(permission);
-    onChangeReminderPreferences((current) => ({ ...current, browserNotifications: permission === 'granted' }));
-    if (permission === 'granted') setMessage('OS通知を有効にしました。');
-    if (permission === 'denied') setError('通知が端末側で拒否されています。アプリ内の記録待ちは引き続き利用できます。');
+    const accepted = onChangeReminderPreferences((current) => ({
+      ...current,
+      browserNotifications: permission === 'granted',
+    }));
+    if (!accepted) {
+      setMessage('');
+      setError(permission === 'granted'
+        ? 'OSの通知許可は確認できましたが、その間に保存状態が変わったためRealitySync側の通知設定は変更していません。競合や保護状態を確認してください。'
+        : '端末の通知状態は確認できましたが、その間に保存状態が変わったためRealitySync側の通知設定は変更していません。');
+      return;
+    }
+    if (permission === 'granted') {
+      setError('');
+      setMessage('OSの通知許可を確認し、RealitySyncの通知設定を有効にしました。');
+      return;
+    }
+    if (permission === 'denied') {
+      setMessage('');
+      setError('通知が端末側で拒否されています。アプリ内の記録待ちは引き続き利用できます。');
+      return;
+    }
+    setError('');
+    setMessage('通知許可は変更されませんでした。アプリ内の記録待ちは引き続き利用できます。');
   };
 
   const eraseAllData = () => {
