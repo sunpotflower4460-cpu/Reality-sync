@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Trash2, X } from 'lucide-react';
 import { CATEGORIES, STATUS } from '../constants.js';
 import { isValidTime } from '../utils/schedule.js';
@@ -7,12 +7,37 @@ import { ModalDialog } from './ModalDialog.jsx';
 export function ScheduleEditorModal({ schedule, stale = false, onClose, onSave, onDelete }) {
   const editing = Boolean(schedule);
   const hasRecord = schedule && schedule.status !== STATUS.PENDING;
-  const [time, setTime] = useState(schedule?.time ?? '09:00');
-  const [title, setTitle] = useState(schedule?.title ?? '');
-  const [category, setCategory] = useState(schedule?.category ?? '仕事');
-  const [duration, setDuration] = useState(String(schedule?.duration ?? 60));
-  const [plannedStress, setPlannedStress] = useState(String(schedule?.plannedStress ?? 30));
+  const initialTime = schedule?.time ?? '09:00';
+  const initialTitle = schedule?.title ?? '';
+  const initialCategory = schedule?.category ?? '仕事';
+  const initialDuration = String(schedule?.duration ?? 60);
+  const initialPlannedStress = String(schedule?.plannedStress ?? 30);
+  const [time, setTime] = useState(initialTime);
+  const [title, setTitle] = useState(initialTitle);
+  const [category, setCategory] = useState(initialCategory);
+  const [duration, setDuration] = useState(initialDuration);
+  const [plannedStress, setPlannedStress] = useState(initialPlannedStress);
   const [error, setError] = useState('');
+  const dirty = time !== initialTime
+    || title !== initialTitle
+    || category !== initialCategory
+    || duration !== initialDuration
+    || plannedStress !== initialPlannedStress;
+
+  useEffect(() => {
+    if (!dirty || window.location.protocol === 'file:') return undefined;
+    const guardUnsavedInput = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', guardUnsavedInput);
+    return () => window.removeEventListener('beforeunload', guardUnsavedInput);
+  }, [dirty]);
+
+  const requestClose = () => {
+    if (dirty && !window.confirm('入力途中の変更があります。保存せずに閉じますか？')) return;
+    onClose();
+  };
 
   const submit = () => {
     if (stale) {
@@ -49,7 +74,7 @@ export function ScheduleEditorModal({ schedule, stale = false, onClose, onSave, 
 
   return (
     <ModalDialog
-      onClose={onClose}
+      onClose={requestClose}
       labelledBy="schedule-editor-title"
       placement="sheet"
       className="sheet-scroll max-h-[94dvh] w-full max-w-sm overflow-y-auto rounded-t-[1.65rem] rounded-b-none bg-[#f7f8fb] shadow-[0_22px_64px_rgba(15,23,42,0.24)] sm:rounded-[1.65rem]"
@@ -62,7 +87,7 @@ export function ScheduleEditorModal({ schedule, stale = false, onClose, onSave, 
             <h3 id="schedule-editor-title" className="mt-0.5 text-[16px] font-semibold tracking-[-0.02em] text-slate-900">{editing ? '予定を編集' : '予定を追加'}</h3>
             <p className="mt-0.5 text-[9px] text-slate-400">理想の1日を、無理なく置いていく</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="予定編集を閉じる" className="tap-target flex items-center justify-center rounded-full bg-slate-100 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600"><X className="h-4.5 w-4.5" /></button>
+          <button type="button" onClick={requestClose} aria-label="予定編集を閉じる" className="tap-target flex items-center justify-center rounded-full bg-slate-100 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600"><X className="h-4.5 w-4.5" /></button>
         </div>
       </div>
 
