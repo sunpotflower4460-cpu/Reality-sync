@@ -201,30 +201,44 @@ function stableSchedules(schedules) {
   return JSON.stringify(normalizeSchedules(schedules, []));
 }
 
-export function migrateLegacySchedules(raw, dateKey, demoSchedules = []) {
-  if (!raw || !isValidDateKey(dateKey)) return createEmptyScheduleStore();
+export function migrateLegacySchedulesResult(raw, dateKey, demoSchedules = []) {
+  if (!raw) return { ok: true, store: createEmptyScheduleStore() };
+  if (!isValidDateKey(dateKey)) return { ok: false, store: createEmptyScheduleStore() };
 
   let parsed;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return createEmptyScheduleStore();
+    return { ok: false, store: createEmptyScheduleStore() };
   }
 
-  if (!Array.isArray(parsed)) return createEmptyScheduleStore();
+  if (!Array.isArray(parsed)) return { ok: false, store: createEmptyScheduleStore() };
+  if (parsed.length === 0) return { ok: true, store: createEmptyScheduleStore() };
 
   const legacy = normalizeSchedules(parsed, demoSchedules);
+  if (legacy.length !== parsed.length) return { ok: false, store: createEmptyScheduleStore() };
+  if (parsed.some((schedule, index) => !storedSchedulePreserved(schedule, legacy[index]))) {
+    return { ok: false, store: createEmptyScheduleStore() };
+  }
+
   const cleanDemo = normalizeSchedules(demoSchedules, demoSchedules);
 
   // The old demo wrote its untouched sample schedule into localStorage on mount.
   // Do not carry that synthetic content into the real product. Only migrate data
   // that differs from the pristine demo or an explicitly empty legacy list.
-  if (legacy.length === 0 || stableSchedules(legacy) === stableSchedules(cleanDemo)) {
-    return createEmptyScheduleStore();
+  if (stableSchedules(legacy) === stableSchedules(cleanDemo)) {
+    return { ok: true, store: createEmptyScheduleStore() };
   }
 
   return {
-    version: STORAGE_VERSION,
-    days: { [dateKey]: legacy },
+    ok: true,
+    store: {
+      version: STORAGE_VERSION,
+      days: { [dateKey]: legacy },
+    },
   };
+}
+
+export function migrateLegacySchedules(raw, dateKey, demoSchedules = []) {
+  return migrateLegacySchedulesResult(raw, dateKey, demoSchedules).store;
 }
