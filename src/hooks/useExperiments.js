@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { EXPERIMENT_STORAGE_KEY, EXPERIMENT_STORAGE_VERSION } from '../constants.js';
 import { buildContextualRetentionBaseline, normalizeContextRule } from '../utils/contextRule.js';
-import { dateKeyFromDate, shiftDateKey } from '../utils/date.js';
+import { dateKeyFromDate, isValidDateKey, shiftDateKey } from '../utils/date.js';
 import {
   abandonExperiment,
   addExperimentTrial,
@@ -26,6 +26,16 @@ function validatedExperiments(next) {
 
 function canonicalExperiments(experiments) {
   return serializeExperiments(experiments);
+}
+
+function canonicalRecordKey(record) {
+  if (!record || !isValidDateKey(record.dateKey)) return null;
+  const scheduleId = typeof record.scheduleId === 'number' && Number.isFinite(record.scheduleId)
+    ? String(record.scheduleId)
+    : typeof record.scheduleId === 'string' && record.scheduleId.trim()
+      ? record.scheduleId.trim()
+      : null;
+  return scheduleId ? `${record.dateKey}::${scheduleId}` : null;
 }
 
 function loadExperimentState() {
@@ -222,6 +232,10 @@ export function useExperiments() {
       if (current !== stateRef.current) applyState(current);
       return false;
     }
+    if (canonicalExperiments(validated) === canonicalExperiments(current.experiments)) {
+      if (current !== stateRef.current) applyState(current);
+      return false;
+    }
     applyState({ ...current, experiments: validated, needsWrite: true });
     return true;
   }, [applyState, latestStateBeforeMutation]);
@@ -273,9 +287,19 @@ export function useExperiments() {
   }, [updateExperiments]);
 
   const captureTrial = useCallback((experimentId, eligibleRecord) => {
-    return updateExperiments((current) => current.map((experiment) => (
-      experiment.id === experimentId ? addExperimentTrial(experiment, eligibleRecord) : experiment
-    )));
+    return updateExperiments((current) => {
+      const target = current.find((experiment) => experiment.id === experimentId);
+      if (!target || target.status !== 'active' || target.trials.length >= target.targetRuns) return null;
+      const expectedRecordKey = canonicalRecordKey(eligibleRecord);
+      if (
+        !expectedRecordKey
+        || eligibleRecord.recordKey !== expectedRecordKey
+        || eligibleRecord.dateKey < target.startDateKey
+      ) return null;
+      const updated = addExperimentTrial(target, eligibleRecord);
+      if (!updated || updated.trials.length !== target.trials.length + 1) return null;
+      return current.map((experiment) => experiment.id === experimentId ? updated : experiment);
+    });
   }, [updateExperiments]);
 
   const removeTrial = useCallback((experimentId, recordKey) => {
@@ -287,17 +311,23 @@ export function useExperiments() {
   const finish = useCallback((experimentId, decision) => {
     const completedAt = new Date().toISOString();
     const decisionDateKey = dateKeyFromDate();
-    return updateExperiments((current) => current.map((experiment) => (
-      experiment.id === experimentId
-        ? finishExperiment(experiment, decision, completedAt, decisionDateKey)
-        : experiment
-    )));
+    return updateExperiments((current) => {
+      const target = current.find((experiment) => experiment.id === experimentId);
+      if (!target || target.status !== 'active') return null;
+      const updated = finishExperiment(target, decision, completedAt, decisionDateKey);
+      if (!updated || updated.status !== 'completed') return null;
+      return current.map((experiment) => experiment.id === experimentId ? updated : experiment);
+    });
   }, [updateExperiments]);
 
   const abandon = useCallback((experimentId) => {
-    return updateExperiments((current) => current.map((experiment) => (
-      experiment.id === experimentId ? abandonExperiment(experiment) : experiment
-    )));
+    return updateExperiments((current) => {
+      const target = current.find((experiment) => experiment.id === experimentId);
+      if (!target || target.status !== 'active') return null;
+      const updated = abandonExperiment(target);
+      if (!updated || updated.status !== 'abandoned') return null;
+      return current.map((experiment) => experiment.id === experimentId ? updated : experiment);
+    });
   }, [updateExperiments]);
 
   const deleteExperiment = useCallback((experimentId) => (
