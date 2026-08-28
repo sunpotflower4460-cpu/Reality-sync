@@ -127,22 +127,33 @@ export default function App() {
   const previousSchedules = store.days[previousDate] ?? [];
   const storageProtection = useMemo(() => {
     const protectedDomains = [];
+    const writeFailedDomains = [];
     if (scheduleStorageProtection.persistenceBlocked) protectedDomains.push('予定・実績');
     if (templateStorageProtection.persistenceBlocked) protectedDomains.push('テンプレート');
     if (experimentStorageProtection.persistenceBlocked) protectedDomains.push('実験履歴');
     if (reminderStorageProtection.persistenceBlocked) protectedDomains.push('リマインダー設定');
+    if (scheduleStorageProtection.writeFailed) writeFailedDomains.push('予定・実績');
+    if (templateStorageProtection.writeFailed) writeFailedDomains.push('テンプレート');
+    if (experimentStorageProtection.writeFailed) writeFailedDomains.push('実験履歴');
+    if (reminderStorageProtection.writeFailed) writeFailedDomains.push('リマインダー設定');
     return {
       persistenceBlocked: protectedDomains.length > 0,
+      writeFailed: writeFailedDomains.length > 0,
       unsupportedVersion: scheduleStorageProtection.unsupportedVersion ?? experimentStorageProtection.unsupportedVersion,
       protectedDomains,
+      writeFailedDomains,
     };
   }, [
     experimentStorageProtection.persistenceBlocked,
     experimentStorageProtection.unsupportedVersion,
+    experimentStorageProtection.writeFailed,
     reminderStorageProtection.persistenceBlocked,
+    reminderStorageProtection.writeFailed,
     scheduleStorageProtection.persistenceBlocked,
     scheduleStorageProtection.unsupportedVersion,
+    scheduleStorageProtection.writeFailed,
     templateStorageProtection.persistenceBlocked,
+    templateStorageProtection.writeFailed,
   ]);
   const protectedMode = storageProtection.persistenceBlocked;
 
@@ -265,7 +276,8 @@ export default function App() {
     try {
       for (const key of LOCAL_STORAGE_KEYS) window.localStorage.removeItem(key);
     } catch {
-      // React state is still cleared even when the storage API is unavailable.
+      // The state is still cleared; write-failure warnings will surface if the
+      // empty state cannot be persisted afterward.
     }
     setSelectedDate(today);
     setSelectedScheduleId(null);
@@ -305,11 +317,25 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-md px-4 pb-[calc(5.25rem+env(safe-area-inset-bottom))]">
+        {storageProtection.writeFailed && (
+          <section role="alert" className="mt-4 rounded-[1.1rem] border border-amber-200 bg-amber-50 p-3.5 text-amber-900 shadow-sm">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-4.5 w-4.5 shrink-0 text-amber-600" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[11px] font-semibold">端末への保存に失敗しています</h2>
+                <p className="mt-1 text-[9px] leading-relaxed text-amber-800">画面上の変更は残っていますが、再読み込みすると失われる可能性があります。設定とデータからバックアップを書き出してください。</p>
+                <p className="mt-1 text-[8px] font-medium text-amber-700">保存失敗: {storageProtection.writeFailedDomains.join('・')}</p>
+                <button type="button" onClick={() => setIsSettingsOpen(true)} className="mt-2 min-h-9 rounded-lg bg-white px-3 text-[9px] font-semibold text-amber-800 ring-1 ring-amber-200">設定とデータを開く</button>
+              </div>
+            </div>
+          </section>
+        )}
+
         {protectedMode ? (
           <section className="app-card mt-4 rounded-[1.25rem] border-red-200 p-5 text-center">
             <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 text-red-500"><AlertTriangle className="h-5 w-5" /></div>
             <h2 className="text-base font-semibold text-slate-800">保存データを保護しています</h2>
-            <p className="mt-2 text-xs leading-relaxed text-slate-500">現在版では保存済みデータを安全に解釈できないため、編集と自動保存を停止しました。元データは上書きしていません。</p>
+            <p className="mt-2 text-xs leading-relaxed text-slate-500">現在版では保存済みデータを安全に読み取れないため、編集と自動保存を停止しました。元データは上書きしていません。</p>
             {storageProtection.protectedDomains.length > 0 && <p className="mt-2 text-xs font-medium text-slate-500">保護対象: {storageProtection.protectedDomains.join('・')}</p>}
             {storageProtection.unsupportedVersion !== null && <p className="mt-2 text-xs font-semibold text-red-600">検出した保存版: {String(storageProtection.unsupportedVersion)}</p>}
             <button type="button" onClick={() => setIsSettingsOpen(true)} className="mt-4 min-h-11 w-full rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white">設定とデータを開く</button>
