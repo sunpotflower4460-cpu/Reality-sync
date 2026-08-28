@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { TEMPLATE_STORAGE_KEY } from '../constants.js';
-import { createUniqueId, hasDuplicateIds } from '../utils/id.js';
-import { createTemplateFromSchedules, normalizeTemplates, parseStoredTemplatesResult } from '../utils/template.js';
+import { createUniqueId } from '../utils/id.js';
+import { createTemplateFromSchedules, parseStoredTemplatesResult } from '../utils/template.js';
+
+function validateTemplates(next) {
+  if (!Array.isArray(next)) return null;
+  const result = parseStoredTemplatesResult(JSON.stringify(next));
+  return result.ok ? result.templates : null;
+}
 
 function loadTemplateState() {
   if (typeof window === 'undefined') return { templates: [], persistenceBlocked: false };
@@ -40,10 +46,9 @@ export function useScheduleTemplates() {
     setState((current) => {
       if (current.persistenceBlocked) return current;
       const next = typeof updater === 'function' ? updater(current.templates) : updater;
-      if (!Array.isArray(next) || hasDuplicateIds(next)) return current;
-      const normalized = normalizeTemplates(next);
-      if (normalized.length !== next.length) return current;
-      return { ...current, templates: normalized };
+      const validated = validateTemplates(next);
+      if (!validated) return current;
+      return { ...current, templates: validated };
     });
   }, []);
 
@@ -61,11 +66,9 @@ export function useScheduleTemplates() {
   }, [updateTemplates]);
 
   const replaceTemplates = useCallback((nextTemplates) => {
-    const candidate = Array.isArray(nextTemplates) ? nextTemplates : [];
-    if (hasDuplicateIds(candidate)) return;
-    const normalized = normalizeTemplates(candidate);
-    if (normalized.length !== candidate.length) return;
-    setState({ templates: normalized, persistenceBlocked: false });
+    const validated = validateTemplates(Array.isArray(nextTemplates) ? nextTemplates : []);
+    if (!validated) return;
+    setState({ templates: validated, persistenceBlocked: false });
   }, []);
 
   return {
