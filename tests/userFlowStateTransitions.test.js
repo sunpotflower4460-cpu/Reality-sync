@@ -151,9 +151,12 @@ test('native file navigation applies the same bundled-root boundary to normal an
   assert.doesNotMatch(native, /if url\.isFileURL \{\s*webView\.load\(navigationAction\.request\)/s);
 });
 
-test('iOS icon generator uses a consistent opaque RGB bitmap on Apple Silicon runners', () => {
+test('iOS icon generator is headless and emits an opaque CoreGraphics PNG', () => {
   const iconGenerator = source('scripts/generate-ios-icon.swift');
-  assert.match(iconGenerator, /samplesPerPixel: 3/);
-  assert.match(iconGenerator, /hasAlpha: false/);
-  assert.doesNotMatch(iconGenerator, /samplesPerPixel: 4,[\s\S]{0,80}hasAlpha: false/);
+  assert.match(iconGenerator, /CGContext\(/);
+  assert.match(iconGenerator, /CGImageAlphaInfo\.noneSkipLast/);
+  assert.match(iconGenerator, /CGImageDestinationCreateWithURL/);
+  assert.match(iconGenerator, /UTType\.png\.identifier/);
+  assert.doesNotMatch(iconGenerator, /NSGraphicsContext/);
+  assert.doesNotMatch(iconGenerator, /NSBitmapImageRep/);
 });
