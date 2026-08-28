@@ -53,6 +53,35 @@ test('erase reports a failed rollback instead of pretending partially restored s
   assert.notDeepEqual(storage.snapshot(), initial);
 });
 
+test('erase refuses to remove a not-yet-erased domain changed after the initial snapshot', () => {
+  const initial = Object.fromEntries(REALITY_SYNC_STORAGE_KEYS.map((key) => [key, `value:${key}`]));
+  const values = new Map(Object.entries(initial));
+  let removals = 0;
+  let injected = false;
+  const concurrentKey = REALITY_SYNC_STORAGE_KEYS[2];
+  const storage = {
+    getItem(key) {
+      if (key === concurrentKey && removals === 2 && !injected) {
+        injected = true;
+        values.set(key, 'remote-concurrent-value');
+      }
+      return values.has(key) ? values.get(key) : null;
+    },
+    setItem(key, value) { values.set(key, String(value)); },
+    removeItem(key) {
+      removals += 1;
+      values.delete(key);
+    },
+    snapshot() { return Object.fromEntries(values); },
+  };
+
+  assert.deepEqual(eraseStoredRealitySyncDataResult(storage), { ok: false, rollbackOk: false });
+  const snapshot = storage.snapshot();
+  assert.equal(snapshot[concurrentKey], 'remote-concurrent-value');
+  assert.equal(snapshot[REALITY_SYNC_STORAGE_KEYS[0]], initial[REALITY_SYNC_STORAGE_KEYS[0]]);
+  assert.equal(snapshot[REALITY_SYNC_STORAGE_KEYS[1]], initial[REALITY_SYNC_STORAGE_KEYS[1]]);
+});
+
 test('erase does not overwrite a third value written concurrently during verification', () => {
   const initial = Object.fromEntries(REALITY_SYNC_STORAGE_KEYS.map((key) => [key, `value:${key}`]));
   const values = new Map(Object.entries(initial));
