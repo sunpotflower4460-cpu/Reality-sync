@@ -146,6 +146,10 @@ export function useScheduleTemplates() {
       if (event.key !== TEMPLATE_STORAGE_KEY) return;
       const result = parseStoredTemplatesResult(event.newValue);
       applyState((current) => {
+        // A detected conflict freezes the local in-memory copy for rescue/export.
+        // Ignore every later storage event, including malformed ones, so a remote
+        // write cannot accidentally add persistenceBlocked and disable rescue.
+        if (current.writeConflict) return current;
         if (!result.ok) {
           // Preserve needsWrite and the in-memory templates. If storage becomes
           // valid again we must still know that these local edits need a commit.
@@ -168,7 +172,6 @@ export function useScheduleTemplates() {
             writeFailed: false,
           };
         }
-        if (current.writeConflict) return current;
         return {
           templates: result.templates,
           persistenceBlocked: false,
