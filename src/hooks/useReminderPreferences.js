@@ -7,26 +7,27 @@ import {
 
 function loadReminderState() {
   if (typeof window === 'undefined') {
-    return { preferences: normalizeReminderPreferences(null), persistenceBlocked: false };
+    return { preferences: normalizeReminderPreferences(null), persistenceBlocked: false, writeFailed: false };
   }
   try {
     const result = parseStoredReminderPreferencesResult(window.localStorage.getItem(REMINDER_STORAGE_KEY));
-    return { preferences: result.preferences, persistenceBlocked: !result.ok };
+    return { preferences: result.preferences, persistenceBlocked: !result.ok, writeFailed: false };
   } catch {
-    return { preferences: normalizeReminderPreferences(null), persistenceBlocked: false };
+    return { preferences: normalizeReminderPreferences(null), persistenceBlocked: false, writeFailed: true };
   }
 }
 
 export function useReminderPreferences() {
   const [state, setState] = useState(loadReminderState);
-  const { preferences, persistenceBlocked } = state;
+  const { preferences, persistenceBlocked, writeFailed } = state;
 
   useEffect(() => {
     if (persistenceBlocked) return;
     try {
       window.localStorage.setItem(REMINDER_STORAGE_KEY, JSON.stringify(preferences));
+      setState((current) => current.writeFailed ? { ...current, writeFailed: false } : current);
     } catch {
-      // In-memory settings remain usable when storage is unavailable.
+      setState((current) => current.writeFailed ? current : { ...current, writeFailed: true });
     }
   }, [persistenceBlocked, preferences]);
 
@@ -34,7 +35,7 @@ export function useReminderPreferences() {
     const syncPreferences = (event) => {
       if (event.key !== REMINDER_STORAGE_KEY) return;
       const result = parseStoredReminderPreferencesResult(event.newValue);
-      setState({ preferences: result.preferences, persistenceBlocked: !result.ok });
+      setState({ preferences: result.preferences, persistenceBlocked: !result.ok, writeFailed: false });
     };
     window.addEventListener('storage', syncPreferences);
     return () => window.removeEventListener('storage', syncPreferences);
@@ -49,13 +50,13 @@ export function useReminderPreferences() {
   }, []);
 
   const replacePreferences = useCallback((nextValue) => {
-    setState({ preferences: normalizeReminderPreferences(nextValue), persistenceBlocked: false });
+    setState({ preferences: normalizeReminderPreferences(nextValue), persistenceBlocked: false, writeFailed: false });
   }, []);
 
   return {
     preferences,
     setPreferences,
     replacePreferences,
-    storageProtection: { persistenceBlocked },
+    storageProtection: { persistenceBlocked, writeFailed },
   };
 }
