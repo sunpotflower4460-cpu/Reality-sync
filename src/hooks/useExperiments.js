@@ -24,8 +24,22 @@ function validatedExperiments(next) {
   return result.ok ? result.experiments : null;
 }
 
+function canonicalExperiments(experiments) {
+  return serializeExperiments(experiments);
+}
+
 function loadExperimentState() {
-  if (typeof window === 'undefined') return { experiments: [], persistenceBlocked: false, unsupportedVersion: null, writeFailed: false, needsWrite: false };
+  if (typeof window === 'undefined') {
+    return {
+      experiments: [],
+      persistenceBlocked: false,
+      unsupportedVersion: null,
+      writeFailed: false,
+      needsWrite: false,
+      baseSerialized: canonicalExperiments([]),
+      writeConflict: false,
+    };
+  }
   try {
     const raw = window.localStorage.getItem(EXPERIMENT_STORAGE_KEY);
     const result = parseStoredExperimentsForPersistence(raw);
@@ -37,36 +51,113 @@ function loadExperimentState() {
       // Older releases stored the experiment list as a bare array. It is safe
       // to migrate only that known legacy shape to the versioned wrapper.
       needsWrite: Boolean(raw) && result.ok && raw.trimStart().startsWith('['),
+      baseSerialized: canonicalExperiments(result.experiments),
+      writeConflict: false,
     };
   } catch {
-    return { experiments: [], persistenceBlocked: true, unsupportedVersion: null, writeFailed: false, needsWrite: false };
+    return {
+      experiments: [],
+      persistenceBlocked: true,
+      unsupportedVersion: null,
+      writeFailed: false,
+      needsWrite: false,
+      baseSerialized: canonicalExperiments([]),
+      writeConflict: false,
+    };
   }
 }
 
 export function useExperiments() {
   const [state, setState] = useState(loadExperimentState);
-  const { experiments, persistenceBlocked, unsupportedVersion, writeFailed, needsWrite } = state;
+  const {
+    experiments,
+    persistenceBlocked,
+    unsupportedVersion,
+    writeFailed,
+    needsWrite,
+    baseSerialized,
+    writeConflict,
+  } = state;
 
   useEffect(() => {
-    if (persistenceBlocked || !needsWrite) return;
+    if (persistenceBlocked || writeConflict || !needsWrite) return;
     try {
-      window.localStorage.setItem(EXPERIMENT_STORAGE_KEY, serializeExperiments(experiments));
-      setState((current) => ({ ...current, writeFailed: false, needsWrite: false }));
+      const latest = parseStoredExperimentsForPersistence(
+        window.localStorage.getItem(EXPERIMENT_STORAGE_KEY),
+      );
+      if (!latest.ok) {
+        setState((current) => ({
+          ...current,
+          persistenceBlocked: true,
+          unsupportedVersion: latest.unsupportedVersion,
+          needsWrite: false,
+        }));
+        return;
+      }
+      const latestSerialized = canonicalExperiments(latest.experiments);
+      if (latestSerialized !== baseSerialized) {
+        setState((current) => ({
+          ...current,
+          writeConflict: true,
+          writeFailed: false,
+          needsWrite: false,
+        }));
+        return;
+      }
+
+      const writtenSerialized = canonicalExperiments(experiments);
+      window.localStorage.setItem(EXPERIMENT_STORAGE_KEY, writtenSerialized);
+      setState((current) => {
+        const currentSerialized = canonicalExperiments(current.experiments);
+        const changedAgain = currentSerialized !== writtenSerialized;
+        return {
+          ...current,
+          writeFailed: false,
+          needsWrite: changedAgain,
+          baseSerialized: writtenSerialized,
+        };
+      });
     } catch {
       setState((current) => current.writeFailed ? current : { ...current, writeFailed: true });
     }
-  }, [experiments, needsWrite, persistenceBlocked]);
+  }, [baseSerialized, experiments, needsWrite, persistenceBlocked, writeConflict]);
 
   useEffect(() => {
     const sync = (event) => {
       if (event.key !== EXPERIMENT_STORAGE_KEY) return;
       const result = parseStoredExperimentsForPersistence(event.newValue);
-      setState({
-        experiments: result.experiments,
-        persistenceBlocked: !result.ok,
-        unsupportedVersion: result.unsupportedVersion,
-        writeFailed: false,
-        needsWrite: false,
+      setState((current) => {
+        if (!result.ok) {
+          return {
+            ...current,
+            persistenceBlocked: true,
+            unsupportedVersion: result.unsupportedVersion,
+            writeFailed: false,
+            needsWrite: false,
+          };
+        }
+        const externalSerialized = canonicalExperiments(result.experiments);
+        if (current.needsWrite) {
+          if (externalSerialized !== current.baseSerialized) {
+            return {
+              ...current,
+              writeConflict: true,
+              writeFailed: false,
+              needsWrite: false,
+            };
+          }
+          return current;
+        }
+        if (current.writeConflict) return current;
+        return {
+          experiments: result.experiments,
+          persistenceBlocked: false,
+          unsupportedVersion: null,
+          writeFailed: false,
+          needsWrite: false,
+          baseSerialized: externalSerialized,
+          writeConflict: false,
+        };
       });
     };
     window.addEventListener('storage', sync);
@@ -75,7 +166,7 @@ export function useExperiments() {
 
   const updateExperiments = useCallback((updater) => {
     setState((current) => {
-      if (current.persistenceBlocked) return current;
+      if (current.persistenceBlocked || current.writeConflict) return current;
       const next = typeof updater === 'function' ? updater(current.experiments) : updater;
       const validated = validatedExperiments(next);
       if (!validated) return current;
@@ -84,16 +175,16 @@ export function useExperiments() {
   }, []);
 
   const startExperiment = useCallback((candidate, options) => {
-    if (persistenceBlocked) return false;
+    if (persistenceBlocked || writeConflict) return false;
     const id = createUniqueId('experiment', experiments.map((experiment) => experiment.id));
     const experiment = createExperimentFromCandidate(candidate, { ...options, id });
     if (!experiment) return false;
     updateExperiments((current) => [experiment, ...current]);
     return true;
-  }, [experiments, persistenceBlocked, updateExperiments]);
+  }, [experiments, persistenceBlocked, updateExperiments, writeConflict]);
 
   const startRevalidation = useCallback((sourceExperimentId, retentionSummary, options = {}) => {
-    if (persistenceBlocked) return false;
+    if (persistenceBlocked || writeConflict) return false;
     const today = dateKeyFromDate();
     if (!retentionSummary?.reviewCandidate || retentionSummary.throughDateKey !== today) return false;
     const source = experiments.find((experiment) => experiment.id === sourceExperimentId);
@@ -122,7 +213,7 @@ export function useExperiments() {
     if (!experiment) return false;
     updateExperiments((current) => [experiment, ...current]);
     return true;
-  }, [experiments, persistenceBlocked, updateExperiments]);
+  }, [experiments, persistenceBlocked, updateExperiments, writeConflict]);
 
   const captureTrial = useCallback((experimentId, eligibleRecord) => {
     updateExperiments((current) => current.map((experiment) => experiment.id === experimentId ? addExperimentTrial(experiment, eligibleRecord) : experiment));
@@ -149,7 +240,15 @@ export function useExperiments() {
   const replaceExperiments = useCallback((next) => {
     const validated = validatedExperiments(Array.isArray(next) ? next : []);
     if (!validated) return;
-    setState({ experiments: validated, persistenceBlocked: false, unsupportedVersion: null, writeFailed: false, needsWrite: false });
+    setState({
+      experiments: validated,
+      persistenceBlocked: false,
+      unsupportedVersion: null,
+      writeFailed: false,
+      needsWrite: false,
+      baseSerialized: canonicalExperiments(validated),
+      writeConflict: false,
+    });
   }, []);
 
   return {
@@ -162,6 +261,11 @@ export function useExperiments() {
     abandon,
     deleteExperiment,
     replaceExperiments,
-    storageProtection: { persistenceBlocked, unsupportedVersion, writeFailed },
+    storageProtection: {
+      persistenceBlocked,
+      unsupportedVersion,
+      writeFailed,
+      writeConflict,
+    },
   };
 }
