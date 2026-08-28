@@ -80,6 +80,20 @@ test('versioned schedule storage rejects numeric strings instead of silently cha
   assert.equal(parseStoredScheduleStoreResult(versioned(recorded)).ok, false);
 });
 
+test('current plan facts reject fractional values the editor and automatic adjustments cannot create', () => {
+  assert.equal(parseStoredScheduleStoreResult(versioned(pending({ duration: 60.5 }))).ok, false);
+  assert.equal(parseStoredScheduleStoreResult(versioned(pending({ plannedStress: 40.5 }))).ok, false);
+  assert.equal(parseStoredScheduleStoreResult(versioned(asPlanned({
+    plannedSnapshot: { time: '09:00', title: 'Focus', category: '仕事', duration: 60.5, plannedStress: 40 },
+  }))).ok, false);
+
+  const fractionalActual = parseStoredScheduleStoreResult(versioned(asPlanned({
+    actualDuration: 45.5,
+    actualStress: 30.5,
+  })));
+  assert.equal(fractionalActual.ok, true, 'optional observed values remain numeric measurements, not plan-grid integers');
+});
+
 test('versioned recorded facts reject explicit empty or null values that normalization would replace', () => {
   assert.equal(parseStoredScheduleStoreResult(versioned(asPlanned({ actualTitle: '' }))).ok, false);
   assert.equal(parseStoredScheduleStoreResult(versioned(asPlanned({ actualCategory: null }))).ok, false);
@@ -117,15 +131,22 @@ test('missing legacy-v2 optional record fields remain compatible while explicit 
   assert.equal(result.store.days['2026-08-23'][0].actualCategory, '仕事');
 });
 
-test('legacy schedule migration remains permissive for numeric strings and canonicalizes them once', () => {
+test('legacy schedule migration remains permissive for numeric strings and fractional plan values and canonicalizes known fields once', () => {
   const raw = JSON.stringify([pending({ duration: '60', plannedStress: '40' })]);
   const result = migrateLegacySchedulesResult(raw, '2026-08-23', []);
   assert.equal(result.ok, true);
   assert.equal(result.store.days['2026-08-23'][0].duration, 60);
   assert.equal(result.store.days['2026-08-23'][0].plannedStress, 40);
+
+  const fractional = migrateLegacySchedulesResult(JSON.stringify([
+    pending({ id: 'legacy-fractional', duration: 60.5, plannedStress: 40.5 }),
+  ]), '2026-08-23', []);
+  assert.equal(fractional.ok, true);
+  assert.equal(fractional.store.days['2026-08-23'][0].duration, 60.5);
+  assert.equal(fractional.store.days['2026-08-23'][0].plannedStress, 40.5);
 });
 
-test('stored templates reject numeric strings instead of rewriting their schema types', () => {
+test('stored templates reject numeric strings and fractional plan facts instead of rewriting or accepting off-grid values', () => {
   const durationString = JSON.stringify([{
     id: 'template-1',
     name: 'Focus day',
@@ -136,8 +157,20 @@ test('stored templates reject numeric strings instead of rewriting their schema 
     name: 'Focus day',
     schedules: [{ time: '09:00', title: 'Focus', category: '仕事', duration: 60, plannedStress: '40' }],
   }]);
+  const durationFraction = JSON.stringify([{
+    id: 'template-3',
+    name: 'Focus day',
+    schedules: [{ time: '09:00', title: 'Focus', category: '仕事', duration: 60.5, plannedStress: 40 }],
+  }]);
+  const stressFraction = JSON.stringify([{
+    id: 'template-4',
+    name: 'Focus day',
+    schedules: [{ time: '09:00', title: 'Focus', category: '仕事', duration: 60, plannedStress: 40.5 }],
+  }]);
   assert.equal(parseStoredTemplatesResult(durationString).ok, false);
   assert.equal(parseStoredTemplatesResult(stressString).ok, false);
+  assert.equal(parseStoredTemplatesResult(durationFraction).ok, false);
+  assert.equal(parseStoredTemplatesResult(stressFraction).ok, false);
 });
 
 test('current backup format cannot bypass strict experiment numeric types through the legacy array parser', () => {
