@@ -89,7 +89,9 @@ test('schedule hook preserves dirty local days across external storage events an
   assert.match(hook, /const merged = mergeScheduleStoreWrite\(/);
   assert.match(hook, /current\.dirtyDateKeys/);
   assert.match(hook, /writeConflict: true/);
-  assert.match(hook, /currentState\.persistenceBlocked \|\| currentState\.writeConflict/);
+  assert.match(hook, /const latestStateBeforeMutation = useCallback/);
+  assert.match(hook, /if \(current\.persistenceBlocked \|\| current\.writeConflict\) return null;/);
+  assert.match(hook, /const currentState = latestStateBeforeMutation\(\);\s*if \(!currentState\) return false;/s);
   assert.match(app, /別の画面との編集競合を検出しました/);
   assert.match(app, /storageProtection\.writeConflict/);
 });
