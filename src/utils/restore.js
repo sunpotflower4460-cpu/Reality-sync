@@ -66,6 +66,10 @@ function rollbackAttemptedEntries(storage, entries, previous) {
   return rollbackOk;
 }
 
+function entryStillMatchesSnapshot(storage, previous, key) {
+  return storage.getItem(key) === (previous.get(key) ?? null);
+}
+
 export function persistRestoredBackup(data, storage = globalThis.window?.localStorage) {
   if (!storage || !data) return { ok: false, rollbackOk: true };
 
@@ -85,7 +89,16 @@ export function persistRestoredBackup(data, storage = globalThis.window?.localSt
   }
 
   try {
-    for (const [key, value] of entries) restoreRawValue(storage, key, value);
+    for (const [key, value] of entries) {
+      // Another tab can update a key after our initial snapshot but before this
+      // particular domain is written. Recheck each untouched key immediately
+      // before replacing it so a successful restore cannot silently erase a
+      // newer concurrent value merely because our final read-back matches ours.
+      if (!entryStillMatchesSnapshot(storage, previous, key)) {
+        throw new Error('restore concurrent write detected');
+      }
+      restoreRawValue(storage, key, value);
+    }
     // A storage implementation can theoretically return from set/remove without
     // persisting the requested value. Never report a destructive restore as
     // successful until every domain can be read back exactly as written.
@@ -112,7 +125,14 @@ export function eraseStoredRealitySyncDataResult(storage = globalThis.window?.lo
   }
 
   try {
-    for (const [key] of eraseEntries) storage.removeItem(key);
+    for (const [key] of eraseEntries) {
+      // As with restore, refuse to erase a value that another tab changed after
+      // the initial snapshot but before this key's destructive write.
+      if (!entryStillMatchesSnapshot(storage, previous, key)) {
+        throw new Error('erase concurrent write detected');
+      }
+      storage.removeItem(key);
+    }
     for (const [key] of eraseEntries) {
       if (storage.getItem(key) !== null) throw new Error('erase verification failed');
     }
