@@ -81,12 +81,18 @@ export default function App() {
   } = useExperiments();
   const { preferences: reminderPreferences, setPreferences: setReminderPreferences, replacePreferences: replaceReminderPreferences } = useReminderPreferences();
   const { canInstall, isInstalled, install } = usePwaInstall();
+  const todayKey = dateKeyFromDate();
   const dueSchedules = useDueRecordReminders({ schedules, dateKey: selectedDate, preferences: reminderPreferences });
   const stats = useMemo(() => calculateStats(schedules), [schedules]);
-  const weeklyInsights = useMemo(() => calculateWeeklyInsights(store.days, selectedDate), [selectedDate, store.days]);
-  const monthlyInsights = useMemo(() => calculateMonthlyInsights(store.days, selectedDate), [selectedDate, store.days]);
+  const weeklyInsights = useMemo(
+    () => calculateWeeklyInsights(store.days, selectedDate, todayKey),
+    [selectedDate, store.days, todayKey],
+  );
+  const monthlyInsights = useMemo(
+    () => calculateMonthlyInsights(store.days, selectedDate, todayKey),
+    [selectedDate, store.days, todayKey],
+  );
   const longitudinalInsights = useMemo(() => calculateLongitudinalInsights(store.days, selectedDate), [selectedDate, store.days]);
-  const todayKey = dateKeyFromDate();
   const previousTodayKeyRef = useRef(todayKey);
   const canRecordSelectedDate = selectedDate <= todayKey;
   const isNativeShell = typeof window !== 'undefined' && window.location.protocol === 'file:';
