@@ -51,6 +51,26 @@ test('current-week analytics do not count future pending plans as missing realit
   assert.equal(observed.recordingRate, 100);
 });
 
+test('current-day analytics do not count later-today pending plans before their scheduled time', () => {
+  const alreadyDue = { ...plan('morning-pending'), time: '09:00' };
+  const recordedFutureSlot = { ...plan('recorded-early', STATUS.AS_PLANNED), time: '18:00', plannedSnapshot: { ...plan('snapshot').plannedSnapshot, time: '18:00' } };
+  const laterToday = { ...plan('evening-pending'), time: '18:30' };
+  const days = {
+    '2026-08-28': [alreadyDue, recordedFutureSlot, laterToday],
+  };
+
+  const weekly = calculateWeeklyInsights(days, '2026-08-28', '2026-08-28', '12:00');
+  const monthly = calculateMonthlyInsights(days, '2026-08-28', '2026-08-28', '12:00');
+
+  for (const observed of [weekly, monthly]) {
+    assert.equal(observed.totalSchedules, 2);
+    assert.equal(observed.recordedCount, 1);
+    assert.equal(observed.pending, 1);
+    assert.equal(observed.recordingRate, 50);
+    assert.equal(observed.plannedMinutes, 120);
+  }
+});
+
 test('current-month analytics stop at the observation date instead of pre-judging future plans', () => {
   const days = {
     '2026-08-28': [plan('today', STATUS.AS_PLANNED)],
@@ -77,6 +97,14 @@ test('analytics keep full historical windows when no observation cutoff is suppl
   assert.equal(historical.totalSchedules, 2);
   assert.equal(historical.pending, 1);
   assert.equal(historical.recordingRate, 50);
+});
+
+test('app passes the current local clock into week and month observation windows', () => {
+  const app = source('src/App.jsx');
+  assert.match(app, /const observationNow = new Date\(\)/);
+  assert.match(app, /const observationTime = timeKeyFromDate\(observationNow\)/);
+  assert.match(app, /calculateWeeklyInsights\(store\.days, selectedDate, todayKey, observationTime\)/);
+  assert.match(app, /calculateMonthlyInsights\(store\.days, selectedDate, todayKey, observationTime\)/);
 });
 
 test('future daily analytics describe plans as unobserved rather than missing reality', () => {
