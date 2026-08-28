@@ -115,11 +115,13 @@ export function useExperiments() {
         window.localStorage.getItem(EXPERIMENT_STORAGE_KEY),
       );
       if (!latest.ok) {
+        // Preserve pending local learning changes while durable storage is
+        // unreadable. Recovery must compare against baseSerialized before any
+        // external value is allowed to replace this in-memory history.
         applyState((current) => ({
           ...current,
           persistenceBlocked: true,
           unsupportedVersion: latest.unsupportedVersion,
-          needsWrite: false,
         }));
         return;
       }
@@ -127,6 +129,8 @@ export function useExperiments() {
       if (latestSerialized !== baseSerialized) {
         applyState((current) => ({
           ...current,
+          persistenceBlocked: false,
+          unsupportedVersion: null,
           writeConflict: true,
           writeFailed: false,
           needsWrite: false,
@@ -143,7 +147,6 @@ export function useExperiments() {
           ...current,
           persistenceBlocked: true,
           unsupportedVersion: preWrite.unsupportedVersion,
-          needsWrite: false,
         }));
         return;
       }
@@ -151,6 +154,8 @@ export function useExperiments() {
       if (preWriteSerialized !== latestSerialized) {
         applyState((current) => ({
           ...current,
+          persistenceBlocked: false,
+          unsupportedVersion: null,
           writeConflict: true,
           writeFailed: false,
           needsWrite: false,
@@ -167,7 +172,6 @@ export function useExperiments() {
           ...current,
           persistenceBlocked: true,
           unsupportedVersion: readBack.unsupportedVersion,
-          needsWrite: false,
         }));
         return;
       }
@@ -178,6 +182,8 @@ export function useExperiments() {
         } else {
           applyState((current) => ({
             ...current,
+            persistenceBlocked: false,
+            unsupportedVersion: null,
             writeConflict: true,
             writeFailed: false,
             needsWrite: false,
@@ -191,6 +197,8 @@ export function useExperiments() {
         const changedAgain = currentSerialized !== writtenSerialized;
         return {
           ...current,
+          persistenceBlocked: false,
+          unsupportedVersion: null,
           writeFailed: false,
           needsWrite: changedAgain,
           baseSerialized: writtenSerialized,
@@ -211,8 +219,6 @@ export function useExperiments() {
             ...current,
             persistenceBlocked: true,
             unsupportedVersion: result.unsupportedVersion,
-            writeFailed: false,
-            needsWrite: false,
           };
         }
         const externalSerialized = canonicalExperiments(result.experiments);
@@ -220,12 +226,19 @@ export function useExperiments() {
           if (externalSerialized !== current.baseSerialized) {
             return {
               ...current,
+              persistenceBlocked: false,
+              unsupportedVersion: null,
               writeConflict: true,
               writeFailed: false,
               needsWrite: false,
             };
           }
-          return current;
+          return {
+            ...current,
+            persistenceBlocked: false,
+            unsupportedVersion: null,
+            writeFailed: false,
+          };
         }
         if (current.writeConflict) return current;
         return {
@@ -255,14 +268,20 @@ export function useExperiments() {
           ...current,
           persistenceBlocked: true,
           unsupportedVersion: latest.unsupportedVersion,
-          needsWrite: false,
         });
         return null;
       }
       const latestSerialized = canonicalExperiments(latest.experiments);
       if (latestSerialized === current.baseSerialized) return current;
       if (current.needsWrite) {
-        applyState({ ...current, writeConflict: true, writeFailed: false, needsWrite: false });
+        applyState({
+          ...current,
+          persistenceBlocked: false,
+          unsupportedVersion: null,
+          writeConflict: true,
+          writeFailed: false,
+          needsWrite: false,
+        });
         return null;
       }
       return {
@@ -275,7 +294,7 @@ export function useExperiments() {
         writeConflict: false,
       };
     } catch {
-      applyState({ ...current, persistenceBlocked: true, needsWrite: false });
+      applyState({ ...current, persistenceBlocked: true });
       return null;
     }
   }, [applyState]);
