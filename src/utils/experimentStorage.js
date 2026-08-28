@@ -1,4 +1,4 @@
-import { EXPERIMENT_STORAGE_VERSION } from '../constants.js';
+import { CATEGORIES, EXPERIMENT_STORAGE_VERSION } from '../constants.js';
 import { normalizeContextRule } from './contextRule.js';
 import { isValidDateKey } from './date.js';
 import {
@@ -120,7 +120,8 @@ function explicitMetadataPreserved(raw, normalized) {
   if (!objectHasOnlyKeys(raw, EXPERIMENT_FIELDS) || !normalized) return false;
 
   if (typeof raw.id !== 'string' || !raw.id.trim() || normalized.id !== raw.id.trim()) return false;
-  if (!objectHasOnlyKeys(raw.condition, CONDITION_FIELDS)) return false;
+  if (!objectHasOnlyKeys(raw.condition, CONDITION_FIELDS) || !sameJson(raw.condition, normalized.condition)) return false;
+  if (raw.condition.kind === 'planned-category' && !CATEGORIES.includes(raw.condition.value)) return false;
   if (!trialMetadataPreserved(raw.trials, normalized.trials)) return false;
 
   if (raw.targetRuns !== undefined) {
