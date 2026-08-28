@@ -71,6 +71,13 @@ export function useExperiments() {
   const [state, setState] = useState(loadExperimentState);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const applyState = useCallback((updater) => {
+    const current = stateRef.current;
+    const next = typeof updater === 'function' ? updater(current) : updater;
+    stateRef.current = next;
+    setState(next);
+    return next;
+  }, []);
   const {
     experiments,
     persistenceBlocked,
@@ -88,7 +95,7 @@ export function useExperiments() {
         window.localStorage.getItem(EXPERIMENT_STORAGE_KEY),
       );
       if (!latest.ok) {
-        setState((current) => ({
+        applyState((current) => ({
           ...current,
           persistenceBlocked: true,
           unsupportedVersion: latest.unsupportedVersion,
@@ -98,7 +105,7 @@ export function useExperiments() {
       }
       const latestSerialized = canonicalExperiments(latest.experiments);
       if (latestSerialized !== baseSerialized) {
-        setState((current) => ({
+        applyState((current) => ({
           ...current,
           writeConflict: true,
           writeFailed: false,
@@ -109,7 +116,7 @@ export function useExperiments() {
 
       const writtenSerialized = canonicalExperiments(experiments);
       window.localStorage.setItem(EXPERIMENT_STORAGE_KEY, writtenSerialized);
-      setState((current) => {
+      applyState((current) => {
         const currentSerialized = canonicalExperiments(current.experiments);
         const changedAgain = currentSerialized !== writtenSerialized;
         return {
@@ -120,15 +127,15 @@ export function useExperiments() {
         };
       });
     } catch {
-      setState((current) => current.writeFailed ? current : { ...current, writeFailed: true });
+      applyState((current) => current.writeFailed ? current : { ...current, writeFailed: true });
     }
-  }, [baseSerialized, experiments, needsWrite, persistenceBlocked, writeConflict]);
+  }, [applyState, baseSerialized, experiments, needsWrite, persistenceBlocked, writeConflict]);
 
   useEffect(() => {
     const sync = (event) => {
       if (event.key !== EXPERIMENT_STORAGE_KEY) return;
       const result = parseStoredExperimentsForPersistence(event.newValue);
-      setState((current) => {
+      applyState((current) => {
         if (!result.ok) {
           return {
             ...current,
@@ -164,7 +171,7 @@ export function useExperiments() {
     };
     window.addEventListener('storage', sync);
     return () => window.removeEventListener('storage', sync);
-  }, []);
+  }, [applyState]);
 
   // User actions can fire more than once before React renders the first update.
   // Keep a synchronous snapshot so a second click evaluates against the first
@@ -175,11 +182,9 @@ export function useExperiments() {
     const next = typeof updater === 'function' ? updater(current.experiments) : updater;
     const validated = validatedExperiments(next);
     if (!validated) return false;
-    const nextState = { ...current, experiments: validated, needsWrite: true };
-    stateRef.current = nextState;
-    setState(nextState);
+    applyState({ ...current, experiments: validated, needsWrite: true });
     return true;
-  }, []);
+  }, [applyState]);
 
   const startExperiment = useCallback((candidate, options) => (
     updateExperiments((current) => {
@@ -266,7 +271,7 @@ export function useExperiments() {
   const replaceExperiments = useCallback((next) => {
     const validated = validatedExperiments(Array.isArray(next) ? next : []);
     if (!validated) return false;
-    const nextState = {
+    applyState({
       experiments: validated,
       persistenceBlocked: false,
       unsupportedVersion: null,
@@ -274,11 +279,9 @@ export function useExperiments() {
       needsWrite: false,
       baseSerialized: canonicalExperiments(validated),
       writeConflict: false,
-    };
-    stateRef.current = nextState;
-    setState(nextState);
+    });
     return true;
-  }, []);
+  }, [applyState]);
 
   return {
     experiments,
