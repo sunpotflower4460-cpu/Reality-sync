@@ -15,7 +15,9 @@ function loadTemplateState() {
     const result = parseStoredTemplatesResult(window.localStorage.getItem(TEMPLATE_STORAGE_KEY));
     return { templates: result.templates, persistenceBlocked: !result.ok, writeFailed: false };
   } catch {
-    return { templates: [], persistenceBlocked: false, writeFailed: true };
+    // Do not treat an unreadable storage area as empty: a later write could
+    // otherwise erase templates that this tab never successfully read.
+    return { templates: [], persistenceBlocked: true, writeFailed: false };
   }
 }
 
