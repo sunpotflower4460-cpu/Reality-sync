@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { STATUS } from '../src/constants.js';
 import { calculateMonthlyInsights, calculateWeeklyInsights } from '../src/utils/analytics.js';
+
+function source(relativePath) {
+  return readFileSync(new URL(`../${relativePath}`, import.meta.url), 'utf8');
+}
 
 function plan(id, status = STATUS.PENDING) {
   return {
@@ -72,4 +77,12 @@ test('analytics keep full historical windows when no observation cutoff is suppl
   assert.equal(historical.totalSchedules, 2);
   assert.equal(historical.pending, 1);
   assert.equal(historical.recordingRate, 50);
+});
+
+test('future daily analytics describe plans as unobserved rather than missing reality', () => {
+  const analyticsView = source('src/components/AnalyticsView.jsx');
+  assert.match(analyticsView, /const isFutureDate = selectedDate > dateKeyFromDate\(\)/);
+  assert.match(analyticsView, /DailyAnalyticsContent stats=\{stats\} isFutureDate=\{isFutureDate\}/);
+  assert.match(analyticsView, /この日の現実はまだ観測前です/);
+  assert.match(analyticsView, /未来日の予定は「未記録」として数えません/);
 });
