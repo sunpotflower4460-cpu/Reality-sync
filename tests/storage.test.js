@@ -86,6 +86,114 @@ test('schedule item loss blocks persistence instead of rewriting a partial day',
   assert.deepEqual(result.store, { version: 2, days: {} });
 });
 
+test('field-level plan corruption blocks persistence instead of silently clamping facts', () => {
+  for (const corrupt of [
+    { duration: 2000 },
+    { plannedStress: -1 },
+    { time: '25:00' },
+    { category: 'unknown-category' },
+  ]) {
+    const raw = JSON.stringify({
+      version: 2,
+      days: {
+        '2026-08-23': [{
+          id: 'a',
+          time: '09:00',
+          title: 'Work',
+          category: '仕事',
+          duration: 60,
+          plannedStress: 40,
+          status: STATUS.PENDING,
+          ...corrupt,
+        }],
+      },
+    });
+    assert.equal(parseStoredScheduleStoreResult(raw).ok, false);
+  }
+});
+
+test('record corruption that normalization would erase blocks persistence', () => {
+  const base = {
+    id: 'recorded',
+    time: '09:00',
+    title: 'Work',
+    category: '仕事',
+    duration: 60,
+    plannedStress: 40,
+    status: STATUS.AS_PLANNED,
+    actualTitle: 'Work',
+    actualCategory: '仕事',
+    actualDuration: 60,
+    actualStress: 35,
+    mood: 'good',
+  };
+  const corruptions = [
+    { actualDuration: 9999 },
+    { actualStress: -10 },
+    { mood: 'mystery' },
+    { actualStartTime: '99:99' },
+    { actualStartTime: '09:10', actualStartDateKey: '2026-02-31' },
+    { deviationReason: 'would be silently dropped' },
+  ];
+
+  for (const corruption of corruptions) {
+    const raw = JSON.stringify({ version: 2, days: { '2026-08-23': [{ ...base, ...corruption }] } });
+    assert.equal(parseStoredScheduleStoreResult(raw).ok, false);
+  }
+});
+
+test('changed record missing its replacement title cannot silently turn back into pending', () => {
+  const raw = JSON.stringify({
+    version: 2,
+    days: {
+      '2026-08-23': [{
+        id: 'changed',
+        time: '09:00',
+        title: 'Work',
+        category: '仕事',
+        duration: 60,
+        plannedStress: 40,
+        status: STATUS.CHANGED,
+        actualDuration: 45,
+        actualStress: 50,
+      }],
+    },
+  });
+  assert.equal(parseStoredScheduleStoreResult(raw).ok, false);
+});
+
+test('invalid planned snapshots and unknown per-item fields are protected from silent loss', () => {
+  const base = {
+    id: 'recorded',
+    time: '09:00',
+    title: 'Work',
+    category: '仕事',
+    duration: 60,
+    plannedStress: 40,
+    status: STATUS.AS_PLANNED,
+    actualTitle: 'Work',
+    actualCategory: '仕事',
+    actualDuration: 60,
+  };
+
+  const invalidSnapshot = JSON.stringify({
+    version: 2,
+    days: {
+      '2026-08-23': [{
+        ...base,
+        plannedSnapshot: { time: '09:00', title: 'Work', category: '仕事', duration: null, plannedStress: 40 },
+      }],
+    },
+  });
+  const unknownField = JSON.stringify({
+    version: 2,
+    days: { '2026-08-23': [{ ...base, futureFact: 'do-not-drop-me' }] },
+  });
+
+  assert.equal(parseStoredScheduleStoreResult(invalidSnapshot).ok, false);
+  assert.equal(parseStoredScheduleStoreResult(unknownField).ok, false);
+});
+
 test('unknown future storage versions are detected so persistence can be blocked', () => {
   const raw = JSON.stringify({
     version: 3,
