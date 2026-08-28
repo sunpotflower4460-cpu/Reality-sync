@@ -1,13 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { INITIAL_SCHEDULES } from '../data/demoSchedules.js';
-import { LEGACY_STORAGE_KEY, STORAGE_KEY } from '../constants.js';
+import { LEGACY_STORAGE_KEY, STORAGE_KEY, STORAGE_VERSION } from '../constants.js';
 import { dateKeyFromDate } from '../utils/date.js';
-import { hasDuplicateIds } from '../utils/id.js';
-import { normalizeSchedules } from '../utils/schedule.js';
 import {
   createEmptyScheduleStore,
   migrateLegacySchedulesResult,
-  normalizeScheduleStore,
   parseStoredScheduleStoreResult,
 } from '../utils/storage.js';
 
@@ -77,16 +74,19 @@ export function usePersistentSchedules(dateKey) {
       if (currentState.persistenceBlocked) return currentState;
       const currentDay = currentState.store.days[dateKey] ?? [];
       const nextDay = typeof nextValue === 'function' ? nextValue(currentDay) : nextValue;
-      if (!Array.isArray(nextDay) || hasDuplicateIds(nextDay)) return currentState;
-      const normalized = normalizeSchedules(nextDay, []);
-      if (normalized.length !== nextDay.length) return currentState;
+      if (!Array.isArray(nextDay)) return currentState;
+      const result = parseStoredScheduleStoreResult(JSON.stringify({
+        version: STORAGE_VERSION,
+        days: { [dateKey]: nextDay },
+      }));
+      if (!result.ok) return currentState;
       return {
         ...currentState,
         store: {
           ...currentState.store,
           days: {
             ...currentState.store.days,
-            [dateKey]: normalized,
+            [dateKey]: result.store.days[dateKey] ?? [],
           },
         },
       };
