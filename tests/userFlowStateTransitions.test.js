@@ -132,6 +132,15 @@ test('native App Store shell bridges backup files through iOS document pickers w
   assert.match(native, /realitysync:native-backup-status/);
 });
 
+test('native backup import checks file metadata before reading the selected file into memory', () => {
+  const native = source('ios/RealitySync/ViewController.swift');
+  const metadataCheck = native.indexOf('url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])');
+  const byteRead = native.indexOf('Data(contentsOf: url, options: [.mappedIfSafe])');
+  assert.ok(metadataCheck >= 0);
+  assert.ok(byteRead > metadataCheck);
+  assert.match(native, /fileSize <= Self\.maximumBackupBytes/);
+});
+
 test('native App Store shell presents JavaScript confirm calls through UIKit so destructive and replacement flows remain usable', () => {
   const native = source('ios/RealitySync/ViewController.swift');
   assert.match(native, /runJavaScriptConfirmPanelWithMessage/);
