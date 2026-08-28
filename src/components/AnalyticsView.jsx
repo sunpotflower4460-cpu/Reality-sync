@@ -7,6 +7,7 @@ import { WeeklyAnalyticsView } from './WeeklyAnalyticsView.jsx';
 
 export function AnalyticsView({
   stats,
+  plannedCount = stats.total,
   weeklyInsights,
   monthlyInsights,
   longitudinalInsights,
@@ -15,6 +16,7 @@ export function AnalyticsView({
 }) {
   const [detailScope, setDetailScope] = useState('week');
   const isFutureDate = selectedDate > dateKeyFromDate();
+  const unobservedPlanCount = Math.max(0, plannedCount - stats.total);
 
   return (
     <div className="animate-fade-in space-y-3.5 pt-3.5">
@@ -24,7 +26,7 @@ export function AnalyticsView({
         <p className="mt-1 text-[10px] leading-relaxed text-slate-500">良し悪しではなく、次の予定を少し現実に近づけるために</p>
       </div>
 
-      <DailyAnalyticsContent stats={stats} isFutureDate={isFutureDate} />
+      <DailyAnalyticsContent stats={stats} isFutureDate={isFutureDate} plannedCount={plannedCount} unobservedPlanCount={unobservedPlanCount} />
       <SimpleInsightCard insights={longitudinalInsights} />
 
       <details className="app-group group">
@@ -65,14 +67,25 @@ function SimpleInsightCard({ insights }) {
   );
 }
 
-function DailyAnalyticsContent({ stats, isFutureDate }) {
+function DailyAnalyticsContent({ stats, isFutureDate, plannedCount, unobservedPlanCount }) {
   if (isFutureDate) {
     return (
       <section className="app-card-strong rounded-[1.25rem] p-5 text-center">
         <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-500"><Layers className="h-4.5 w-4.5" /></div>
         <h2 className="mt-3.5 text-[15px] font-semibold text-slate-800">この日の現実はまだ観測前です</h2>
         <p className="mx-auto mt-1.5 max-w-[18rem] text-[11px] leading-relaxed text-slate-500">未来日の予定は「未記録」として数えません。日付を迎えて実績を記録すると、理想と現実を比べられます。</p>
-        {stats.total > 0 && <p className="mt-2 text-[9px] font-medium text-indigo-500">予定 {stats.total}件は計画として保存されています</p>}
+        {plannedCount > 0 && <p className="mt-2 text-[9px] font-medium text-indigo-500">予定 {plannedCount}件は計画として保存されています</p>}
+      </section>
+    );
+  }
+
+  if (stats.total === 0 && unobservedPlanCount > 0) {
+    return (
+      <section className="app-card-strong rounded-[1.25rem] p-5 text-center">
+        <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-500"><Layers className="h-4.5 w-4.5" /></div>
+        <h2 className="mt-3.5 text-[15px] font-semibold text-slate-800">この時間までの現実はまだ観測前です</h2>
+        <p className="mx-auto mt-1.5 max-w-[18rem] text-[11px] leading-relaxed text-slate-500">今日これからの予定は、開始時刻を迎えるまで「未記録」として数えません。</p>
+        <p className="mt-2 text-[9px] font-medium text-indigo-500">これからの予定 {unobservedPlanCount}件</p>
       </section>
     );
   }
@@ -116,6 +129,7 @@ function DailyAnalyticsContent({ stats, isFutureDate }) {
           <MiniStat label="変更・休み" value={stats.changed + stats.skipped} tone="text-amber-600" />
           <MiniStat label="未記録" value={stats.pending} tone="text-slate-500" />
         </div>
+        {unobservedPlanCount > 0 && <p className="mt-2 text-center text-[8px] leading-relaxed text-slate-400">これからの予定 {unobservedPlanCount}件は、開始時刻を迎えるまで集計していません。</p>}
       </section>
 
       <section className="app-group p-3.5">
