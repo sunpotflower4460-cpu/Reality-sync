@@ -38,6 +38,10 @@ function canonicalRecordKey(record) {
   return scheduleId ? `${record.dateKey}::${scheduleId}` : null;
 }
 
+function exactRevisionMatches(value, expectedRevision) {
+  return typeof expectedRevision === 'string' && JSON.stringify(value) === expectedRevision;
+}
+
 function loadExperimentState() {
   if (typeof window === 'undefined') {
     return {
@@ -366,7 +370,7 @@ export function useExperiments() {
 
     return updateExperiments((current) => {
       const source = current.find((experiment) => experiment.id === sourceExperimentId);
-      if (!source || JSON.stringify(source) !== sourceRevision) return null;
+      if (!source || !exactRevisionMatches(source, sourceRevision)) return null;
       const rootId = source.learningRootId || source.id;
       if (current.some((experiment) => (
         experiment.status === 'active' && (experiment.learningRootId || experiment.id) === rootId
@@ -385,10 +389,10 @@ export function useExperiments() {
     });
   }, [updateExperiments]);
 
-  const captureTrial = useCallback((experimentId, eligibleRecord) => {
+  const captureTrial = useCallback((experimentId, eligibleRecord, expectedRevision) => {
     return updateExperiments((current) => {
       const target = current.find((experiment) => experiment.id === experimentId);
-      if (!target || target.status !== 'active' || target.trials.length >= target.targetRuns) return null;
+      if (!target || !exactRevisionMatches(target, expectedRevision) || target.status !== 'active' || target.trials.length >= target.targetRuns) return null;
       const expectedRecordKey = canonicalRecordKey(eligibleRecord);
       if (
         !expectedRecordKey
@@ -401,38 +405,41 @@ export function useExperiments() {
     });
   }, [updateExperiments]);
 
-  const removeTrial = useCallback((experimentId, recordKey) => {
-    return updateExperiments((current) => current.map((experiment) => (
-      experiment.id === experimentId ? removeExperimentTrial(experiment, recordKey) : experiment
-    )));
+  const removeTrial = useCallback((experimentId, recordKey, expectedRevision) => {
+    return updateExperiments((current) => {
+      const target = current.find((experiment) => experiment.id === experimentId);
+      if (!target || !exactRevisionMatches(target, expectedRevision)) return null;
+      const updated = removeExperimentTrial(target, recordKey);
+      return current.map((experiment) => experiment.id === experimentId ? updated : experiment);
+    });
   }, [updateExperiments]);
 
-  const finish = useCallback((experimentId, decision) => {
+  const finish = useCallback((experimentId, decision, expectedRevision) => {
     const completedAt = new Date().toISOString();
     const decisionDateKey = dateKeyFromDate();
     return updateExperiments((current) => {
       const target = current.find((experiment) => experiment.id === experimentId);
-      if (!target || target.status !== 'active') return null;
+      if (!target || !exactRevisionMatches(target, expectedRevision) || target.status !== 'active') return null;
       const updated = finishExperiment(target, decision, completedAt, decisionDateKey);
       if (!updated || updated.status !== 'completed') return null;
       return current.map((experiment) => experiment.id === experimentId ? updated : experiment);
     });
   }, [updateExperiments]);
 
-  const abandon = useCallback((experimentId) => {
+  const abandon = useCallback((experimentId, expectedRevision) => {
     return updateExperiments((current) => {
       const target = current.find((experiment) => experiment.id === experimentId);
-      if (!target || target.status !== 'active') return null;
+      if (!target || !exactRevisionMatches(target, expectedRevision) || target.status !== 'active') return null;
       const updated = abandonExperiment(target);
       if (!updated || updated.status !== 'abandoned') return null;
       return current.map((experiment) => experiment.id === experimentId ? updated : experiment);
     });
   }, [updateExperiments]);
 
-  const deleteExperiment = useCallback((experimentId) => (
+  const deleteExperiment = useCallback((experimentId, expectedRevision) => (
     updateExperiments((current) => {
       const target = current.find((experiment) => experiment.id === experimentId);
-      if (!target) return null;
+      if (!target || !exactRevisionMatches(target, expectedRevision)) return null;
       // An adopted experiment can already be referenced by schedules/templates
       // through appliedExperimentIds. Deleting a leaf would also make an older
       // adopted lineage version appear current again, resurrecting stale advice.
@@ -451,7 +458,7 @@ export function useExperiments() {
     const current = latestStateBeforeMutation();
     if (!current) return null;
     const experiment = current.experiments.find((item) => item.id === experimentId) ?? null;
-    const revisionMatches = experiment && JSON.stringify(experiment) === expectedRevision;
+    const revisionMatches = experiment && exactRevisionMatches(experiment, expectedRevision);
     if (current !== stateRef.current) applyState(current);
     return revisionMatches ? experiment : null;
   }, [applyState, latestStateBeforeMutation]);
