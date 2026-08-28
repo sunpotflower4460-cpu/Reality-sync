@@ -31,8 +31,12 @@ test('navigation caching uses canonical app-shell keys instead of accumulating q
   assert.match(worker, /cache\.put\(scopeUrl\.href, response\.clone\(\)\)/);
   assert.match(worker, /cache\.put\(indexUrl\.href, response\.clone\(\)\)/);
   const navigationStart = worker.indexOf("if (request.mode === 'navigate')");
-  const navigationEnd = worker.indexOf("event.respondWith((async () => {", navigationStart + 1);
-  const navigationBlock = worker.slice(navigationStart, navigationEnd);
+  const firstRespond = worker.indexOf('event.respondWith((async () => {', navigationStart);
+  const secondRespond = worker.indexOf('event.respondWith((async () => {', firstRespond + 1);
+  const navigationBlock = worker.slice(navigationStart, secondRespond);
+  assert.ok(navigationStart >= 0);
+  assert.ok(firstRespond > navigationStart);
+  assert.ok(secondRespond > firstRespond);
   assert.match(navigationBlock, /await putNavigationResponse\(response\)/);
   assert.doesNotMatch(navigationBlock, /cache\.match\(request\)/);
   assert.doesNotMatch(navigationBlock, /putResponse\(request, response\)/);
