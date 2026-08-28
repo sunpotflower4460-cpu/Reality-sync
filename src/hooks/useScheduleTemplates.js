@@ -9,37 +9,112 @@ function validateTemplates(next) {
   return result.ok ? result.templates : null;
 }
 
+function serializeTemplates(templates) {
+  return JSON.stringify(templates);
+}
+
 function loadTemplateState() {
-  if (typeof window === 'undefined') return { templates: [], persistenceBlocked: false, writeFailed: false, needsWrite: false };
+  if (typeof window === 'undefined') {
+    return {
+      templates: [],
+      persistenceBlocked: false,
+      writeFailed: false,
+      needsWrite: false,
+      baseSerialized: '[]',
+      writeConflict: false,
+    };
+  }
   try {
     const result = parseStoredTemplatesResult(window.localStorage.getItem(TEMPLATE_STORAGE_KEY));
-    return { templates: result.templates, persistenceBlocked: !result.ok, writeFailed: false, needsWrite: false };
+    return {
+      templates: result.templates,
+      persistenceBlocked: !result.ok,
+      writeFailed: false,
+      needsWrite: false,
+      baseSerialized: serializeTemplates(result.templates),
+      writeConflict: false,
+    };
   } catch {
     // Do not treat an unreadable storage area as empty: a later write could
     // otherwise erase templates that this tab never successfully read.
-    return { templates: [], persistenceBlocked: true, writeFailed: false, needsWrite: false };
+    return {
+      templates: [],
+      persistenceBlocked: true,
+      writeFailed: false,
+      needsWrite: false,
+      baseSerialized: '[]',
+      writeConflict: false,
+    };
   }
 }
 
 export function useScheduleTemplates() {
   const [state, setState] = useState(loadTemplateState);
-  const { templates, persistenceBlocked, writeFailed, needsWrite } = state;
+  const {
+    templates,
+    persistenceBlocked,
+    writeFailed,
+    needsWrite,
+    baseSerialized,
+    writeConflict,
+  } = state;
 
   useEffect(() => {
-    if (persistenceBlocked || !needsWrite) return;
+    if (persistenceBlocked || writeConflict || !needsWrite) return;
     try {
-      window.localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
-      setState((current) => ({ ...current, writeFailed: false, needsWrite: false }));
+      const latest = parseStoredTemplatesResult(window.localStorage.getItem(TEMPLATE_STORAGE_KEY));
+      if (!latest.ok) {
+        setState((current) => ({ ...current, persistenceBlocked: true, needsWrite: false }));
+        return;
+      }
+      const latestSerialized = serializeTemplates(latest.templates);
+      if (latestSerialized !== baseSerialized) {
+        setState((current) => ({ ...current, writeConflict: true, writeFailed: false, needsWrite: false }));
+        return;
+      }
+
+      const writtenSerialized = serializeTemplates(templates);
+      window.localStorage.setItem(TEMPLATE_STORAGE_KEY, writtenSerialized);
+      setState((current) => {
+        const currentSerialized = serializeTemplates(current.templates);
+        const changedAgain = currentSerialized !== writtenSerialized;
+        return {
+          ...current,
+          writeFailed: false,
+          needsWrite: changedAgain,
+          baseSerialized: writtenSerialized,
+        };
+      });
     } catch {
       setState((current) => current.writeFailed ? current : { ...current, writeFailed: true });
     }
-  }, [needsWrite, persistenceBlocked, templates]);
+  }, [baseSerialized, needsWrite, persistenceBlocked, templates, writeConflict]);
 
   useEffect(() => {
     const syncTemplates = (event) => {
       if (event.key !== TEMPLATE_STORAGE_KEY) return;
       const result = parseStoredTemplatesResult(event.newValue);
-      setState({ templates: result.templates, persistenceBlocked: !result.ok, writeFailed: false, needsWrite: false });
+      setState((current) => {
+        if (!result.ok) {
+          return { ...current, persistenceBlocked: true, writeFailed: false, needsWrite: false };
+        }
+        const externalSerialized = serializeTemplates(result.templates);
+        if (current.needsWrite) {
+          if (externalSerialized !== current.baseSerialized) {
+            return { ...current, writeConflict: true, writeFailed: false, needsWrite: false };
+          }
+          return current;
+        }
+        if (current.writeConflict) return current;
+        return {
+          templates: result.templates,
+          persistenceBlocked: false,
+          writeFailed: false,
+          needsWrite: false,
+          baseSerialized: externalSerialized,
+          writeConflict: false,
+        };
+      });
     };
     window.addEventListener('storage', syncTemplates);
     return () => window.removeEventListener('storage', syncTemplates);
@@ -47,7 +122,7 @@ export function useScheduleTemplates() {
 
   const updateTemplates = useCallback((updater) => {
     setState((current) => {
-      if (current.persistenceBlocked) return current;
+      if (current.persistenceBlocked || current.writeConflict) return current;
       const next = typeof updater === 'function' ? updater(current.templates) : updater;
       const validated = validateTemplates(next);
       if (!validated) return current;
@@ -56,13 +131,13 @@ export function useScheduleTemplates() {
   }, []);
 
   const saveTemplate = useCallback((name, schedules) => {
-    if (persistenceBlocked) return false;
+    if (persistenceBlocked || writeConflict) return false;
     const id = createUniqueId('template', templates.map((template) => template.id));
     const template = createTemplateFromSchedules(name, schedules, id);
     if (!template) return false;
     updateTemplates((current) => [template, ...current]);
     return true;
-  }, [persistenceBlocked, templates, updateTemplates]);
+  }, [persistenceBlocked, templates, updateTemplates, writeConflict]);
 
   const deleteTemplate = useCallback((templateId) => {
     updateTemplates((current) => current.filter((template) => template.id !== templateId));
@@ -71,7 +146,14 @@ export function useScheduleTemplates() {
   const replaceTemplates = useCallback((nextTemplates) => {
     const validated = validateTemplates(Array.isArray(nextTemplates) ? nextTemplates : []);
     if (!validated) return;
-    setState({ templates: validated, persistenceBlocked: false, writeFailed: false, needsWrite: false });
+    setState({
+      templates: validated,
+      persistenceBlocked: false,
+      writeFailed: false,
+      needsWrite: false,
+      baseSerialized: serializeTemplates(validated),
+      writeConflict: false,
+    });
   }, []);
 
   return {
@@ -79,6 +161,6 @@ export function useScheduleTemplates() {
     saveTemplate,
     deleteTemplate,
     replaceTemplates,
-    storageProtection: { persistenceBlocked, writeFailed },
+    storageProtection: { persistenceBlocked, writeFailed, writeConflict },
   };
 }
