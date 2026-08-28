@@ -75,12 +75,15 @@ test('application-level erase verifies every RealitySync storage domain before r
   ]) {
     assert.match(restore, new RegExp(storageKey));
   }
-  assert.match(restore, /eraseStoredRealitySyncData/);
+  assert.match(restore, /eraseStoredRealitySyncDataResult/);
   assert.match(restore, /storage\.removeItem\(key\)/);
-  assert.match(settings, /const erased = eraseStoredRealitySyncData\(\)/);
+  assert.match(restore, /storage\.getItem\(key\) !== null/);
+  assert.match(settings, /const eraseResult = eraseStoredRealitySyncDataResult\(\)/);
+  assert.match(settings, /if \(!eraseResult\.ok\)/);
+  assert.match(settings, /eraseResult\.rollbackOk/);
   assert.ok(
-    settings.indexOf('const erased = eraseStoredRealitySyncData()') < settings.indexOf('onEraseAllData();'),
-    'persistent erase must be verified before React state is cleared',
+    settings.indexOf('const eraseResult = eraseStoredRealitySyncDataResult()') < settings.indexOf('onEraseAllData();'),
+    'persistent erase and rollback status must be verified before React state is cleared',
   );
   assert.match(app, /replaceStore\(createEmptyScheduleStore\(\)\)/);
   assert.match(app, /replaceTemplates\(\[\]\)/);
