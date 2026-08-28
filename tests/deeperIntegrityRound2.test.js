@@ -119,3 +119,13 @@ test('experiment storage rejects unknown nested trial and condition fields', () 
   assert.equal(parseExperiment(unknownCondition).ok, false);
   assert.equal(parseExperiment(unknownTrial).ok, false);
 });
+
+test('experiment storage rejects coerced or impossible conditions instead of persisting inert learning', () => {
+  const numericString = rawExperiment({ condition: { kind: 'weekday', value: '0' } });
+  const unknownCategory = rawExperiment({ condition: { kind: 'planned-category', value: '存在しないカテゴリ' } });
+  const validCategory = rawExperiment({ condition: { kind: 'planned-category', value: '仕事' } });
+
+  assert.equal(parseExperiment(numericString).ok, false);
+  assert.equal(parseExperiment(unknownCategory).ok, false);
+  assert.equal(parseExperiment(validCategory).ok, true);
+});
