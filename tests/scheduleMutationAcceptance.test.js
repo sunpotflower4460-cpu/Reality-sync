@@ -9,9 +9,11 @@ function source(relativePath) {
 test('schedule mutations synchronously report whether the latest hook state accepted the edit', () => {
   const hook = source('src/hooks/usePersistentSchedules.js');
   assert.match(hook, /const stateRef = useRef\(state\)/);
+  assert.match(hook, /const applyState = useCallback\(\(updater\) =>/);
+  assert.match(hook, /stateRef\.current = next;\s*setState\(next\);/s);
   assert.match(hook, /const currentState = stateRef\.current;/);
   assert.match(hook, /if \(currentState\.persistenceBlocked \|\| currentState\.writeConflict\) return false;/);
-  assert.match(hook, /stateRef\.current = nextState;\s*setState\(nextState\);\s*return true;/s);
+  assert.match(hook, /applyState\(nextState\);\s*return true;/s);
 });
 
 test('record and plan editors recheck their opening revision inside the atomic day updater', () => {
