@@ -11,6 +11,75 @@ import {
 
 const VALID_STATUSES = new Set(Object.values(EXPERIMENT_STATUS));
 const VALID_DECISIONS = new Set(Object.values(EXPERIMENT_DECISION));
+const PAYLOAD_FIELDS = new Set(['version', 'experiments']);
+const EXPERIMENT_FIELDS = new Set([
+  'id',
+  'candidateId',
+  'candidateType',
+  'title',
+  'hypothesis',
+  'action',
+  'metricKind',
+  'metricLabel',
+  'condition',
+  'contextRule',
+  'startDateKey',
+  'targetRuns',
+  'baselineFailureRate',
+  'baselineSampleCount',
+  'planAdjustment',
+  'learningRootId',
+  'parentExperimentId',
+  'learningVersion',
+  'revalidationReason',
+  'sourceRetention',
+  'status',
+  'decision',
+  'decisionDateKey',
+  'trials',
+  'createdAt',
+  'completedAt',
+]);
+const TRIAL_FIELDS = new Set([
+  'id',
+  'recordKey',
+  'dateKey',
+  'scheduleId',
+  'planTitle',
+  'outcome',
+  'observedValue',
+  'observedLabel',
+  'capturedAt',
+]);
+const CONDITION_FIELDS = new Set(['kind', 'value']);
+const PLAN_ADJUSTMENT_FIELDS = new Set(['kind', 'minutes']);
+const CONTEXT_RULE_FIELDS = new Set([
+  'metric',
+  'operator',
+  'threshold',
+  'category',
+  'sourceCandidateId',
+  'sourcePreviousValue',
+  'sourceRecentValue',
+  'sourceThroughDateKey',
+]);
+const RETENTION_FIELDS = new Set([
+  'experimentId',
+  'throughDateKey',
+  'assessmentCount',
+  'weekCount',
+  'failureRate',
+  'experimentFailureRate',
+  'differenceFromExperimentPoints',
+  'capturedAt',
+]);
+
+function objectHasOnlyKeys(value, allowed) {
+  return Boolean(value)
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && Object.keys(value).every((key) => allowed.has(key));
+}
 
 function optionalFiniteNumber(value) {
   if (value === null || value === undefined) return null;
@@ -33,7 +102,7 @@ function trialMetadataPreserved(rawTrials, normalizedTrials) {
   for (let index = 0; index < rawTrials.length; index += 1) {
     const raw = rawTrials[index];
     const normalized = normalizedTrials[index];
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !normalized) return false;
+    if (!objectHasOnlyKeys(raw, TRIAL_FIELDS) || !normalized) return false;
     if (raw.observedValue !== undefined && raw.observedValue !== null && raw.observedValue !== '') {
       const numeric = optionalFiniteNumber(raw.observedValue);
       if (numeric === null || normalized.observedValue !== numeric) return false;
@@ -48,9 +117,10 @@ function trialMetadataPreserved(rawTrials, normalizedTrials) {
 }
 
 function explicitMetadataPreserved(raw, normalized) {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !normalized) return false;
+  if (!objectHasOnlyKeys(raw, EXPERIMENT_FIELDS) || !normalized) return false;
 
   if (typeof raw.id !== 'string' || !raw.id.trim() || normalized.id !== raw.id.trim()) return false;
+  if (!objectHasOnlyKeys(raw.condition, CONDITION_FIELDS)) return false;
   if (!trialMetadataPreserved(raw.trials, normalized.trials)) return false;
 
   if (raw.targetRuns !== undefined) {
@@ -62,6 +132,7 @@ function explicitMetadataPreserved(raw, normalized) {
     if (raw.planAdjustment === null) {
       if (normalized.planAdjustment !== null) return false;
     } else {
+      if (!objectHasOnlyKeys(raw.planAdjustment, PLAN_ADJUSTMENT_FIELDS)) return false;
       const adjustment = normalizePlanAdjustment(raw.planAdjustment);
       if (!adjustment || !sameJson(adjustment, normalized.planAdjustment)) return false;
     }
@@ -71,6 +142,7 @@ function explicitMetadataPreserved(raw, normalized) {
     if (raw.contextRule === null) {
       if (normalized.contextRule !== null) return false;
     } else {
+      if (!objectHasOnlyKeys(raw.contextRule, CONTEXT_RULE_FIELDS)) return false;
       const rule = normalizeContextRule(raw.contextRule);
       if (!rule || !sameJson(rule, normalized.contextRule)) return false;
     }
@@ -80,6 +152,7 @@ function explicitMetadataPreserved(raw, normalized) {
     if (raw.sourceRetention === null) {
       if (normalized.sourceRetention !== null) return false;
     } else {
+      if (!objectHasOnlyKeys(raw.sourceRetention, RETENTION_FIELDS)) return false;
       const snapshot = normalizeRetentionSnapshot(raw.sourceRetention);
       if (!snapshot || !sameJson(snapshot, normalized.sourceRetention)) return false;
     }
@@ -138,7 +211,7 @@ function parsePayload(raw) {
   let parsed;
   try { parsed = JSON.parse(raw); } catch { return { ok: false, rawExperiments: [], unsupportedVersion: null }; }
   if (Array.isArray(parsed)) return { ok: true, rawExperiments: parsed, unsupportedVersion: null };
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { ok: false, rawExperiments: [], unsupportedVersion: null };
+  if (!objectHasOnlyKeys(parsed, PAYLOAD_FIELDS)) return { ok: false, rawExperiments: [], unsupportedVersion: null };
   if (parsed.version !== EXPERIMENT_STORAGE_VERSION) {
     return { ok: false, rawExperiments: [], unsupportedVersion: parsed.version ?? 'unknown' };
   }
