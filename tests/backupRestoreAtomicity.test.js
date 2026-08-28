@@ -64,11 +64,96 @@ test('partial restore write failure rolls already-written domains back to their 
   const storage = fakeStorage(initial, EXPERIMENT_STORAGE_KEY);
   const result = persistRestoredBackup(backupData(), storage);
   assert.equal(result.ok, false);
-  // The failing key was never changed, so only successfully changed earlier
-  // keys need rollback; this should be reported as a clean rollback.
   assert.equal(result.rollbackOk, true);
-  const snapshot = storage.snapshot();
-  assert.deepEqual(snapshot, initial);
+  assert.deepEqual(storage.snapshot(), initial);
+});
+
+test('restore verifies read-back and rolls back a silent no-op storage write', () => {
+  const initial = {
+    [STORAGE_KEY]: 'old-schedules',
+    [TEMPLATE_STORAGE_KEY]: 'old-templates',
+    [EXPERIMENT_STORAGE_KEY]: 'old-experiments',
+    [REMINDER_STORAGE_KEY]: 'old-reminders',
+    [LEGACY_STORAGE_KEY]: 'old-legacy',
+    [REMINDER_NOTIFIED_STORAGE_KEY]: 'old-notified',
+  };
+  const values = new Map(Object.entries(initial));
+  const storage = {
+    getItem(key) { return values.has(key) ? values.get(key) : null; },
+    setItem(key, value) {
+      if (key === TEMPLATE_STORAGE_KEY) return;
+      values.set(key, String(value));
+    },
+    removeItem(key) { values.delete(key); },
+    snapshot() { return Object.fromEntries(values); },
+  };
+
+  assert.deepEqual(persistRestoredBackup(backupData(), storage), { ok: false, rollbackOk: true });
+  assert.deepEqual(storage.snapshot(), initial);
+});
+
+test('restore rolls back a key even when storage mutates before throwing', () => {
+  const initial = {
+    [STORAGE_KEY]: 'old-schedules',
+    [TEMPLATE_STORAGE_KEY]: 'old-templates',
+    [EXPERIMENT_STORAGE_KEY]: 'old-experiments',
+    [REMINDER_STORAGE_KEY]: 'old-reminders',
+    [LEGACY_STORAGE_KEY]: 'old-legacy',
+    [REMINDER_NOTIFIED_STORAGE_KEY]: 'old-notified',
+  };
+  const values = new Map(Object.entries(initial));
+  let throwOnce = true;
+  const storage = {
+    getItem(key) { return values.has(key) ? values.get(key) : null; },
+    setItem(key, value) {
+      values.set(key, String(value));
+      if (key === EXPERIMENT_STORAGE_KEY && throwOnce) {
+        throwOnce = false;
+        throw new Error('mutated before reporting failure');
+      }
+    },
+    removeItem(key) { values.delete(key); },
+    snapshot() { return Object.fromEntries(values); },
+  };
+
+  assert.deepEqual(persistRestoredBackup(backupData(), storage), { ok: false, rollbackOk: true });
+  assert.deepEqual(storage.snapshot(), initial);
+});
+
+test('restore does not overwrite a third value that appears concurrently during verification', () => {
+  const initial = {
+    [STORAGE_KEY]: 'old-schedules',
+    [TEMPLATE_STORAGE_KEY]: 'old-templates',
+    [EXPERIMENT_STORAGE_KEY]: 'old-experiments',
+    [REMINDER_STORAGE_KEY]: 'old-reminders',
+    [LEGACY_STORAGE_KEY]: 'old-legacy',
+    [REMINDER_NOTIFIED_STORAGE_KEY]: 'old-notified',
+  };
+  const values = new Map(Object.entries(initial));
+  let writeCount = 0;
+  let injected = false;
+  const storage = {
+    getItem(key) {
+      if (writeCount === 6 && key === STORAGE_KEY && !injected) {
+        injected = true;
+        values.set(TEMPLATE_STORAGE_KEY, 'remote-concurrent-template');
+      }
+      return values.has(key) ? values.get(key) : null;
+    },
+    setItem(key, value) {
+      writeCount += 1;
+      values.set(key, String(value));
+    },
+    removeItem(key) {
+      writeCount += 1;
+      values.delete(key);
+    },
+    snapshot() { return Object.fromEntries(values); },
+  };
+
+  const result = persistRestoredBackup(backupData(), storage);
+  assert.deepEqual(result, { ok: false, rollbackOk: false });
+  assert.equal(storage.snapshot()[TEMPLATE_STORAGE_KEY], 'remote-concurrent-template');
 });
 
 test('restore never starts if existing storage cannot be read safely', () => {
