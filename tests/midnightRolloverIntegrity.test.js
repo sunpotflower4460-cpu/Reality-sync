@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
+function source(path) {
+  return readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+}
+
+const app = source('src/App.jsx');
 
 test('midnight rollover defers today navigation while an interactive modal is open', () => {
   const start = app.indexOf('useEffect(() => {\n    const previousTodayKey = previousTodayKeyRef.current;');
@@ -29,4 +33,38 @@ test('closing a deferred interaction can retrigger midnight rollover', () => {
   const block = app.slice(effectStart, effectEnd);
   assert.match(block, /\[editorState, isTemplateModalOpen, recordSession, selectedDate, selectedPlanFeedbackId, todayKey\]/);
   assert.match(block, /if \(selectedDate !== previousTodayKey\) \{\s*previousTodayKeyRef\.current = todayKey;\s*return;/s);
+});
+
+test('schedule editor only warns on exit after form values differ from their initial revision', () => {
+  const text = source('src/components/ScheduleEditorModal.jsx');
+  assert.match(text, /const dirty = time !== initialTime/);
+  assert.match(text, /title !== initialTitle/);
+  assert.match(text, /duration !== initialDuration/);
+  assert.match(text, /plannedStress !== initialPlannedStress/);
+  assert.match(text, /if \(!dirty \|\| window\.location\.protocol === 'file:'\) return undefined;/);
+  assert.match(text, /window\.addEventListener\('beforeunload', guardUnsavedInput\)/);
+  assert.match(text, /入力途中の変更があります。保存せずに閉じますか？/);
+  assert.match(text, /<ModalDialog\s+onClose=\{requestClose\}/s);
+  assert.match(text, /onClick=\{requestClose\} aria-label="予定編集を閉じる"/);
+});
+
+test('record modal protects real draft changes without treating numeric input stringification as a change', () => {
+  const text = source('src/components/RecordModal.jsx');
+  assert.match(text, /function draftValueKey\(value\)/);
+  assert.match(text, /draftValueKey\(actualDuration\) !== draftValueKey\(initialActualDuration\)/);
+  assert.doesNotMatch(text, /stressEditing !==/);
+  assert.match(text, /if \(!dirty \|\| window\.location\.protocol === 'file:'\) return undefined;/);
+  assert.match(text, /入力途中の実績があります。保存せずに閉じますか？/);
+  assert.match(text, /<ModalDialog\s+onClose=\{requestClose\}/s);
+  assert.match(text, /onClick=\{requestClose\} aria-label="記録画面を閉じる"/);
+});
+
+test('template name draft is protected on modal close, page exit, and template apply', () => {
+  const text = source('src/components/TemplateModal.jsx');
+  assert.match(text, /const dirty = name\.length > 0;/);
+  assert.match(text, /if \(!dirty \|\| window\.location\.protocol === 'file:'\) return undefined;/);
+  assert.match(text, /入力途中のテンプレート名があります。保存せずに閉じますか？/);
+  assert.match(text, /入力途中のテンプレート名は保存されていません。この名前を破棄してテンプレートを適用しますか？/);
+  assert.match(text, /<ModalDialog\s+onClose=\{requestClose\}/s);
+  assert.match(text, /onClick=\{requestClose\} aria-label="テンプレート画面を閉じる"/);
 });
