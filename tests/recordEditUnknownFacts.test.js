@@ -26,3 +26,12 @@ test('changed record editor preserves an unknown actual category', () => {
   assert.match(modal, /<option value="">未記録<\/option>/);
   assert.match(modal, /\? \(actualCategory \|\| null\)/);
 });
+
+test('Track labels legacy recorded plan values as current references rather than historical facts', () => {
+  const track = source('src/components/TrackView.jsx');
+  assert.match(track, /const legacyPlanReference = recorded && !schedule\.plannedSnapshot/);
+  assert.match(track, /記録時の予定不明/);
+  assert.match(track, /現在の予定時刻/);
+  assert.match(track, /現在の予定負荷/);
+  assert.match(track, /legacyPlanReference \? `現在の予定: \$\{schedule\.title\}` : planned\.title/);
+});
