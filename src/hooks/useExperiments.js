@@ -27,13 +27,16 @@ function validatedExperiments(next) {
 function loadExperimentState() {
   if (typeof window === 'undefined') return { experiments: [], persistenceBlocked: false, unsupportedVersion: null, writeFailed: false, needsWrite: false };
   try {
-    const result = parseStoredExperimentsForPersistence(window.localStorage.getItem(EXPERIMENT_STORAGE_KEY));
+    const raw = window.localStorage.getItem(EXPERIMENT_STORAGE_KEY);
+    const result = parseStoredExperimentsForPersistence(raw);
     return {
       experiments: result.experiments,
       persistenceBlocked: !result.ok,
       unsupportedVersion: result.unsupportedVersion,
       writeFailed: false,
-      needsWrite: false,
+      // Older releases stored the experiment list as a bare array. It is safe
+      // to migrate only that known legacy shape to the versioned wrapper.
+      needsWrite: Boolean(raw) && result.ok && raw.trimStart().startsWith('['),
     };
   } catch {
     return { experiments: [], persistenceBlocked: true, unsupportedVersion: null, writeFailed: false, needsWrite: false };
