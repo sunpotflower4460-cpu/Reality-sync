@@ -264,12 +264,16 @@ export function usePersistentSchedules(dateKey) {
 
   // Apply UI mutations synchronously against both the latest hook state and the
   // latest readable device store. This catches a remote write even if its
-  // storage event has not been delivered to React yet.
+  // storage event has not been delivered to React yet. Store-aware updaters may
+  // also inspect other dates from this exact same preflight snapshot so source
+  // data for copy/replace flows cannot come from an older render.
   const setSchedules = useCallback((nextValue) => {
     const currentState = latestStateBeforeMutation();
     if (!currentState) return false;
     const currentDay = currentState.store.days[dateKey] ?? [];
-    const nextDay = typeof nextValue === 'function' ? nextValue(currentDay) : nextValue;
+    const nextDay = typeof nextValue === 'function'
+      ? nextValue(currentDay, currentState.store)
+      : nextValue;
     if (!Array.isArray(nextDay)) {
       if (currentState !== stateRef.current) applyState(currentState);
       return false;
