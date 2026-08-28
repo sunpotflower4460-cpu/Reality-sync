@@ -12,6 +12,7 @@ test('native iOS shell loads only the bundled web app and sends external links t
   assert.match(text, /loadFileURL\(indexURL, allowingReadAccessTo: root\)/);
   assert.match(text, /if url\.isFileURL/);
   assert.match(text, /UIApplication\.shared\.open\(url\)/);
+  assert.doesNotMatch(text, /load\(URLRequest\(/);
 });
 
 test('iOS privacy manifest declares no tracking or collected data for the current local-only release', () => {
@@ -94,7 +95,7 @@ test('public privacy, terms and support documents exist and match the current lo
   assert.match(privacy, /この端末のデータをすべて削除/);
   assert.match(terms, /医療・診断用途ではありません/);
   assert.match(support, /個人情報を公開しないでください/);
-  assert.match(support, /Reality-sync\/issues\/new/);
+  assert.match(support, /sunpotflower4460-cpu\/Reality-sync\/issues\/new/);
 });
 
 test('App Store icon is generated headlessly from source rather than relying on a committed release binary', () => {
