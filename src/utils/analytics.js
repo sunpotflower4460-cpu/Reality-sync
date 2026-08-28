@@ -3,6 +3,7 @@ import {
   differenceInCalendarDays,
   getMonthDateKeys,
   getWeekDateKeys,
+  isValidDateKey,
   startOfWeekDateKey,
   weekdayIndexMondayFirst,
 } from './date.js';
@@ -44,6 +45,11 @@ function sumCategoryMinutes(categories, field) {
 function average(values) {
   if (values.length === 0) return null;
   return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+}
+
+function observedDateKeys(dateKeys, throughDateKey) {
+  if (!isValidDateKey(throughDateKey)) return dateKeys;
+  return dateKeys.filter((dateKey) => dateKey <= throughDateKey);
 }
 
 function createStressBucket() {
@@ -237,8 +243,8 @@ function calculateRangeInsights(days, dateKeys) {
   };
 }
 
-export function calculateWeeklyInsights(days, anchorDateKey) {
-  return calculateRangeInsights(days, getWeekDateKeys(anchorDateKey));
+export function calculateWeeklyInsights(days, anchorDateKey, throughDateKey = null) {
+  return calculateRangeInsights(days, observedDateKeys(getWeekDateKeys(anchorDateKey), throughDateKey));
 }
 
 function createWeekdayBucket(index) {
@@ -283,9 +289,9 @@ function finalizeWeekdayBucket(bucket) {
   };
 }
 
-export function calculateMonthlyInsights(days, anchorDateKey) {
+export function calculateMonthlyInsights(days, anchorDateKey, throughDateKey = null) {
   const sourceDays = days && typeof days === 'object' && !Array.isArray(days) ? days : {};
-  const dateKeys = getMonthDateKeys(anchorDateKey);
+  const dateKeys = observedDateKeys(getMonthDateKeys(anchorDateKey), throughDateKey);
   const range = calculateRangeInsights(sourceDays, dateKeys);
   const weekdayBuckets = Array.from({ length: 7 }, (_, index) => createWeekdayBucket(index));
   const weekMap = new Map();
