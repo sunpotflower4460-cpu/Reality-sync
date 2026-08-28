@@ -21,6 +21,44 @@ function rawExperiment(overrides = {}) {
   };
 }
 
+function validCompletedTrials() {
+  return [
+    {
+      id: 'trial-1',
+      recordKey: '2026-08-24::work-1',
+      dateKey: '2026-08-24',
+      scheduleId: 'work-1',
+      planTitle: 'Work 1',
+      outcome: 'success',
+      observedValue: 0,
+      observedLabel: '予定通り',
+      capturedAt: '2026-08-24T12:00:00Z',
+    },
+    {
+      id: 'trial-2',
+      recordKey: '2026-08-25::work-2',
+      dateKey: '2026-08-25',
+      scheduleId: 'work-2',
+      planTitle: 'Work 2',
+      outcome: 'failure',
+      observedValue: 1,
+      observedLabel: '変更・スキップ',
+      capturedAt: '2026-08-25T12:00:00Z',
+    },
+    {
+      id: 'trial-3',
+      recordKey: '2026-08-26::work-3',
+      dateKey: '2026-08-26',
+      scheduleId: 'work-3',
+      planTitle: 'Work 3',
+      outcome: 'success',
+      observedValue: 0,
+      observedLabel: '予定通り',
+      capturedAt: '2026-08-26T12:00:00Z',
+    },
+  ];
+}
+
 function parse(experiment) {
   return parseStoredExperimentsForPersistence(JSON.stringify({
     version: EXPERIMENT_STORAGE_VERSION,
@@ -66,7 +104,9 @@ test('valid completed experiment protocol remains writable', () => {
     decision: 'adopt',
     decisionDateKey: '2026-08-30',
     completedAt: '2026-08-30T12:00:00Z',
+    trials: validCompletedTrials(),
   }));
   assert.equal(result.ok, true);
   assert.equal(result.experiments[0].decision, 'adopt');
+  assert.equal(result.experiments[0].trials.length, 3);
 });
