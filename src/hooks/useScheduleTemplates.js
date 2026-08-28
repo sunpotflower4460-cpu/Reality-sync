@@ -52,6 +52,13 @@ export function useScheduleTemplates() {
   const [state, setState] = useState(loadTemplateState);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const applyState = useCallback((updater) => {
+    const current = stateRef.current;
+    const next = typeof updater === 'function' ? updater(current) : updater;
+    stateRef.current = next;
+    setState(next);
+    return next;
+  }, []);
   const {
     templates,
     persistenceBlocked,
@@ -66,18 +73,18 @@ export function useScheduleTemplates() {
     try {
       const latest = parseStoredTemplatesResult(window.localStorage.getItem(TEMPLATE_STORAGE_KEY));
       if (!latest.ok) {
-        setState((current) => ({ ...current, persistenceBlocked: true, needsWrite: false }));
+        applyState((current) => ({ ...current, persistenceBlocked: true, needsWrite: false }));
         return;
       }
       const latestSerialized = serializeTemplates(latest.templates);
       if (latestSerialized !== baseSerialized) {
-        setState((current) => ({ ...current, writeConflict: true, writeFailed: false, needsWrite: false }));
+        applyState((current) => ({ ...current, writeConflict: true, writeFailed: false, needsWrite: false }));
         return;
       }
 
       const writtenSerialized = serializeTemplates(templates);
       window.localStorage.setItem(TEMPLATE_STORAGE_KEY, writtenSerialized);
-      setState((current) => {
+      applyState((current) => {
         const currentSerialized = serializeTemplates(current.templates);
         const changedAgain = currentSerialized !== writtenSerialized;
         return {
@@ -88,15 +95,15 @@ export function useScheduleTemplates() {
         };
       });
     } catch {
-      setState((current) => current.writeFailed ? current : { ...current, writeFailed: true });
+      applyState((current) => current.writeFailed ? current : { ...current, writeFailed: true });
     }
-  }, [baseSerialized, needsWrite, persistenceBlocked, templates, writeConflict]);
+  }, [applyState, baseSerialized, needsWrite, persistenceBlocked, templates, writeConflict]);
 
   useEffect(() => {
     const syncTemplates = (event) => {
       if (event.key !== TEMPLATE_STORAGE_KEY) return;
       const result = parseStoredTemplatesResult(event.newValue);
-      setState((current) => {
+      applyState((current) => {
         if (!result.ok) {
           return { ...current, persistenceBlocked: true, writeFailed: false, needsWrite: false };
         }
@@ -120,7 +127,7 @@ export function useScheduleTemplates() {
     };
     window.addEventListener('storage', syncTemplates);
     return () => window.removeEventListener('storage', syncTemplates);
-  }, []);
+  }, [applyState]);
 
   // Keep same-frame repeated UI actions on one synchronous source of truth.
   // This prevents a double click from allocating against the same stale list.
@@ -130,11 +137,9 @@ export function useScheduleTemplates() {
     const next = typeof updater === 'function' ? updater(current.templates) : updater;
     const validated = validateTemplates(next);
     if (!validated) return false;
-    const nextState = { ...current, templates: validated, needsWrite: true };
-    stateRef.current = nextState;
-    setState(nextState);
+    applyState({ ...current, templates: validated, needsWrite: true });
     return true;
-  }, []);
+  }, [applyState]);
 
   const saveTemplate = useCallback((name, schedules) => (
     updateTemplates((current) => {
@@ -154,18 +159,16 @@ export function useScheduleTemplates() {
   const replaceTemplates = useCallback((nextTemplates) => {
     const validated = validateTemplates(Array.isArray(nextTemplates) ? nextTemplates : []);
     if (!validated) return false;
-    const nextState = {
+    applyState({
       templates: validated,
       persistenceBlocked: false,
       writeFailed: false,
       needsWrite: false,
       baseSerialized: serializeTemplates(validated),
       writeConflict: false,
-    };
-    stateRef.current = nextState;
-    setState(nextState);
+    });
     return true;
-  }, []);
+  }, [applyState]);
 
   return {
     templates,
