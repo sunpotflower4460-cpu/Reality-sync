@@ -332,7 +332,14 @@ export function useExperiments() {
 
   const deleteExperiment = useCallback((experimentId) => (
     updateExperiments((current) => {
-      if (!current.some((experiment) => experiment.id === experimentId)) return null;
+      const target = current.find((experiment) => experiment.id === experimentId);
+      if (!target) return null;
+      // An adopted experiment can already be referenced by schedules/templates
+      // through appliedExperimentIds. Deleting a leaf would also make an older
+      // adopted lineage version appear current again, resurrecting stale advice.
+      // Keep adopted learning as provenance; full app-data erase remains the
+      // explicit destructive path when the user wants all history removed.
+      if (target.status === 'completed' && target.decision === 'adopt') return null;
       if (current.some((experiment) => experiment.parentExperimentId === experimentId)) return null;
       return current.filter((experiment) => experiment.id !== experimentId);
     })
