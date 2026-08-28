@@ -19,7 +19,7 @@ import { MAX_BACKUP_BYTES, serializeBackup, parseBackup } from '../utils/backup.
 import { REMINDER_DELAY_OPTIONS } from '../utils/reminder.js';
 import {
   BACKUP_RESTORED_EVENT,
-  eraseStoredRealitySyncData,
+  eraseStoredRealitySyncDataResult,
   persistRestoredBackup,
 } from '../utils/restore.js';
 import { ModalDialog } from './ModalDialog.jsx';
@@ -253,10 +253,12 @@ export function SettingsModal({
     const second = window.confirm('最終確認です。外部へ書き出したバックアップ以外のRealitySync端末内データを削除します。実行しますか？');
     if (!second) return;
 
-    const erased = eraseStoredRealitySyncData();
-    if (!erased) {
+    const eraseResult = eraseStoredRealitySyncDataResult();
+    if (!eraseResult.ok) {
       setMessage('');
-      setError('端末保存領域からすべて削除できたことを確認できなかったため、画面のデータも変更していません。再読み込みせず、必要なら先にバックアップを書き出してください。');
+      setError(eraseResult.rollbackOk
+        ? '端末内データの削除に失敗しました。削除前の端末データへ戻したため、画面の内容は変更していません。'
+        : '端末内データの削除に失敗し、削除前データへの戻しも完了確認できませんでした。画面の内容は変更していません。アプリを再読み込みせず、可能なら現在見えているデータを外部へ控えてください。');
       return;
     }
     onEraseAllData();
