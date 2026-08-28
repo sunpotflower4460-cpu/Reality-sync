@@ -78,6 +78,33 @@ test('experiment persistence rejects target-run coercion that would alter the pr
   assert.equal(parse(rawExperiment({ targetRuns: 3.5 })).ok, false);
 });
 
+test('versioned experiment persistence rejects numeric strings instead of silently changing schema types', () => {
+  assert.equal(parse(rawExperiment({ targetRuns: '3' })).ok, false);
+  assert.equal(parse(rawExperiment({ baselineFailureRate: '0.5' })).ok, false);
+  assert.equal(parse(rawExperiment({ baselineSampleCount: '10' })).ok, false);
+  assert.equal(parse(rawExperiment({ learningVersion: '1' })).ok, false);
+
+  const stringObservedValue = validCompletedTrials();
+  stringObservedValue[0] = { ...stringObservedValue[0], observedValue: '0' };
+  assert.equal(parse(rawExperiment({
+    status: 'completed',
+    decision: 'adopt',
+    decisionDateKey: '2026-08-30',
+    completedAt: '2026-08-30T12:00:00Z',
+    trials: stringObservedValue,
+  })).ok, false);
+});
+
+test('known legacy bare-array experiments can canonicalize old numeric strings once', () => {
+  const result = parseStoredExperimentsForPersistence(JSON.stringify([
+    rawExperiment({ targetRuns: '3', baselineFailureRate: '0.5', baselineSampleCount: '10' }),
+  ]));
+  assert.equal(result.ok, true);
+  assert.equal(result.experiments[0].targetRuns, 3);
+  assert.equal(result.experiments[0].baselineFailureRate, 0.5);
+  assert.equal(result.experiments[0].baselineSampleCount, 10);
+});
+
 test('experiment persistence rejects a decision that normalization would erase from an active experiment', () => {
   assert.equal(parse(rawExperiment({ status: 'active', decision: 'adopt' })).ok, false);
 });
