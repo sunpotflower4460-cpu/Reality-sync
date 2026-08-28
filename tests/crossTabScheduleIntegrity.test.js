@@ -86,9 +86,10 @@ test('same-day remote edits are detected rather than overwritten', () => {
 test('schedule hook preserves dirty local days across external storage events and surfaces conflicts', () => {
   const hook = source('src/hooks/usePersistentSchedules.js');
   const app = source('src/App.jsx');
-  assert.match(hook, /mergeScheduleStoreWrite\(result\.store,/);
+  assert.match(hook, /const merged = mergeScheduleStoreWrite\(/);
+  assert.match(hook, /current\.dirtyDateKeys/);
   assert.match(hook, /writeConflict: true/);
-  assert.match(hook, /currentState\.writeConflict/);
+  assert.match(hook, /currentState\.persistenceBlocked \|\| currentState\.writeConflict/);
   assert.match(app, /別の画面との編集競合を検出しました/);
   assert.match(app, /storageProtection\.writeConflict/);
 });
