@@ -55,6 +55,7 @@ export function SettingsModal({
     typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
   ));
   const storageBlocked = Boolean(storageProtection?.persistenceBlocked);
+  const storageWriteFailed = Boolean(storageProtection?.writeFailed);
 
   const restoreBackupText = useCallback((text) => {
     const parsed = parseBackup(text);
@@ -139,7 +140,8 @@ export function SettingsModal({
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
-    URL.revokeObjectURL(url);
+    // Revoke after the click task so Safari/WebKit has time to consume the URL.
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
     setError('');
     setMessage('バックアップを書き出しました。');
   };
@@ -206,7 +208,12 @@ export function SettingsModal({
     if (!first) return;
     const second = window.confirm('最終確認です。外部へ書き出したバックアップ以外のRealitySync端末内データを削除します。実行しますか？');
     if (!second) return;
-    onEraseAllData();
+    const erased = onEraseAllData();
+    if (erased === false) {
+      setMessage('');
+      setError('画面上のデータは消しましたが、端末保存領域から削除できたことを確認できませんでした。再読み込みすると以前のデータが戻る可能性があります。');
+      return;
+    }
     setError('');
     setMessage('この端末のRealitySyncデータを削除しました。');
   };
@@ -241,6 +248,13 @@ export function SettingsModal({
           <section className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-[9px] leading-relaxed text-red-700">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <div><div className="font-semibold">保存データ保護モード</div><p className="mt-1">現在の保存データを安全に解釈できないため、自動保存とバックアップ書き出しを止めています。元データは上書きしていません。{storageProtection.unsupportedVersion !== null ? ` 検出した保存版: ${String(storageProtection.unsupportedVersion)}` : ''}</p></div>
+          </section>
+        )}
+
+        {storageWriteFailed && !storageBlocked && (
+          <section className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[9px] leading-relaxed text-amber-800">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div><div className="font-semibold">端末保存が完了していません</div><p className="mt-1">画面上の最新データを端末へ書き込めていません。再読み込み前にバックアップを書き出すことをおすすめします。バックアップ機能はこの状態でも利用できます。</p></div>
           </section>
         )}
 
