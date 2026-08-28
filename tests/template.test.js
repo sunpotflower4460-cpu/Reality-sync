@@ -93,6 +93,25 @@ test('template parser refuses to invent a stored template id', () => {
   assert.equal(parseStoredTemplatesResult(raw).ok, false);
 });
 
+test('stored templates reject unknown template and plan fields instead of erasing future data', () => {
+  const unknownTemplateField = JSON.stringify([{
+    id: 'future-template',
+    name: 'Future',
+    futureMetadata: { source: 'v-next' },
+    schedules: [{ time: '09:00', title: 'Focus', category: '仕事', duration: 60, plannedStress: 20 }],
+  }]);
+  const unknownScheduleField = JSON.stringify([{
+    id: 'future-plan',
+    name: 'Future plan',
+    schedules: [{
+      time: '09:00', title: 'Focus', category: '仕事', duration: 60, plannedStress: 20,
+      futureConstraint: 'keep-me',
+    }],
+  }]);
+  assert.equal(parseStoredTemplatesResult(unknownTemplateField).ok, false);
+  assert.equal(parseStoredTemplatesResult(unknownScheduleField).ok, false);
+});
+
 test('template normalization rejects malformed plan rows and still deduplicates valid ids', () => {
   const templates = normalizeTemplates([
     { id: 'same', name: 'Broken first', schedules: [{ time: '25:00', title: 'Focus', category: '__proto__', duration: 9999, plannedStress: -5 }] },
