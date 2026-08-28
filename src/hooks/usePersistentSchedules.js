@@ -164,6 +164,10 @@ export function usePersistentSchedules(dateKey) {
           };
         }
 
+        // Once a conflict is detected, keep the local in-memory copy frozen for
+        // rescue/export. Later storage events must not silently replace it.
+        if (current.writeConflict) return current;
+
         if (!current.needsWrite || current.dirtyDateKeys.length === 0) {
           return {
             store: result.store,
