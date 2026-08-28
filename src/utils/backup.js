@@ -2,7 +2,7 @@ import { BACKUP_FORMAT, BACKUP_VERSION } from '../constants.js';
 import { isValidDateKey } from './date.js';
 import { normalizeExperiments } from './experiment.js';
 import { parseStoredExperimentsForPersistence } from './experimentStorage.js';
-import { normalizeReminderPreferences, REMINDER_DELAY_OPTIONS } from './reminder.js';
+import { normalizeReminderPreferences, parseStoredReminderPreferencesResult } from './reminder.js';
 import { normalizeScheduleStore, parseStoredScheduleStoreResult } from './storage.js';
 import { normalizeTemplates, parseStoredTemplatesResult } from './template.js';
 
@@ -17,7 +17,6 @@ const BACKUP_FIELDS = new Set([
   'experiments',
   'reminderPreferences',
 ]);
-const REMINDER_FIELDS = new Set(['enabled', 'delayMinutes', 'browserNotifications']);
 
 function hasOnlyKeys(value, allowed) {
   return Boolean(value)
@@ -37,20 +36,6 @@ function experimentLineageValid(experiments) {
     if ((parent.learningRootId || parent.id) !== (experiment.learningRootId || experiment.id)) return false;
     if ((experiment.learningVersion || 1) <= (parent.learningVersion || 1)) return false;
   }
-  return true;
-}
-
-function reminderPreferencesPreserved(raw, normalized) {
-  if (!hasOnlyKeys(raw, REMINDER_FIELDS)) return false;
-  if (raw.enabled !== undefined && typeof raw.enabled !== 'boolean') return false;
-  if (raw.browserNotifications !== undefined && typeof raw.browserNotifications !== 'boolean') return false;
-  if (raw.delayMinutes !== undefined) {
-    if (raw.delayMinutes === null || (typeof raw.delayMinutes === 'string' && raw.delayMinutes.trim() === '')) return false;
-    const delay = Number(raw.delayMinutes);
-    if (!REMINDER_DELAY_OPTIONS.includes(delay) || normalized.delayMinutes !== delay) return false;
-  }
-  if (typeof raw.enabled === 'boolean' && normalized.enabled !== raw.enabled) return false;
-  if (typeof raw.browserNotifications === 'boolean' && normalized.browserNotifications !== raw.browserNotifications) return false;
   return true;
 }
 
@@ -107,10 +92,11 @@ export function parseBackup(raw) {
   }
   const experiments = experimentResult.experiments;
 
-  const reminderPreferences = normalizeReminderPreferences(parsed.reminderPreferences);
-  if (!reminderPreferencesPreserved(parsed.reminderPreferences, reminderPreferences)) {
+  const reminderResult = parseStoredReminderPreferencesResult(JSON.stringify(parsed.reminderPreferences));
+  if (!reminderResult.ok) {
     return { ok: false, error: 'リマインダー設定に復元できない項目があります。' };
   }
+  const reminderPreferences = reminderResult.preferences;
 
   return {
     ok: true,
