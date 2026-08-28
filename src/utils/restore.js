@@ -34,12 +34,13 @@ function serializedRestoreEntries(data) {
   ];
 }
 
-function rollbackRestoreEntries(storage, entries, previous) {
+function rollbackAttemptedEntries(storage, entries, previous) {
   let rollbackOk = true;
 
-  // Do not blindly overwrite a third value that appeared while the restore was
-  // running. It may be a concurrent write from another RealitySync tab. Only
-  // undo values that are still either our attempted value or the original one.
+  // Do not blindly overwrite a third value that appeared while the destructive
+  // operation was running. It may be a concurrent write from another
+  // RealitySync tab. Only undo values that are still either our attempted value
+  // or the original one.
   for (const [key, attemptedValue] of [...entries].reverse()) {
     const previousValue = previous.get(key) ?? null;
     try {
@@ -93,16 +94,17 @@ export function persistRestoredBackup(data, storage = globalThis.window?.localSt
     }
     return { ok: true, rollbackOk: true };
   } catch {
-    return { ok: false, rollbackOk: rollbackRestoreEntries(storage, entries, previous) };
+    return { ok: false, rollbackOk: rollbackAttemptedEntries(storage, entries, previous) };
   }
 }
 
 export function eraseStoredRealitySyncDataResult(storage = globalThis.window?.localStorage) {
   if (!storage) return { ok: false, rollbackOk: true };
 
+  const eraseEntries = REALITY_SYNC_STORAGE_KEYS.map((key) => [key, null]);
   const previous = new Map();
   try {
-    for (const key of REALITY_SYNC_STORAGE_KEYS) previous.set(key, storage.getItem(key));
+    for (const [key] of eraseEntries) previous.set(key, storage.getItem(key));
   } catch {
     // Never begin a destructive erase when the current state cannot first be
     // snapshotted for rollback.
@@ -110,30 +112,13 @@ export function eraseStoredRealitySyncDataResult(storage = globalThis.window?.lo
   }
 
   try {
-    for (const key of REALITY_SYNC_STORAGE_KEYS) storage.removeItem(key);
-    for (const key of REALITY_SYNC_STORAGE_KEYS) {
+    for (const [key] of eraseEntries) storage.removeItem(key);
+    for (const [key] of eraseEntries) {
       if (storage.getItem(key) !== null) throw new Error('erase verification failed');
     }
     return { ok: true, rollbackOk: true };
   } catch {
-    let rollbackOk = true;
-    // Restore every domain, not only the keys whose removeItem call returned.
-    // A storage implementation may have mutated before reporting failure.
-    for (const key of REALITY_SYNC_STORAGE_KEYS) {
-      try {
-        restoreRawValue(storage, key, previous.get(key) ?? null);
-      } catch {
-        rollbackOk = false;
-      }
-    }
-    for (const key of REALITY_SYNC_STORAGE_KEYS) {
-      try {
-        if (storage.getItem(key) !== (previous.get(key) ?? null)) rollbackOk = false;
-      } catch {
-        rollbackOk = false;
-      }
-    }
-    return { ok: false, rollbackOk };
+    return { ok: false, rollbackOk: rollbackAttemptedEntries(storage, eraseEntries, previous) };
   }
 }
 
