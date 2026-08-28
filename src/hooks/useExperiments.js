@@ -211,13 +211,26 @@ export function useExperiments() {
 
   useEffect(() => {
     const sync = (event) => {
-      if (event.key !== EXPERIMENT_STORAGE_KEY) return;
+      if (event.key !== EXPERIMENT_STORAGE_KEY && event.key !== null) return;
       const result = parseStoredExperimentsForPersistence(event.newValue);
       applyState((current) => {
         // Conflict mode freezes the local learning history for rescue/export.
         // Ignore later storage events, including malformed values, so recovery
         // options cannot be disabled by remote activity after the conflict.
         if (current.writeConflict) return current;
+        // A removed key or localStorage.clear() is an explicit destructive
+        // transition. Never let an empty base make a pending local experiment
+        // mutation silently resurrect history erased in another tab.
+        if (event.newValue === null && current.needsWrite) {
+          return {
+            ...current,
+            persistenceBlocked: false,
+            unsupportedVersion: null,
+            writeConflict: true,
+            writeFailed: false,
+            needsWrite: false,
+          };
+        }
         if (!result.ok) {
           return {
             ...current,
