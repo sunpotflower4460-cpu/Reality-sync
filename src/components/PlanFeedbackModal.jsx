@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ArrowRight, CheckCircle2, Lightbulb, ShieldCheck, XCircle } from 'lucide-react';
 import { ModalDialog } from './ModalDialog.jsx';
 
@@ -14,7 +15,17 @@ function PlanSnapshot({ label, plan, tone = 'gray' }) {
 }
 
 export function PlanFeedbackModal({ preview, onApply, onClose }) {
+  const [error, setError] = useState('');
   if (!preview) return null;
+
+  const apply = () => {
+    setError('');
+    const applied = onApply();
+    if (applied === false) {
+      setError('反映直前に予定または保存状態が変わりました。古い内容で上書きしないよう停止しました。最新の予定を確認してから、必要ならもう一度ヒントを開いてください。');
+    }
+  };
+
   return (
     <ModalDialog
       onClose={onClose}
@@ -57,6 +68,7 @@ export function PlanFeedbackModal({ preview, onApply, onClose }) {
         </section>
 
         {!preview.canApply && <div className="rounded-xl border border-amber-100 bg-amber-50 p-3 text-[10px] leading-relaxed text-amber-800">{preview.error}</div>}
+        {error && <div role="alert" className="rounded-xl border border-rose-100 bg-rose-50 p-3 text-[10px] leading-relaxed text-rose-700">{error}</div>}
 
         <section className="flex items-start gap-2 rounded-xl bg-slate-50 p-3 text-[9px] leading-relaxed text-slate-500">
           <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-400" />
@@ -66,7 +78,7 @@ export function PlanFeedbackModal({ preview, onApply, onClose }) {
 
       <div className="sticky bottom-0 border-t border-slate-100 bg-white/96 p-3 pb-modal-safe backdrop-blur-xl">
         {preview.canApply ? (
-          <button type="button" onClick={onApply} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-[12px] font-extrabold text-white"><CheckCircle2 className="h-4 w-4" />この調整を予定へ反映</button>
+          <button type="button" onClick={apply} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-[12px] font-extrabold text-white"><CheckCircle2 className="h-4 w-4" />この調整を予定へ反映</button>
         ) : (
           <button type="button" onClick={onClose} className="min-h-12 w-full rounded-xl bg-slate-100 px-4 text-[12px] font-extrabold text-slate-600">確認して閉じる</button>
         )}
