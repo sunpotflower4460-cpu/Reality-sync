@@ -143,13 +143,25 @@ export function useScheduleTemplates() {
 
   useEffect(() => {
     const syncTemplates = (event) => {
-      if (event.key !== TEMPLATE_STORAGE_KEY) return;
+      if (event.key !== TEMPLATE_STORAGE_KEY && event.key !== null) return;
       const result = parseStoredTemplatesResult(event.newValue);
       applyState((current) => {
         // A detected conflict freezes the local in-memory copy for rescue/export.
         // Ignore every later storage event, including malformed ones, so a remote
         // write cannot accidentally add persistenceBlocked and disable rescue.
         if (current.writeConflict) return current;
+        // removeItem/clear is a destructive operation, not just another empty
+        // snapshot. If this tab has an unsaved edit, never let an empty base make
+        // that edit silently recreate data the user explicitly erased elsewhere.
+        if (event.newValue === null && current.needsWrite) {
+          return {
+            ...current,
+            persistenceBlocked: false,
+            writeConflict: true,
+            writeFailed: false,
+            needsWrite: false,
+          };
+        }
         if (!result.ok) {
           // Preserve needsWrite and the in-memory templates. If storage becomes
           // valid again we must still know that these local edits need a commit.
