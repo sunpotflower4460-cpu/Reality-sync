@@ -1,5 +1,5 @@
 import { STATUS } from '../constants.js';
-import { dateKeyFromDate, isValidDateKey } from './date.js';
+import { dateKeyFromDate, isValidDateKey, shiftDateKey } from './date.js';
 import { isValidTime, normalizeSchedules } from './schedule.js';
 
 export const DEFAULT_REMINDER_PREFERENCES = Object.freeze({
@@ -82,6 +82,27 @@ export function getDuePendingSchedules(schedules, dateKey, now = new Date(), pre
     const plannedMinutes = timeToMinutes(schedule.time);
     if (plannedMinutes === null) return false;
     return nowMinutes >= plannedMinutes + normalizedPreferences.delayMinutes;
+  });
+}
+
+export function getCarryoverDuePendingSchedules(schedules, dateKey, now = new Date(), preferences = DEFAULT_REMINDER_PREFERENCES) {
+  const normalizedPreferences = normalizeReminderPreferences(preferences);
+  const todayKey = dateKeyFromDate(now);
+  if (
+    !normalizedPreferences.enabled
+    || !isValidDateKey(dateKey)
+    || dateKey !== shiftDateKey(todayKey, -1)
+    || normalizedPreferences.delayMinutes <= 0
+  ) return [];
+
+  const nowMinutes = minutesSinceMidnight(now);
+  return normalizeSchedules(schedules, []).filter((schedule) => {
+    if (schedule.status !== STATUS.PENDING) return false;
+    const plannedMinutes = timeToMinutes(schedule.time);
+    if (plannedMinutes === null) return false;
+    const dueMinutes = plannedMinutes + normalizedPreferences.delayMinutes;
+    if (dueMinutes < 1440) return false;
+    return nowMinutes >= dueMinutes - 1440;
   });
 }
 
