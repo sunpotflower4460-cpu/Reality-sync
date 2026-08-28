@@ -11,6 +11,7 @@ import {
 
 const VALID_STATUSES = new Set(Object.values(EXPERIMENT_STATUS));
 const VALID_DECISIONS = new Set(Object.values(EXPERIMENT_DECISION));
+const VALID_TRIAL_OUTCOMES = new Set(['success', 'failure']);
 const PAYLOAD_FIELDS = new Set(['version', 'experiments']);
 const EXPERIMENT_FIELDS = new Set([
   'id',
@@ -96,6 +97,10 @@ function explicitTextPreserved(rawValue, normalizedValue) {
   return typeof rawValue === 'string' && normalizedValue === rawValue.trim();
 }
 
+function optionalTextFieldPreserved(raw, normalized, key) {
+  return raw[key] === undefined || explicitTextPreserved(raw[key], normalized[key]);
+}
+
 function trialMetadataPreserved(rawTrials, normalizedTrials) {
   if (!Array.isArray(rawTrials)) return rawTrials === undefined;
   if (rawTrials.length !== normalizedTrials.length) return false;
@@ -103,10 +108,17 @@ function trialMetadataPreserved(rawTrials, normalizedTrials) {
     const raw = rawTrials[index];
     const normalized = normalizedTrials[index];
     if (!objectHasOnlyKeys(raw, TRIAL_FIELDS) || !normalized) return false;
+    if (raw.id !== undefined) {
+      if (typeof raw.id !== 'string' || !raw.id.trim() || normalized.id !== raw.id.trim()) return false;
+    }
+    if (typeof raw.recordKey !== 'string' || !raw.recordKey.trim() || normalized.recordKey !== raw.recordKey.trim()) return false;
+    if (!isValidDateKey(raw.dateKey) || normalized.dateKey !== raw.dateKey) return false;
+    if (!VALID_TRIAL_OUTCOMES.has(raw.outcome) || normalized.outcome !== raw.outcome) return false;
     if (raw.observedValue !== undefined && raw.observedValue !== null && raw.observedValue !== '') {
       const numeric = optionalFiniteNumber(raw.observedValue);
       if (numeric === null || normalized.observedValue !== numeric) return false;
     }
+    if (raw.observedLabel !== undefined && !explicitTextPreserved(raw.observedLabel, normalized.observedLabel)) return false;
     if (raw.capturedAt !== undefined && !explicitTextPreserved(raw.capturedAt, normalized.capturedAt)) return false;
     if (raw.planTitle !== undefined && !explicitTextPreserved(raw.planTitle, normalized.planTitle)) return false;
     if (raw.scheduleId !== undefined) {
@@ -120,6 +132,11 @@ function explicitMetadataPreserved(raw, normalized) {
   if (!objectHasOnlyKeys(raw, EXPERIMENT_FIELDS) || !normalized) return false;
 
   if (typeof raw.id !== 'string' || !raw.id.trim() || normalized.id !== raw.id.trim()) return false;
+  for (const key of ['candidateId', 'candidateType', 'title', 'hypothesis', 'action', 'metricLabel']) {
+    if (!optionalTextFieldPreserved(raw, normalized, key)) return false;
+  }
+  if (raw.metricKind !== undefined && normalized.metricKind !== raw.metricKind) return false;
+  if (raw.startDateKey !== undefined && (!isValidDateKey(raw.startDateKey) || normalized.startDateKey !== raw.startDateKey)) return false;
   if (!objectHasOnlyKeys(raw.condition, CONDITION_FIELDS) || !sameJson(raw.condition, normalized.condition)) return false;
   if (raw.condition.kind === 'planned-category' && !CATEGORIES.includes(raw.condition.value)) return false;
   if (!trialMetadataPreserved(raw.trials, normalized.trials)) return false;
