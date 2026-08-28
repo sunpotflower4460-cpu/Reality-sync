@@ -1,6 +1,16 @@
 import { CATEGORIES } from '../constants.js';
 import { isValidTime, normalizeSchedules } from './schedule.js';
 
+const TEMPLATE_FIELDS = new Set(['id', 'name', 'schedules']);
+const TEMPLATE_SCHEDULE_FIELDS = new Set([
+  'time',
+  'title',
+  'category',
+  'duration',
+  'plannedStress',
+  'appliedExperimentIds',
+]);
+
 function finiteNumber(value) {
   if (value === null || value === undefined) return null;
   if (typeof value === 'string' && value.trim() === '') return null;
@@ -54,6 +64,33 @@ function normalizeTemplateItem(value) {
   };
 }
 
+function storedTemplateSchedulePreserved(raw, normalized) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !normalized) return false;
+  if (Object.keys(raw).some((key) => !TEMPLATE_SCHEDULE_FIELDS.has(key))) return false;
+  if (!templateScheduleInputValid(raw)) return false;
+
+  const duration = finiteNumber(raw.duration);
+  const plannedStress = finiteNumber(raw.plannedStress);
+  if (normalized.time !== raw.time) return false;
+  if (normalized.title !== raw.title.trim()) return false;
+  if (normalized.category !== raw.category) return false;
+  if (normalized.duration !== duration) return false;
+  if (normalized.plannedStress !== plannedStress) return false;
+
+  if (raw.appliedExperimentIds === undefined) return normalized.appliedExperimentIds.length === 0;
+  return raw.appliedExperimentIds.length === normalized.appliedExperimentIds.length
+    && raw.appliedExperimentIds.every((id, index) => id === normalized.appliedExperimentIds[index]);
+}
+
+function storedTemplatePreserved(raw, normalized) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !normalized) return false;
+  if (Object.keys(raw).some((key) => !TEMPLATE_FIELDS.has(key))) return false;
+  if (typeof raw.id !== 'string' || !raw.id.trim() || normalized.id !== raw.id.trim()) return false;
+  if (typeof raw.name !== 'string' || !raw.name.trim() || normalized.name !== raw.name.trim()) return false;
+  if (!Array.isArray(raw.schedules) || raw.schedules.length !== normalized.schedules.length) return false;
+  return raw.schedules.every((schedule, index) => storedTemplateSchedulePreserved(schedule, normalized.schedules[index]));
+}
+
 export function normalizeTemplates(value) {
   if (!Array.isArray(value)) return [];
   const seenIds = new Set();
@@ -86,13 +123,7 @@ export function parseStoredTemplatesResult(raw) {
   const templates = normalizeTemplates(parsed);
   if (templates.length !== parsed.length) return { ok: false, templates: [] };
   for (let index = 0; index < parsed.length; index += 1) {
-    const rawTemplate = parsed[index];
-    const normalized = templates[index];
-    const rawId = typeof rawTemplate?.id === 'string' ? rawTemplate.id.trim() : '';
-    if (!rawId || normalized.id !== rawId) return { ok: false, templates: [] };
-    if (!Array.isArray(rawTemplate?.schedules) || rawTemplate.schedules.length !== normalized.schedules.length) {
-      return { ok: false, templates: [] };
-    }
+    if (!storedTemplatePreserved(parsed[index], templates[index])) return { ok: false, templates: [] };
   }
   return { ok: true, templates };
 }
