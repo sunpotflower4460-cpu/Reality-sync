@@ -37,10 +37,11 @@ test('revalidation requires the exact reviewed parent revision and derives linea
   const start = hook.indexOf('const startRevalidation');
   const end = hook.indexOf('const captureTrial', start);
   const block = hook.slice(start, end);
+  assert.match(hook, /function exactRevisionMatches\(value, expectedRevision\)/);
   assert.match(block, /const sourceRevision = typeof options\.sourceRevision === 'string'/);
   assert.match(block, /if \(!sourceRevision\) return false/);
   assert.match(block, /const source = current\.find\(\(experiment\) => experiment\.id === sourceExperimentId\)/);
-  assert.match(block, /!source \|\| JSON\.stringify\(source\) !== sourceRevision/);
+  assert.match(block, /!source \|\| !exactRevisionMatches\(source, sourceRevision\)/);
   assert.match(block, /experiment\.status === 'active' && \(experiment\.learningRootId \|\| experiment\.id\) === rootId/);
   assert.match(block, /createUniqueId\('experiment', current\.map\(\(item\) => item\.id\)\)/);
   assert.match(block, /learningVersion: nextLearningVersion\(current, source\)/);
@@ -53,16 +54,33 @@ test('revalidation modal snapshots the parent revision at open time and passes i
   assert.match(modal, /親の学習履歴または最新の「今日」の傾向/);
 });
 
-test('trial capture cannot pass the target count or accept a forged record identity', () => {
+test('trial capture cannot pass the target count, accept a forged record identity, or mutate a different target revision', () => {
   const hook = source('src/hooks/useExperiments.js');
   const start = hook.indexOf('const captureTrial');
   const end = hook.indexOf('const removeTrial', start);
   const block = hook.slice(start, end);
+  assert.match(block, /captureTrial = useCallback\(\(experimentId, eligibleRecord, expectedRevision\)/);
+  assert.match(block, /!exactRevisionMatches\(target, expectedRevision\)/);
   assert.match(block, /target\.trials\.length >= target\.targetRuns/);
   assert.match(block, /const expectedRecordKey = canonicalRecordKey\(eligibleRecord\)/);
   assert.match(block, /eligibleRecord\.recordKey !== expectedRecordKey/);
   assert.match(block, /eligibleRecord\.dateKey < target\.startDateKey/);
   assert.match(block, /updated\.trials\.length !== target\.trials\.length \+ 1/);
+});
+
+test('trial removal, finish, abandon, and delete all require the exact experiment revision reviewed by the user', () => {
+  const hook = source('src/hooks/useExperiments.js');
+  const operations = [
+    ['const removeTrial', 'const finish'],
+    ['const finish', 'const abandon'],
+    ['const abandon', 'const deleteExperiment'],
+    ['const deleteExperiment', 'const resolveExperimentForMutation'],
+  ];
+  for (const [startMarker, endMarker] of operations) {
+    const block = hook.slice(hook.indexOf(startMarker), hook.indexOf(endMarker, hook.indexOf(startMarker)));
+    assert.match(block, /expectedRevision/);
+    assert.match(block, /exactRevisionMatches\(target, expectedRevision\)/);
+  }
 });
 
 test('finish and abandon refuse lifecycle transitions from a non-active experiment', () => {
@@ -81,7 +99,21 @@ test('experiment deletion cannot orphan a child or erase adopted learning proven
   const end = hook.indexOf('const resolveExperimentForMutation', start);
   const block = hook.slice(start, end);
   assert.match(block, /const target = current\.find\(\(experiment\) => experiment\.id === experimentId\)/);
+  assert.match(block, /exactRevisionMatches\(target, expectedRevision\)/);
   assert.match(block, /target\.status === 'completed' && target\.decision === 'adopt'/);
   assert.match(block, /current\.some\(\(experiment\) => experiment\.parentExperimentId === experimentId\)/);
   assert.match(block, /return current\.filter\(\(experiment\) => experiment\.id !== experimentId\)/);
+});
+
+test('experiment panel passes the reviewed revision to every mutable action and confirms history deletion', () => {
+  const panel = source('src/components/ExperimentPanel.jsx');
+  assert.match(panel, /const revision = experimentRevision\(experiment\)/);
+  assert.match(panel, /onRemoveTrial\(experiment\.id, trial\.recordKey, revision\)/);
+  assert.match(panel, /onCaptureTrial\(experiment\.id, record, revision\)/);
+  assert.match(panel, /onFinish\(experiment\.id, EXPERIMENT_DECISION\.ADOPT, revision\)/);
+  assert.match(panel, /onFinish\(experiment\.id, EXPERIMENT_DECISION\.HOLD, revision\)/);
+  assert.match(panel, /onFinish\(experiment\.id, EXPERIMENT_DECISION\.REJECT, revision\)/);
+  assert.match(panel, /onAbandon\(experiment\.id, revision\)/);
+  assert.match(panel, /window\.confirm\(`「\$\{experiment\.title\}」の実験履歴を削除しますか？`\)/);
+  assert.match(panel, /onDelete\(experiment\.id, experimentRevision\(experiment\)\)/);
 });
