@@ -50,14 +50,16 @@ test('app aggregates write conflicts from every persistent domain and keeps back
   assert.match(settings, /disabled=\{storageBlocked\}/);
 });
 
-test('destructive erase verifies persistent deletion before clearing React state', () => {
+test('destructive erase verifies persistent deletion and rollback status before clearing React state', () => {
   const settings = source('src/components/SettingsModal.jsx');
-  const eraseStorage = settings.indexOf('const erased = eraseStoredRealitySyncData()');
-  const clearState = settings.indexOf('onEraseAllData();', eraseStorage);
-  const failureGuard = settings.indexOf('if (!erased)', eraseStorage);
+  const eraseStorage = settings.indexOf('const eraseResult = eraseStoredRealitySyncDataResult()');
+  const failureGuard = settings.indexOf('if (!eraseResult.ok)', eraseStorage);
+  const rollbackStatus = settings.indexOf('eraseResult.rollbackOk', failureGuard);
+  const clearState = settings.indexOf('onEraseAllData();', rollbackStatus);
   assert.ok(eraseStorage >= 0);
   assert.ok(failureGuard > eraseStorage);
-  assert.ok(clearState > failureGuard, 'React state must be cleared only after storage deletion succeeds');
+  assert.ok(rollbackStatus > failureGuard);
+  assert.ok(clearState > rollbackStatus, 'React state must be cleared only after verified storage deletion');
 
   const app = source('src/App.jsx');
   const eraseBody = app.slice(app.indexOf('const eraseAllData = () => {'), app.indexOf('const openLegal'));
