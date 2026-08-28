@@ -1,10 +1,26 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Copy, Plus, Trash2, XCircle } from 'lucide-react';
 import { ModalDialog } from './ModalDialog.jsx';
 
 export function TemplateModal({ templates, currentSchedules, onClose, onSaveTemplate, onApplyTemplate, onDeleteTemplate }) {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
+  const dirty = name.length > 0;
+
+  useEffect(() => {
+    if (!dirty || window.location.protocol === 'file:') return undefined;
+    const guardUnsavedInput = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', guardUnsavedInput);
+    return () => window.removeEventListener('beforeunload', guardUnsavedInput);
+  }, [dirty]);
+
+  const requestClose = () => {
+    if (dirty && !window.confirm('入力途中のテンプレート名があります。保存せずに閉じますか？')) return;
+    onClose();
+  };
 
   const saveCurrent = () => {
     const trimmed = name.trim();
@@ -26,6 +42,7 @@ export function TemplateModal({ templates, currentSchedules, onClose, onSaveTemp
   };
 
   const applyTemplate = (template) => {
+    if (dirty && !window.confirm('入力途中のテンプレート名は保存されていません。この名前を破棄してテンプレートを適用しますか？')) return;
     const applied = onApplyTemplate(template);
     if (applied === false) {
       setError('適用直前にこの日の予定または保存状態が変わりました。最新の内容を確認してからもう一度適用してください。');
@@ -43,7 +60,7 @@ export function TemplateModal({ templates, currentSchedules, onClose, onSaveTemp
 
   return (
     <ModalDialog
-      onClose={onClose}
+      onClose={requestClose}
       labelledBy="template-modal-title"
       placement="sheet"
       className="max-h-[94dvh] w-full max-w-sm overflow-y-auto rounded-t-[1.75rem] rounded-b-none bg-[#f7f8fb] shadow-[0_24px_70px_rgba(15,23,42,0.28)] sm:rounded-[1.75rem]"
@@ -55,7 +72,7 @@ export function TemplateModal({ templates, currentSchedules, onClose, onSaveTemp
             <h3 id="template-modal-title" className="text-[13px] font-black text-slate-900">1日のテンプレート</h3>
             <p className="mt-0.5 text-[9px] text-slate-400">よく使う予定だけを保存。実績は入りません。</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="テンプレート画面を閉じる" className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-400"><XCircle className="h-4 w-4" /></button>
+          <button type="button" onClick={requestClose} aria-label="テンプレート画面を閉じる" className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-400"><XCircle className="h-4 w-4" /></button>
         </div>
       </div>
 
