@@ -53,7 +53,13 @@ test('current-week analytics do not count future pending plans as missing realit
 
 test('current-day analytics do not count later-today pending plans before their scheduled time', () => {
   const alreadyDue = { ...plan('morning-pending'), time: '09:00' };
-  const recordedFutureSlot = { ...plan('recorded-early', STATUS.AS_PLANNED), time: '18:00', plannedSnapshot: { ...plan('snapshot').plannedSnapshot, time: '18:00' } };
+  const recordedFutureSlot = {
+    ...plan('recorded-early', STATUS.AS_PLANNED),
+    time: '18:00',
+    plannedSnapshot: {
+      time: '18:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 40,
+    },
+  };
   const laterToday = { ...plan('evening-pending'), time: '18:30' };
   const days = {
     '2026-08-28': [alreadyDue, recordedFutureSlot, laterToday],
@@ -99,18 +105,22 @@ test('analytics keep full historical windows when no observation cutoff is suppl
   assert.equal(historical.recordingRate, 50);
 });
 
-test('app passes the current local clock into week and month observation windows', () => {
+test('app passes the current local clock into daily, week and month observation windows', () => {
   const app = source('src/App.jsx');
   assert.match(app, /const observationNow = new Date\(\)/);
   assert.match(app, /const observationTime = timeKeyFromDate\(observationNow\)/);
+  assert.match(app, /schedule\.status !== STATUS\.PENDING \|\| schedule\.time <= observationTime/);
+  assert.match(app, /calculateStats\(observedDailySchedules\)/);
   assert.match(app, /calculateWeeklyInsights\(store\.days, selectedDate, todayKey, observationTime\)/);
   assert.match(app, /calculateMonthlyInsights\(store\.days, selectedDate, todayKey, observationTime\)/);
 });
 
-test('future daily analytics describe plans as unobserved rather than missing reality', () => {
+test('future and later-today daily analytics describe plans as unobserved rather than missing reality', () => {
   const analyticsView = source('src/components/AnalyticsView.jsx');
   assert.match(analyticsView, /const isFutureDate = selectedDate > dateKeyFromDate\(\)/);
-  assert.match(analyticsView, /DailyAnalyticsContent stats=\{stats\} isFutureDate=\{isFutureDate\}/);
+  assert.match(analyticsView, /unobservedPlanCount=\{unobservedPlanCount\}/);
   assert.match(analyticsView, /この日の現実はまだ観測前です/);
   assert.match(analyticsView, /未来日の予定は「未記録」として数えません/);
+  assert.match(analyticsView, /この時間までの現実はまだ観測前です/);
+  assert.match(analyticsView, /開始時刻を迎えるまで「未記録」として数えません/);
 });
