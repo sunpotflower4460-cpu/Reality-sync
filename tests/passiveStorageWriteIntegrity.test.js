@@ -28,16 +28,18 @@ test('known legacy stores still opt into the one required migration write', () =
   assert.match(experiments, /raw\.trimStart\(\)\.startsWith\('\['\)/);
 });
 
-test('successful primary schedule persistence is committed before best-effort legacy cleanup', () => {
+test('successful primary schedule persistence is read-back verified and committed before best-effort legacy cleanup', () => {
   const schedules = source('src/hooks/usePersistentSchedules.js');
   const write = schedules.indexOf('window.localStorage.setItem(STORAGE_KEY');
-  const commitComment = schedules.indexOf('The primary versioned store is already durable at this point.', write);
-  const stateCommit = schedules.indexOf('applyState((current) => {', commitComment);
+  const readBack = schedules.indexOf('const readBack = parseStoredScheduleStoreResult(window.localStorage.getItem(STORAGE_KEY))', write);
+  const verifiedComment = schedules.indexOf('The primary versioned store is read-back verified at this point.', readBack);
+  const stateCommit = schedules.indexOf('applyState((current) => {', verifiedComment);
   const legacyCleanup = schedules.indexOf('window.localStorage.removeItem(LEGACY_STORAGE_KEY)', stateCommit);
   const cleanupCatch = schedules.indexOf('Legacy data is ignored whenever the versioned store exists.', legacyCleanup);
   assert.ok(write >= 0);
-  assert.ok(commitComment > write);
-  assert.ok(stateCommit > commitComment);
+  assert.ok(readBack > write);
+  assert.ok(verifiedComment > readBack);
+  assert.ok(stateCommit > verifiedComment);
   assert.ok(legacyCleanup > stateCommit);
   assert.ok(cleanupCatch > legacyCleanup);
 });
