@@ -9,6 +9,14 @@ import {
 import { serializeExperiments } from './experiment.js';
 
 export const BACKUP_RESTORED_EVENT = 'realitysync:backup-restored';
+export const REALITY_SYNC_STORAGE_KEYS = Object.freeze([
+  STORAGE_KEY,
+  LEGACY_STORAGE_KEY,
+  TEMPLATE_STORAGE_KEY,
+  REMINDER_STORAGE_KEY,
+  REMINDER_NOTIFIED_STORAGE_KEY,
+  EXPERIMENT_STORAGE_KEY,
+]);
 
 function restoreRawValue(storage, key, value) {
   if (value === null) storage.removeItem(key);
@@ -62,4 +70,24 @@ export function persistRestoredBackup(data, storage = globalThis.window?.localSt
     }
     return { ok: false, rollbackOk };
   }
+}
+
+export function eraseStoredRealitySyncData(storage = globalThis.window?.localStorage) {
+  if (!storage) return false;
+  let ok = true;
+  for (const key of REALITY_SYNC_STORAGE_KEYS) {
+    try {
+      storage.removeItem(key);
+    } catch {
+      ok = false;
+    }
+  }
+  for (const key of REALITY_SYNC_STORAGE_KEYS) {
+    try {
+      if (storage.getItem(key) !== null) ok = false;
+    } catch {
+      ok = false;
+    }
+  }
+  return ok;
 }
