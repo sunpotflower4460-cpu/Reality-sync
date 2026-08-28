@@ -16,7 +16,7 @@ function isBlankValue(value) {
   return value === null || value === undefined || (typeof value === 'string' && value.trim() === '');
 }
 
-export function RecordModal({ schedule, dateKey, onClose, onSave }) {
+export function RecordModal({ schedule, dateKey, stale = false, onClose, onSave }) {
   const recordedPlan = recordedPlanForSchedule(schedule);
   const planReferenceLabel = schedule.plannedSnapshot
     ? '記録時の予定'
@@ -63,6 +63,10 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
   };
 
   const submit = () => {
+    if (stale) {
+      setError('この予定は別の画面で変更されました。入力内容を守るため、この画面からの保存を停止しています。内容を控えて閉じ、最新の予定を開き直してください。');
+      return;
+    }
     if (recordMode === STATUS.CHANGED && !actualTitle.trim()) {
       setError('予定を変更した場合は、代わりに行ったことを入力してください。');
       return;
@@ -100,7 +104,7 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
     const plannedSnapshot = schedule.plannedSnapshot
       ?? (schedule.status === STATUS.PENDING ? createPlannedSnapshot(schedule) : null);
 
-    onSave({
+    const saved = onSave({
       status: recordMode,
       plannedSnapshot,
       actualTitle: title,
@@ -114,6 +118,9 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
         ? deviationReason.trim() || null
         : null,
     });
+    if (saved === false) {
+      setError('保存直前に予定の更新を検出しました。入力内容はこの画面に残しています。内容を控えて閉じ、最新の予定を開き直してください。');
+    }
   };
 
   const beginStressEntry = () => {
@@ -159,6 +166,13 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
       </div>
 
       <div className="space-y-3 p-3.5">
+        {stale && (
+          <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[9px] leading-relaxed text-amber-800">
+            <div className="font-semibold">別の画面でこの予定が更新されました</div>
+            <p className="mt-1">入力途中の内容はこの画面に保持しています。古い予定へ上書きしないため保存を停止しました。内容を控えて閉じ、最新の予定を開き直してください。</p>
+          </div>
+        )}
+
         <div className="app-group flex items-center gap-3 p-3">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-500"><Clock className="h-4 w-4" aria-hidden="true" /></div>
           <div className="min-w-0"><div className="text-[8px] font-medium text-slate-400">{planReferenceLabel} ・ {dateKey} {recordedPlan.time}</div><div className="mt-0.5 truncate text-[13px] font-semibold text-slate-800">{recordedPlan.title}</div></div>
@@ -241,7 +255,7 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
         {error && <p role="alert" className="rounded-xl border border-rose-100 bg-rose-50 p-3 text-[10px] font-medium text-rose-600">{error}</p>}
       </div>
 
-      <div className="sticky bottom-0 z-10 border-t border-slate-100 bg-white/96 p-3 pb-modal-safe backdrop-blur-2xl"><button type="button" onClick={submit} className="min-h-12 w-full rounded-xl bg-indigo-600 px-4 text-[13px] font-semibold text-white shadow-[0_5px_16px_rgba(79,70,229,0.18)] transition hover:bg-indigo-700 active:scale-[0.99]">この内容で記録する</button></div>
+      <div className="sticky bottom-0 z-10 border-t border-slate-100 bg-white/96 p-3 pb-modal-safe backdrop-blur-2xl"><button type="button" onClick={submit} disabled={stale} className="min-h-12 w-full rounded-xl bg-indigo-600 px-4 text-[13px] font-semibold text-white shadow-[0_5px_16px_rgba(79,70,229,0.18)] transition hover:bg-indigo-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none">{stale ? '外部更新のため保存停止中' : 'この内容で記録する'}</button></div>
     </ModalDialog>
   );
 }
