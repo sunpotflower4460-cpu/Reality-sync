@@ -133,11 +133,14 @@ export function usePersistentSchedules(dateKey) {
       const latestRaw = window.localStorage.getItem(STORAGE_KEY);
       const latest = parseStoredScheduleStoreResult(latestRaw);
       if (!latest.ok) {
+        // Never erase the dirty marker just because the durable store became
+        // temporarily unreadable. A later valid storage event must still compare
+        // these local edits against their original base before anything replaces
+        // them.
         applyState((current) => ({
           ...current,
           persistenceBlocked: true,
           unsupportedVersion: latest.unsupportedVersion,
-          needsWrite: false,
         }));
         return;
       }
@@ -147,6 +150,8 @@ export function usePersistentSchedules(dateKey) {
         if (!merged.ok) {
           applyState((current) => ({
             ...current,
+            persistenceBlocked: false,
+            unsupportedVersion: null,
             writeConflict: true,
             conflictDateKeys: merged.conflictDateKeys,
             writeFailed: false,
@@ -163,6 +168,8 @@ export function usePersistentSchedules(dateKey) {
         if (JSON.stringify(latest.store) !== JSON.stringify(store)) {
           applyState((current) => ({
             ...current,
+            persistenceBlocked: false,
+            unsupportedVersion: null,
             writeConflict: true,
             conflictDateKeys: [],
             writeFailed: false,
@@ -189,7 +196,6 @@ export function usePersistentSchedules(dateKey) {
           ...current,
           persistenceBlocked: true,
           unsupportedVersion: readBack.unsupportedVersion,
-          needsWrite: false,
         }));
         return;
       }
@@ -202,6 +208,8 @@ export function usePersistentSchedules(dateKey) {
           } else {
             applyState((current) => ({
               ...current,
+              persistenceBlocked: false,
+              unsupportedVersion: null,
               writeConflict: true,
               conflictDateKeys: changedDirtyDates,
               writeFailed: false,
@@ -217,6 +225,8 @@ export function usePersistentSchedules(dateKey) {
         } else {
           applyState((current) => ({
             ...current,
+            persistenceBlocked: false,
+            unsupportedVersion: null,
             writeConflict: true,
             conflictDateKeys: [],
             writeFailed: false,
@@ -244,6 +254,8 @@ export function usePersistentSchedules(dateKey) {
         store: remainingDirty.length > 0
           ? overlayDirtyDays(persistedStore, current.store, remainingDirty)
           : persistedStore,
+        persistenceBlocked: false,
+        unsupportedVersion: null,
         writeFailed: false,
         needsWrite: remainingDirty.length > 0,
         dirtyDateKeys: remainingDirty,
@@ -266,12 +278,13 @@ export function usePersistentSchedules(dateKey) {
       const result = parseStoredScheduleStoreResult(event.newValue);
       applyState((current) => {
         if (!result.ok) {
+          // Preserve the local dirty store and dirtyDateKeys. If another tab later
+          // repairs storage, we still need the original base to decide whether
+          // these edits can be written or must become a conflict.
           return {
             ...current,
             persistenceBlocked: true,
             unsupportedVersion: result.unsupportedVersion,
-            writeFailed: false,
-            needsWrite: false,
           };
         }
 
@@ -299,13 +312,21 @@ export function usePersistentSchedules(dateKey) {
         if (!merged.ok) {
           return {
             ...current,
+            persistenceBlocked: false,
+            unsupportedVersion: null,
             writeConflict: true,
             conflictDateKeys: merged.conflictDateKeys,
             writeFailed: false,
             needsWrite: false,
           };
         }
-        return { ...current, store: merged.store, writeFailed: false };
+        return {
+          ...current,
+          store: merged.store,
+          persistenceBlocked: false,
+          unsupportedVersion: null,
+          writeFailed: false,
+        };
       });
     };
 
@@ -326,7 +347,6 @@ export function usePersistentSchedules(dateKey) {
           ...current,
           persistenceBlocked: true,
           unsupportedVersion: latest.unsupportedVersion,
-          needsWrite: false,
         });
         return null;
       }
@@ -339,6 +359,8 @@ export function usePersistentSchedules(dateKey) {
       if (!merged.ok) {
         applyState({
           ...current,
+          persistenceBlocked: false,
+          unsupportedVersion: null,
           writeConflict: true,
           conflictDateKeys: merged.conflictDateKeys,
           writeFailed: false,
@@ -346,9 +368,15 @@ export function usePersistentSchedules(dateKey) {
         });
         return null;
       }
-      return { ...current, store: merged.store, writeFailed: false };
+      return {
+        ...current,
+        store: merged.store,
+        persistenceBlocked: false,
+        unsupportedVersion: null,
+        writeFailed: false,
+      };
     } catch {
-      applyState({ ...current, persistenceBlocked: true, needsWrite: false });
+      applyState({ ...current, persistenceBlocked: true });
       return null;
     }
   }, [applyState]);
