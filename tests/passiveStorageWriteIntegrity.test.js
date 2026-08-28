@@ -6,6 +6,22 @@ function source(relativePath) {
   return readFileSync(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 }
 
+function bracedBlockAfter(text, needle) {
+  const needleIndex = text.indexOf(needle);
+  assert.ok(needleIndex >= 0, `expected source marker: ${needle}`);
+  const openIndex = text.indexOf('{', needleIndex);
+  assert.ok(openIndex >= 0, `expected block after: ${needle}`);
+  let depth = 0;
+  for (let index = openIndex; index < text.length; index += 1) {
+    if (text[index] === '{') depth += 1;
+    if (text[index] === '}') {
+      depth -= 1;
+      if (depth === 0) return text.slice(openIndex, index + 1);
+    }
+  }
+  assert.fail(`unterminated block after: ${needle}`);
+}
+
 test('persistent hooks do not write merely because they mounted or received an external storage event', () => {
   for (const path of [
     'src/hooks/usePersistentSchedules.js',
@@ -53,4 +69,49 @@ test('backup restore and erase state replacements do not echo whole-store writes
   assert.match(templates, /replaceTemplates[\s\S]*needsWrite:\s*false/);
   assert.match(experiments, /replaceExperiments[\s\S]*needsWrite:\s*false/);
   assert.match(reminders, /replacePreferences[\s\S]*needsWrite:\s*false/);
+});
+
+test('temporary invalid storage events preserve pending local writes until valid storage can be reconciled', () => {
+  const handlers = [
+    ['src/hooks/usePersistentSchedules.js', 'const syncFromStorage = (event) => {'],
+    ['src/hooks/useScheduleTemplates.js', 'const syncTemplates = (event) => {'],
+    ['src/hooks/useExperiments.js', 'const sync = (event) => {'],
+    ['src/hooks/useReminderPreferences.js', 'const syncPreferences = (event) => {'],
+  ];
+
+  for (const [path, marker] of handlers) {
+    const handler = bracedBlockAfter(source(path), marker);
+    const invalidBranch = bracedBlockAfter(handler, 'if (!result.ok) {');
+    assert.match(invalidBranch, /persistenceBlocked:\s*true/);
+    assert.doesNotMatch(
+      invalidBranch,
+      /needsWrite:\s*false/,
+      `${path} must not discard a pending local write merely because one storage event is invalid`,
+    );
+    assert.match(
+      handler,
+      /persistenceBlocked:\s*false/,
+      `${path} should be able to leave temporary protection after a later valid storage event`,
+    );
+  }
+});
+
+test('synchronous preflight read failures also keep the pending write marker for recovery', () => {
+  const cases = [
+    ['src/hooks/usePersistentSchedules.js', 'const latestStateBeforeMutation = useCallback(() => {', 'if (!latest.ok) {'],
+    ['src/hooks/useScheduleTemplates.js', 'const latestStateBeforeMutation = useCallback(() => {', 'if (!latest.ok) {'],
+    ['src/hooks/useExperiments.js', 'const latestStateBeforeMutation = useCallback(() => {', 'if (!latest.ok) {'],
+    ['src/hooks/useReminderPreferences.js', 'const latestStateBeforeMutation = useCallback(() => {', 'if (!latest.ok) {'],
+  ];
+
+  for (const [path, callbackMarker, invalidMarker] of cases) {
+    const callback = bracedBlockAfter(source(path), callbackMarker);
+    const invalidBranch = bracedBlockAfter(callback, invalidMarker);
+    assert.match(invalidBranch, /persistenceBlocked:\s*true/);
+    assert.doesNotMatch(
+      invalidBranch,
+      /needsWrite:\s*false/,
+      `${path} preflight failure must preserve any already-pending local write`,
+    );
+  }
 });
