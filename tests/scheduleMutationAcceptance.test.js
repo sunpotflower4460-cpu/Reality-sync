@@ -6,13 +6,16 @@ function source(relativePath) {
   return readFileSync(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 }
 
-test('schedule mutations synchronously report whether the latest hook state accepted the edit', () => {
+test('schedule mutations preflight the latest device store and synchronously report acceptance', () => {
   const hook = source('src/hooks/usePersistentSchedules.js');
   assert.match(hook, /const stateRef = useRef\(state\)/);
   assert.match(hook, /const applyState = useCallback\(\(updater\) =>/);
   assert.match(hook, /stateRef\.current = next;\s*setState\(next\);/s);
-  assert.match(hook, /const currentState = stateRef\.current;/);
-  assert.match(hook, /if \(currentState\.persistenceBlocked \|\| currentState\.writeConflict\) return false;/);
+  assert.match(hook, /const latestStateBeforeMutation = useCallback/);
+  assert.match(hook, /parseStoredScheduleStoreResult\(window\.localStorage\.getItem\(STORAGE_KEY\)\)/);
+  assert.match(hook, /mergeScheduleStoreWrite\(\s*latest\.store,\s*current\.store,\s*current\.dirtyDateKeys,\s*current\.baseDays/s);
+  assert.match(hook, /const currentState = latestStateBeforeMutation\(\)/);
+  assert.match(hook, /if \(!currentState\) return false;/);
   assert.match(hook, /applyState\(nextState\);\s*return true;/s);
 });
 
