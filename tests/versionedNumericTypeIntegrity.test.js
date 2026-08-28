@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { STATUS } from '../src/constants.js';
+import { BACKUP_FORMAT, BACKUP_VERSION, STATUS } from '../src/constants.js';
+import { parseBackup } from '../src/utils/backup.js';
 import { migrateLegacySchedulesResult, parseStoredScheduleStoreResult } from '../src/utils/storage.js';
 import { parseStoredTemplatesResult } from '../src/utils/template.js';
 
@@ -35,6 +36,36 @@ function asPlanned(overrides = {}) {
 
 function versioned(schedule) {
   return JSON.stringify({ version: 2, days: { '2026-08-23': [schedule] } });
+}
+
+function backupWithExperiment(experiment) {
+  return JSON.stringify({
+    format: BACKUP_FORMAT,
+    version: BACKUP_VERSION,
+    exportedAt: '2026-08-28T00:00:00.000Z',
+    scheduleStore: { version: 2, days: {} },
+    templates: [],
+    experiments: [experiment],
+    reminderPreferences: { enabled: true, delayMinutes: 15, browserNotifications: false },
+  });
+}
+
+function activeExperiment(overrides = {}) {
+  return {
+    id: 'exp-1',
+    title: 'Monday buffer',
+    action: '15分余白',
+    metricKind: 'deviation',
+    metricLabel: '変更・スキップ',
+    condition: { kind: 'weekday', value: 0 },
+    startDateKey: '2026-08-24',
+    targetRuns: 3,
+    baselineFailureRate: 0.5,
+    baselineSampleCount: 10,
+    status: 'active',
+    trials: [],
+    ...overrides,
+  };
 }
 
 test('versioned schedule storage rejects numeric strings instead of silently changing fact types', () => {
@@ -107,4 +138,10 @@ test('stored templates reject numeric strings instead of rewriting their schema 
   }]);
   assert.equal(parseStoredTemplatesResult(durationString).ok, false);
   assert.equal(parseStoredTemplatesResult(stressString).ok, false);
+});
+
+test('current backup format cannot bypass strict experiment numeric types through the legacy array parser', () => {
+  assert.equal(parseBackup(backupWithExperiment(activeExperiment({ targetRuns: '3' }))).ok, false);
+  assert.equal(parseBackup(backupWithExperiment(activeExperiment({ baselineFailureRate: '0.5' }))).ok, false);
+  assert.equal(parseBackup(backupWithExperiment(activeExperiment({ baselineSampleCount: '10' }))).ok, false);
 });
