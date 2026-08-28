@@ -25,7 +25,16 @@ async function putResponse(request, response) {
   if (!response.ok) return;
   const cache = await caches.open(CACHE_NAME);
   await cache.put(request, response.clone());
-  if (isRuntimeAsset(request.url)) await trimRuntimeAssets(cache);
+  if (isRuntimeAsset(typeof request === 'string' ? request : request.url)) await trimRuntimeAssets(cache);
+}
+
+async function putNavigationResponse(response) {
+  if (!response.ok) return;
+  const cache = await caches.open(CACHE_NAME);
+  await Promise.all([
+    cache.put(scopeUrl.href, response.clone()),
+    cache.put(indexUrl.href, response.clone()),
+  ]);
 }
 
 self.addEventListener('install', (event) => {
@@ -55,13 +64,12 @@ self.addEventListener('fetch', (event) => {
     event.respondWith((async () => {
       try {
         const response = await fetch(request);
-        if (response.ok) await putResponse(request, response);
+        if (response.ok) await putNavigationResponse(response);
         return response;
       } catch {
         const cache = await caches.open(CACHE_NAME);
-        return await cache.match(request)
+        return await cache.match(indexUrl.href)
           || await cache.match(scopeUrl.href)
-          || await cache.match(indexUrl.href)
           || Response.error();
       }
     })());
