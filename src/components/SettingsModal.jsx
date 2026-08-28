@@ -17,6 +17,7 @@ import {
 import { APP_VERSION, SUPPORT_PAGE_URL } from '../config/app.js';
 import { MAX_BACKUP_BYTES, serializeBackup, parseBackup } from '../utils/backup.js';
 import { REMINDER_DELAY_OPTIONS } from '../utils/reminder.js';
+import { BACKUP_RESTORED_EVENT, persistRestoredBackup } from '../utils/restore.js';
 import { ModalDialog } from './ModalDialog.jsx';
 
 function backupFilename() {
@@ -69,7 +70,18 @@ export function SettingsModal({
       `このバックアップで現在のRealitySyncデータを置き換えますか？\n\n予定・実績: ${scheduleCount}件 / ${dayCount}日\nテンプレート: ${templateCount}件\n内部の学習履歴: ${experimentCount}件\n\n現在の端末内データは置き換わります。必要なら先に書き出してください。`,
     );
     if (!confirmed) return;
+
+    const persistence = persistRestoredBackup(parsed.data);
+    if (!persistence.ok) {
+      setMessage('');
+      setError(persistence.rollbackOk
+        ? 'バックアップの復元中に端末保存へ失敗しました。元の端末データへ戻したため、画面の内容は変更していません。'
+        : 'バックアップの復元中に端末保存へ失敗し、元データへの戻しも完了確認できませんでした。アプリを再読み込みせず、可能なら現在見えているデータを外部へ控えてください。');
+      return;
+    }
+
     onRestoreBackup(parsed.data);
+    window.dispatchEvent(new Event(BACKUP_RESTORED_EVENT));
     setError('');
     setMessage('バックアップを復元しました。');
   }, [onRestoreBackup]);
