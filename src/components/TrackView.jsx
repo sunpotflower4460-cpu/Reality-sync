@@ -20,13 +20,27 @@ function statusStyle(status) {
 
 function TimelineTitle({ schedule, recorded, planned }) {
   if (!recorded) return schedule.title;
+  const legacyPlanReference = !schedule.plannedSnapshot;
   if (schedule.status === STATUS.CHANGED) {
-    return <span className="flex flex-col"><span className="text-[8px] font-normal text-slate-400 line-through">{planned.title}</span><span className="break-words">{schedule.actualTitle}<span className="ml-1 text-[8px] font-medium text-amber-600">{schedule.actualCategory ? `・${schedule.actualCategory}` : ''}</span></span></span>;
+    return (
+      <span className="flex flex-col">
+        <span className={`text-[8px] font-normal text-slate-400 ${legacyPlanReference ? '' : 'line-through'}`}>
+          {legacyPlanReference ? `現在の予定: ${schedule.title}` : planned.title}
+        </span>
+        <span className="break-words">{schedule.actualTitle}<span className="ml-1 text-[8px] font-medium text-amber-600">{schedule.actualCategory ? `・${schedule.actualCategory}` : ''}</span></span>
+      </span>
+    );
   }
-  if (schedule.status === STATUS.SKIPPED) return <span className="text-slate-500 line-through">{planned.title}</span>;
+  if (schedule.status === STATUS.SKIPPED) {
+    return legacyPlanReference
+      ? <span className="text-slate-500">現在の予定: {schedule.title}</span>
+      : <span className="text-slate-500 line-through">{planned.title}</span>;
+  }
   const recordedTitle = schedule.actualTitle || planned.title;
   const recordedCategory = schedule.actualCategory || planned.category;
-  const planChangedAfterRecord = planned.title !== schedule.title || planned.category !== schedule.category;
+  const planChangedAfterRecord = legacyPlanReference
+    ? recordedTitle !== schedule.title || recordedCategory !== schedule.category
+    : planned.title !== schedule.title || planned.category !== schedule.category;
   if (!planChangedAfterRecord) return recordedTitle;
   return <span className="flex flex-col"><span className="text-[8px] font-normal text-slate-400">現在: {schedule.title}</span><span className="break-words">記録時: {recordedTitle}<span className="ml-1 text-[8px] font-medium text-emerald-700">{recordedCategory ? `・${recordedCategory}` : ''}</span></span></span>;
 }
@@ -91,6 +105,7 @@ export function TrackView({ schedules, dueSchedules = [], dateKey, canRecord = t
         <div className="relative ml-2 space-y-2.5 border-l border-indigo-100/80 pb-2">
           {orderedSchedules.map((schedule) => {
             const recorded = schedule.status !== STATUS.PENDING;
+            const legacyPlanReference = recorded && !schedule.plannedSnapshot;
             const planned = recorded ? recordedPlanForSchedule(schedule) : schedule;
             const plannedTime = planned?.time ?? schedule.time;
             const plannedTitle = planned?.title ?? schedule.title;
@@ -104,6 +119,7 @@ export function TrackView({ schedules, dueSchedules = [], dateKey, canRecord = t
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 text-[13px] font-semibold text-slate-800"><TimelineTitle schedule={schedule} recorded={recorded} planned={planned} /></div>
                   <div className="flex shrink-0 items-center gap-1.5">
+                    {legacyPlanReference && <span className="rounded-full bg-slate-50 px-2 py-1 text-[7px] font-semibold text-slate-400">記録時の予定不明</span>}
                     {recorded && <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-50"><MoodIcon mood={schedule.mood} /></span>}
                     <span className={`rounded-full px-2 py-1 text-[8px] font-semibold ${style.badge}`}>{style.label}</span>
                   </div>
@@ -121,7 +137,7 @@ export function TrackView({ schedules, dueSchedules = [], dateKey, canRecord = t
                 <div className="mt-2 flex min-h-8 items-center justify-between gap-3 border-t border-slate-100 pt-2">
                   {recorded ? (
                     <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-[9px] font-medium text-slate-400">
-                      <span>予定負荷 {plannedStress}</span>
+                      <span>{legacyPlanReference ? '現在の予定負荷' : '予定負荷'} {plannedStress}</span>
                       <span className={schedule.actualStress > 80 ? 'text-rose-500' : schedule.actualStress === null ? 'text-slate-400' : 'text-indigo-600'}>実負荷 {schedule.actualStress ?? '—'}</span>
                       <span className="text-slate-600">実時間 {schedule.actualDuration === null ? '—' : `${schedule.actualDuration}分`}</span>
                     </div>
@@ -137,6 +153,7 @@ export function TrackView({ schedules, dueSchedules = [], dateKey, canRecord = t
                 <div className={`absolute -left-[4px] top-4 h-2 w-2 rounded-full ring-[3px] ring-[#f6f7fb] ${style.accent}`} aria-hidden="true" />
                 <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold text-indigo-600">
                   <time dateTime={`${dateKey}T${plannedTime}`}>{plannedTime}</time>
+                  {legacyPlanReference && <span className="text-[8px] font-medium text-slate-400">現在の予定時刻</span>}
                   {recorded && schedule.actualStartTime && schedule.status !== STATUS.SKIPPED && <><span className="text-slate-300">→</span><span className="flex items-center gap-1 text-pink-600"><Clock3 className="h-3 w-3" aria-hidden="true" />{actualDateDiffers ? `${formatShortDateLabel(schedule.actualStartDateKey)} ` : ''}{schedule.actualStartTime}</span></>}
                 </div>
 
