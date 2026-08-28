@@ -168,6 +168,9 @@ export function useReminderPreferences() {
       if (event.key !== REMINDER_STORAGE_KEY) return;
       const result = parseStoredReminderPreferencesResult(event.newValue);
       applyState((current) => {
+        // Conflict mode is a rescue snapshot. Ignore every later storage event,
+        // including malformed values, so backup export remains available.
+        if (current.writeConflict) return current;
         if (!result.ok) {
           return { ...current, persistenceBlocked: true };
         }
@@ -188,7 +191,6 @@ export function useReminderPreferences() {
             writeFailed: false,
           };
         }
-        if (current.writeConflict) return current;
         return {
           preferences: result.preferences,
           persistenceBlocked: false,
