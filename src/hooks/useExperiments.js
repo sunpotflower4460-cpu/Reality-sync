@@ -99,6 +99,16 @@ export function useExperiments() {
   } = state;
 
   useEffect(() => {
+    if ((!writeFailed && !writeConflict) || window.location.protocol === 'file:') return undefined;
+    const guardUnsavedPersistence = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', guardUnsavedPersistence);
+    return () => window.removeEventListener('beforeunload', guardUnsavedPersistence);
+  }, [writeConflict, writeFailed]);
+
+  useEffect(() => {
     if (persistenceBlocked || writeConflict || !needsWrite) return;
     try {
       const latest = parseStoredExperimentsForPersistence(
