@@ -37,6 +37,7 @@ function instantiatePlans(source) {
 }
 function scheduleRevisionKey(schedule) { return schedule ? JSON.stringify(schedule) : 'none'; }
 function dayRevisionKey(schedules) { return JSON.stringify(Array.isArray(schedules) ? schedules : []); }
+function entityRevisionKey(value) { return value ? JSON.stringify(value) : 'none'; }
 function timeKeyFromDate(date) {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
@@ -61,11 +62,13 @@ export default function App() {
     templates,
     saveTemplate,
     deleteTemplate,
+    resolveTemplateForMutation,
     replaceTemplates,
     storageProtection: templateStorageProtection,
   } = useScheduleTemplates();
   const {
     experiments,
+    resolveExperimentForMutation,
     replaceExperiments,
     storageProtection: experimentStorageProtection,
   } = useExperiments();
@@ -297,10 +300,13 @@ export default function App() {
 
   const applyTemplate = (template) => {
     if (protectedMode || !template?.schedules?.length) return false;
-    const baseRevision = dayRevisionKey(schedules);
+    const targetRevision = dayRevisionKey(schedules);
+    const templateRevision = entityRevisionKey(template);
     if (!confirmReplaceDay(`テンプレート「${template.name}」`)) return false;
+    const latestTemplate = resolveTemplateForMutation(template.id, templateRevision);
+    if (!latestTemplate) return false;
     const accepted = setSchedules((current) => (
-      dayRevisionKey(current) === baseRevision ? instantiatePlans(template.schedules) : null
+      dayRevisionKey(current) === targetRevision ? instantiatePlans(latestTemplate.schedules) : null
     ));
     if (!accepted) return false;
     setSelectedPlanFeedbackId(null);
@@ -310,7 +316,15 @@ export default function App() {
 
   const applySelectedPlanFeedback = () => {
     if (protectedMode || !selectedPlanFeedback) return false;
-    const experiment = experiments.find((item) => item.id === selectedPlanFeedback.experimentId);
+    const reviewedExperiment = experiments.find((item) => item.id === selectedPlanFeedback.experimentId);
+    if (!reviewedExperiment) {
+      setSelectedPlanFeedbackId(null);
+      return false;
+    }
+    const experiment = resolveExperimentForMutation(
+      reviewedExperiment.id,
+      entityRevisionKey(reviewedExperiment),
+    );
     if (!experiment) {
       setSelectedPlanFeedbackId(null);
       return false;
