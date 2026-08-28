@@ -91,7 +91,47 @@ export function useReminderPreferences() {
       }
 
       const writtenSerialized = serializePreferences(preferences);
+      const preWrite = parseStoredReminderPreferencesResult(
+        window.localStorage.getItem(REMINDER_STORAGE_KEY),
+      );
+      if (!preWrite.ok) {
+        applyState((current) => ({ ...current, persistenceBlocked: true, needsWrite: false }));
+        return;
+      }
+      const preWriteSerialized = serializePreferences(preWrite.preferences);
+      if (preWriteSerialized !== latestSerialized) {
+        applyState((current) => ({
+          ...current,
+          writeConflict: true,
+          writeFailed: false,
+          needsWrite: false,
+        }));
+        return;
+      }
+
       window.localStorage.setItem(REMINDER_STORAGE_KEY, writtenSerialized);
+      const readBack = parseStoredReminderPreferencesResult(
+        window.localStorage.getItem(REMINDER_STORAGE_KEY),
+      );
+      if (!readBack.ok) {
+        applyState((current) => ({ ...current, persistenceBlocked: true, needsWrite: false }));
+        return;
+      }
+      const readBackSerialized = serializePreferences(readBack.preferences);
+      if (readBackSerialized !== writtenSerialized) {
+        if (readBackSerialized === preWriteSerialized) {
+          applyState((current) => ({ ...current, writeFailed: true }));
+        } else {
+          applyState((current) => ({
+            ...current,
+            writeConflict: true,
+            writeFailed: false,
+            needsWrite: false,
+          }));
+        }
+        return;
+      }
+
       applyState((current) => {
         const currentSerialized = serializePreferences(current.preferences);
         const changedAgain = currentSerialized !== writtenSerialized;
