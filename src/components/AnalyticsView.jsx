@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Activity, ChevronDown, Layers, Sparkles } from 'lucide-react';
+import { dateKeyFromDate } from '../utils/date.js';
 import { formatTime } from '../utils/schedule.js';
 import { MonthlyAnalyticsView } from './MonthlyAnalyticsView.jsx';
 import { WeeklyAnalyticsView } from './WeeklyAnalyticsView.jsx';
@@ -13,6 +14,7 @@ export function AnalyticsView({
   onChangeDate,
 }) {
   const [detailScope, setDetailScope] = useState('week');
+  const isFutureDate = selectedDate > dateKeyFromDate();
 
   return (
     <div className="animate-fade-in space-y-3.5 pt-3.5">
@@ -22,7 +24,7 @@ export function AnalyticsView({
         <p className="mt-1 text-[10px] leading-relaxed text-slate-500">良し悪しではなく、次の予定を少し現実に近づけるために</p>
       </div>
 
-      <DailyAnalyticsContent stats={stats} />
+      <DailyAnalyticsContent stats={stats} isFutureDate={isFutureDate} />
       <SimpleInsightCard insights={longitudinalInsights} />
 
       <details className="app-group group">
@@ -63,7 +65,18 @@ function SimpleInsightCard({ insights }) {
   );
 }
 
-function DailyAnalyticsContent({ stats }) {
+function DailyAnalyticsContent({ stats, isFutureDate }) {
+  if (isFutureDate) {
+    return (
+      <section className="app-card-strong rounded-[1.25rem] p-5 text-center">
+        <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-500"><Layers className="h-4.5 w-4.5" /></div>
+        <h2 className="mt-3.5 text-[15px] font-semibold text-slate-800">この日の現実はまだ観測前です</h2>
+        <p className="mx-auto mt-1.5 max-w-[18rem] text-[11px] leading-relaxed text-slate-500">未来日の予定は「未記録」として数えません。日付を迎えて実績を記録すると、理想と現実を比べられます。</p>
+        {stats.total > 0 && <p className="mt-2 text-[9px] font-medium text-indigo-500">予定 {stats.total}件は計画として保存されています</p>}
+      </section>
+    );
+  }
+
   if (stats.total === 0) {
     return (
       <section className="app-card-strong rounded-[1.25rem] p-5 text-center">
