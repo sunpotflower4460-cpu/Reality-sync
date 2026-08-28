@@ -240,7 +240,7 @@ function experimentLineageValid(experiments) {
     versionsByRoot.set(rootId, versions);
 
     if (!experiment.parentExperimentId) {
-      if (rootId !== experiment.id || version !== 1) return false;
+      if (rootId !== experiment.id || version !== 1 || experiment.sourceRetention !== null) return false;
       continue;
     }
 
@@ -249,6 +249,20 @@ function experimentLineageValid(experiments) {
     const parentRootId = parent.learningRootId || parent.id;
     const parentVersion = parent.learningVersion || 1;
     if (parentRootId !== rootId || parentVersion >= version) return false;
+    if (
+      parent.status !== EXPERIMENT_STATUS.COMPLETED
+      || parent.decision !== EXPERIMENT_DECISION.ADOPT
+      || !parent.decisionDateKey
+    ) return false;
+
+    const retention = experiment.sourceRetention;
+    if (!retention || retention.experimentId !== parent.id) return false;
+    if (retention.throughDateKey < parent.decisionDateKey) return false;
+    if (experiment.startDateKey <= retention.throughDateKey) return false;
+    if (
+      experiment.baselineFailureRate !== retention.failureRate
+      || experiment.baselineSampleCount !== retention.assessmentCount
+    ) return false;
   }
 
   return true;
