@@ -64,15 +64,11 @@ test('partial restore write failure rolls already-written domains back to their 
   const storage = fakeStorage(initial, EXPERIMENT_STORAGE_KEY);
   const result = persistRestoredBackup(backupData(), storage);
   assert.equal(result.ok, false);
-  // The injected storage also refuses rollback of the failing key itself, so
-  // rollbackOk is false, but every key that could be restored is returned.
-  assert.equal(result.rollbackOk, false);
+  // The failing key was never changed, so only successfully changed earlier
+  // keys need rollback; this should be reported as a clean rollback.
+  assert.equal(result.rollbackOk, true);
   const snapshot = storage.snapshot();
-  assert.equal(snapshot[STORAGE_KEY], initial[STORAGE_KEY]);
-  assert.equal(snapshot[TEMPLATE_STORAGE_KEY], initial[TEMPLATE_STORAGE_KEY]);
-  assert.equal(snapshot[REMINDER_STORAGE_KEY], initial[REMINDER_STORAGE_KEY]);
-  assert.equal(snapshot[LEGACY_STORAGE_KEY], initial[LEGACY_STORAGE_KEY]);
-  assert.equal(snapshot[REMINDER_NOTIFIED_STORAGE_KEY], initial[REMINDER_NOTIFIED_STORAGE_KEY]);
+  assert.deepEqual(snapshot, initial);
 });
 
 test('restore never starts if existing storage cannot be read safely', () => {
