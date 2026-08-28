@@ -61,11 +61,18 @@ test('erase reports success only after every RealitySync key is actually absent'
   assert.deepEqual(storage.snapshot(), {});
 });
 
-test('settings verifies destructive storage removal before displaying success', () => {
+test('settings distinguishes a clean rollback from an uncertain partial erase before changing React state', () => {
   const settings = source('src/components/SettingsModal.jsx');
-  const eraseCall = settings.indexOf('const erased = eraseStoredRealitySyncData()');
-  const successCopy = settings.indexOf('この端末のRealitySyncデータを削除しました。', eraseCall);
+  const eraseCall = settings.indexOf('const eraseResult = eraseStoredRealitySyncDataResult()');
+  const failureGuard = settings.indexOf('if (!eraseResult.ok)', eraseCall);
+  const rollbackBranch = settings.indexOf('eraseResult.rollbackOk', failureGuard);
+  const clearState = settings.indexOf('onEraseAllData();', rollbackBranch);
+  const successCopy = settings.indexOf('この端末のRealitySyncデータを削除しました。', clearState);
   assert.ok(eraseCall >= 0);
-  assert.ok(successCopy > eraseCall);
-  assert.match(settings.slice(eraseCall, successCopy), /if \(!erased\)/);
+  assert.ok(failureGuard > eraseCall);
+  assert.ok(rollbackBranch > failureGuard);
+  assert.ok(clearState > rollbackBranch);
+  assert.ok(successCopy > clearState);
+  assert.match(settings.slice(failureGuard, clearState), /削除前の端末データへ戻した/);
+  assert.match(settings.slice(failureGuard, clearState), /戻しも完了確認できませんでした/);
 });
