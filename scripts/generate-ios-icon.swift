@@ -6,12 +6,15 @@ let outputPath = arguments.count > 1
     : "ios/RealitySync/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png"
 
 let size = NSSize(width: 1024, height: 1024)
+// A fully opaque RGB bitmap has three samples per pixel. Using four samples
+// with hasAlpha=false is an inconsistent NSBitmapImageRep configuration and
+// crashes on some Apple Silicon/macOS runner combinations.
 guard let bitmap = NSBitmapImageRep(
     bitmapDataPlanes: nil,
     pixelsWide: Int(size.width),
     pixelsHigh: Int(size.height),
     bitsPerSample: 8,
-    samplesPerPixel: 4,
+    samplesPerPixel: 3,
     hasAlpha: false,
     isPlanar: false,
     colorSpaceName: .deviceRGB,
