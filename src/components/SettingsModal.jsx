@@ -15,7 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { APP_VERSION, SUPPORT_PAGE_URL } from '../config/app.js';
-import { serializeBackup, parseBackup } from '../utils/backup.js';
+import { MAX_BACKUP_BYTES, serializeBackup, parseBackup } from '../utils/backup.js';
 import { REMINDER_DELAY_OPTIONS } from '../utils/reminder.js';
 import { ModalDialog } from './ModalDialog.jsx';
 
@@ -142,6 +142,11 @@ export function SettingsModal({
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
+    if (!Number.isFinite(file.size) || file.size > MAX_BACKUP_BYTES) {
+      setMessage('');
+      setError('バックアップファイルが大きすぎます。10MB以下のファイルを選択してください。');
+      return;
+    }
     let text;
     try {
       text = await file.text();
