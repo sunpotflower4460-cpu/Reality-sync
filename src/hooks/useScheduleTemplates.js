@@ -189,6 +189,18 @@ export function useScheduleTemplates() {
     })
   ), [updateTemplates]);
 
+  // Destructive cross-domain consumers must not apply a template captured from
+  // an older render. Re-read the template domain synchronously and require the
+  // exact revision the user reviewed before returning a source object.
+  const resolveTemplateForMutation = useCallback((templateId, expectedRevision) => {
+    const current = latestStateBeforeMutation();
+    if (!current) return null;
+    const template = current.templates.find((item) => item.id === templateId) ?? null;
+    const revisionMatches = template && JSON.stringify(template) === expectedRevision;
+    if (current !== stateRef.current) applyState(current);
+    return revisionMatches ? template : null;
+  }, [applyState, latestStateBeforeMutation]);
+
   const replaceTemplates = useCallback((nextTemplates) => {
     const validated = validateTemplates(Array.isArray(nextTemplates) ? nextTemplates : []);
     if (!validated) return false;
@@ -207,6 +219,7 @@ export function useScheduleTemplates() {
     templates,
     saveTemplate,
     deleteTemplate,
+    resolveTemplateForMutation,
     replaceTemplates,
     storageProtection: { persistenceBlocked, writeFailed, writeConflict },
   };
