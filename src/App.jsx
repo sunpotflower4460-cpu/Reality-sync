@@ -12,6 +12,7 @@ import {
 } from './constants.js';
 import { calculateMonthlyInsights, calculateWeeklyInsights } from './utils/analytics.js';
 import { dateKeyFromDate, shiftDateKey } from './utils/date.js';
+import { createUniqueId } from './utils/id.js';
 import { calculateLongitudinalInsights } from './utils/insights.js';
 import { applyPlanFeedback, buildPlanFeedbackSuggestions } from './utils/planningFeedback.js';
 import { DEFAULT_REMINDER_PREFERENCES } from './utils/reminder.js';
@@ -35,11 +36,14 @@ import { SettingsModal } from './components/SettingsModal.jsx';
 import { TemplateModal } from './components/TemplateModal.jsx';
 import { TrackView } from './components/TrackView.jsx';
 
-function createScheduleId() {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-  return `schedule-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+function instantiatePlans(source) {
+  const ids = [];
+  return source.map((schedule) => {
+    const id = createUniqueId('schedule', ids);
+    ids.push(id);
+    return createPendingScheduleCopy(schedule, id);
+  });
 }
-function instantiatePlans(source) { return source.map((schedule) => createPendingScheduleCopy(schedule, createScheduleId())); }
 function scheduleRevisionKey(schedule) { return schedule ? JSON.stringify(schedule) : 'none'; }
 function timeKeyFromDate(date) {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
@@ -176,21 +180,24 @@ export default function App() {
     if (editorState?.type === 'edit') {
       setSchedules((current) => current.map((schedule) => schedule.id === editorState.id ? { ...schedule, ...draft } : schedule));
     } else {
-      setSchedules((current) => [...current, {
-        id: createScheduleId(),
-        ...draft,
-        appliedExperimentIds: [],
-        status: STATUS.PENDING,
-        plannedSnapshot: null,
-        actualTitle: '',
-        actualCategory: null,
-        actualDuration: null,
-        actualStartTime: null,
-        actualStartDateKey: null,
-        deviationReason: null,
-        mood: null,
-        actualStress: null,
-      }]);
+      setSchedules((current) => {
+        const id = createUniqueId('schedule', current.map((schedule) => schedule.id));
+        return [...current, {
+          id,
+          ...draft,
+          appliedExperimentIds: [],
+          status: STATUS.PENDING,
+          plannedSnapshot: null,
+          actualTitle: '',
+          actualCategory: null,
+          actualDuration: null,
+          actualStartTime: null,
+          actualStartDateKey: null,
+          deviationReason: null,
+          mood: null,
+          actualStress: null,
+        }];
+      });
     }
     setEditorState(null);
   };
@@ -229,7 +236,8 @@ export default function App() {
       setSelectedPlanFeedbackId(null);
       return;
     }
-    const result = applyPlanFeedback(experiment, selectedDate, schedules, selectedPlanFeedback.scheduleId, createScheduleId());
+    const newScheduleId = createUniqueId('schedule', schedules.map((schedule) => schedule.id));
+    const result = applyPlanFeedback(experiment, selectedDate, schedules, selectedPlanFeedback.scheduleId, newScheduleId);
     if (result.ok) setSchedules(result.schedules);
     setSelectedPlanFeedbackId(null);
   };
