@@ -24,11 +24,15 @@ function experiment(overrides = {}) {
   };
 }
 
-function parse(value) {
+function parseMany(experiments) {
   return parseStoredExperimentsForPersistence(JSON.stringify({
     version: EXPERIMENT_STORAGE_VERSION,
-    experiments: [value],
+    experiments,
   }));
+}
+
+function parse(value) {
+  return parseMany([value]);
 }
 
 test('experiment protocol condition cannot be rounded or type-coerced during persistence', () => {
@@ -62,8 +66,39 @@ test('explicit trial identity and observation metadata cannot be silently replac
   assert.equal(parse(experiment({ trials: [{ ...baseTrial, outcome: 'maybe' }] })).ok, false);
 });
 
-test('valid explicit experiment metadata remains writable', () => {
-  const result = parse(experiment({
+test('orphaned and root-mismatched learning versions are protected during normal storage load', () => {
+  const orphan = experiment({
+    id: 'child',
+    learningRootId: 'root',
+    parentExperimentId: 'missing-parent',
+    learningVersion: 2,
+  });
+  assert.equal(parse(orphan).ok, false);
+
+  const root = experiment({ id: 'root', learningRootId: 'root', learningVersion: 1 });
+  const wrongRootChild = experiment({
+    id: 'child',
+    learningRootId: 'other-root',
+    parentExperimentId: 'root',
+    learningVersion: 2,
+  });
+  assert.equal(parseMany([root, wrongRootChild]).ok, false);
+});
+
+test('learning lineage rejects duplicate or non-increasing versions', () => {
+  const root = experiment({ id: 'root', learningRootId: 'root', learningVersion: 1 });
+  const child = experiment({ id: 'child', learningRootId: 'root', parentExperimentId: 'root', learningVersion: 2 });
+  const duplicateVersion = experiment({ id: 'sibling', learningRootId: 'root', parentExperimentId: 'root', learningVersion: 2 });
+  const reversedVersion = experiment({ id: 'reversed', learningRootId: 'root', parentExperimentId: 'child', learningVersion: 1 });
+  assert.equal(parseMany([root, child, duplicateVersion]).ok, false);
+  assert.equal(parseMany([root, child, reversedVersion]).ok, false);
+});
+
+test('valid explicit experiment metadata and lineage remain writable', () => {
+  const root = experiment({
+    id: 'root',
+    learningRootId: 'root',
+    learningVersion: 1,
     trials: [{
       id: 'trial-1',
       recordKey: '2026-08-28::work',
@@ -75,7 +110,15 @@ test('valid explicit experiment metadata remains writable', () => {
       observedLabel: '予定通り',
       capturedAt: '2026-08-28T10:00:00Z',
     }],
-  }));
+  });
+  const child = experiment({
+    id: 'child',
+    learningRootId: 'root',
+    parentExperimentId: 'root',
+    learningVersion: 2,
+  });
+  const result = parseMany([root, child]);
   assert.equal(result.ok, true);
   assert.equal(result.experiments[0].trials[0].id, 'trial-1');
+  assert.equal(result.experiments[1].parentExperimentId, 'root');
 });
