@@ -282,11 +282,15 @@ export default function App() {
 
   const copyPreviousDay = () => {
     if (protectedMode || previousSchedules.length === 0) return;
-    const baseRevision = dayRevisionKey(schedules);
+    const targetRevision = dayRevisionKey(schedules);
+    const sourceRevision = dayRevisionKey(previousSchedules);
     if (!confirmReplaceDay('前日の予定')) return;
-    const accepted = setSchedules((current) => (
-      dayRevisionKey(current) === baseRevision ? instantiatePlans(previousSchedules) : null
-    ));
+    const accepted = setSchedules((current, latestStore) => {
+      const latestSource = latestStore.days[previousDate] ?? [];
+      if (dayRevisionKey(current) !== targetRevision) return null;
+      if (dayRevisionKey(latestSource) !== sourceRevision || latestSource.length === 0) return null;
+      return instantiatePlans(latestSource);
+    });
     if (!accepted) return;
     setSelectedPlanFeedbackId(null);
   };
