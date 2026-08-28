@@ -22,12 +22,16 @@ test('persistent hooks update their synchronous ref on storage-event transitions
   }
 });
 
-test('template and reminder mutations return rejection instead of reporting stale UI success', () => {
+test('template and reminder mutations preflight latest storage and return rejection instead of stale UI success', () => {
   const templates = source('src/hooks/useScheduleTemplates.js');
   const reminders = source('src/hooks/useReminderPreferences.js');
-  assert.match(templates, /if \(current\.persistenceBlocked \|\| current\.writeConflict\) return false;/);
+  for (const [text, label] of [[templates, 'templates'], [reminders, 'reminders']]) {
+    assert.match(text, /const latestStateBeforeMutation = useCallback/, label);
+    assert.match(text, /if \(current\.persistenceBlocked \|\| current\.writeConflict\) return null;/, label);
+  }
+  assert.match(templates, /const current = latestStateBeforeMutation\(\);\s*if \(!current\) return false;/s);
   assert.match(templates, /applyState\(\{ \.\.\.current, templates: validated, needsWrite: true \}\);\s*return true;/s);
-  assert.match(reminders, /if \(current\.persistenceBlocked \|\| current\.writeConflict\) return false;/);
+  assert.match(reminders, /const current = latestStateBeforeMutation\(\);\s*if \(!current\) return false;/s);
   assert.match(reminders, /applyState\(\{ \.\.\.current, preferences: validated, needsWrite: true \}\);\s*return true;/s);
 });
 
