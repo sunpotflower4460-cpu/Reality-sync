@@ -55,7 +55,7 @@ async function showBrowserNotification(schedule, dateKey) {
   }
 }
 
-export function useDueRecordReminders({ schedules, dateKey, preferences }) {
+export function useDueRecordReminders({ schedules, dateKey, notificationSchedules = schedules, preferences }) {
   const [now, setNow] = useState(() => new Date());
   const sessionNotifiedRef = useRef(new Set());
 
@@ -87,27 +87,31 @@ export function useDueRecordReminders({ schedules, dateKey, preferences }) {
     () => getDuePendingSchedules(schedules, dateKey, now, preferences),
     [dateKey, now, preferences, schedules],
   );
+  const todayKey = dateKeyFromDate(now);
+  const notificationDueSchedules = useMemo(
+    () => getDuePendingSchedules(notificationSchedules, todayKey, now, preferences),
+    [notificationSchedules, now, preferences, todayKey],
+  );
 
   useEffect(() => {
-    if (!preferences.browserNotifications || dueSchedules.length === 0) return;
+    if (!preferences.browserNotifications || notificationDueSchedules.length === 0) return;
     if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
 
-    const todayKey = dateKeyFromDate(now);
     const sessionKeys = normalizeNotifiedReminderKeys([...sessionNotifiedRef.current], todayKey);
     sessionNotifiedRef.current = new Set(sessionKeys);
     const notified = new Set([...readNotifiedKeys(todayKey), ...sessionKeys]);
-    const pendingNotifications = dueSchedules.filter((schedule) => !notified.has(reminderNotificationKey(dateKey, schedule.id)));
+    const pendingNotifications = notificationDueSchedules.filter((schedule) => !notified.has(reminderNotificationKey(todayKey, schedule.id)));
     if (pendingNotifications.length === 0) return;
 
     let cancelled = false;
     const notify = async () => {
       for (const schedule of pendingNotifications) {
         if (cancelled) return;
-        const key = reminderNotificationKey(dateKey, schedule.id);
+        const key = reminderNotificationKey(todayKey, schedule.id);
         // Reserve before awaiting the OS so a focus/visibility rerender cannot
         // launch a second notification for the same schedule in parallel.
         sessionNotifiedRef.current.add(key);
-        const shown = await showBrowserNotification(schedule, dateKey);
+        const shown = await showBrowserNotification(schedule, todayKey);
         if (!shown) {
           sessionNotifiedRef.current.delete(key);
           continue;
@@ -121,7 +125,7 @@ export function useDueRecordReminders({ schedules, dateKey, preferences }) {
     };
     notify();
     return () => { cancelled = true; };
-  }, [dateKey, dueSchedules, now, preferences.browserNotifications]);
+  }, [notificationDueSchedules, preferences.browserNotifications, todayKey]);
 
   return dueSchedules;
 }
