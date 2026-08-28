@@ -4,6 +4,7 @@ import { INITIAL_SCHEDULES } from '../src/data/demoSchedules.js';
 import { STATUS } from '../src/constants.js';
 import {
   migrateLegacySchedules,
+  migrateLegacySchedulesResult,
   parseStoredScheduleStore,
   parseStoredScheduleStoreResult,
   parseStoredSchedules,
@@ -88,6 +89,7 @@ test('schedule item loss blocks persistence instead of rewriting a partial day',
 
 test('field-level plan corruption blocks persistence instead of silently clamping facts', () => {
   for (const corrupt of [
+    { duration: 0 },
     { duration: 2000 },
     { plannedStress: -1 },
     { time: '25:00' },
@@ -110,6 +112,55 @@ test('field-level plan corruption blocks persistence instead of silently clampin
     });
     assert.equal(parseStoredScheduleStoreResult(raw).ok, false);
   }
+});
+
+test('planned duration must be at least one minute while an explicitly recorded zero-minute reality remains valid', () => {
+  const recorded = {
+    id: 'recorded-zero-actual',
+    time: '09:00',
+    title: 'Work',
+    category: '仕事',
+    duration: 1,
+    plannedStress: 40,
+    status: STATUS.AS_PLANNED,
+    plannedSnapshot: { time: '09:00', title: 'Work', category: '仕事', duration: 1, plannedStress: 40 },
+    actualTitle: 'Work',
+    actualCategory: '仕事',
+    actualDuration: 0,
+  };
+  const valid = parseStoredScheduleStoreResult(JSON.stringify({
+    version: 2,
+    days: { '2026-08-23': [recorded] },
+  }));
+  assert.equal(valid.ok, true);
+  assert.equal(valid.store.days['2026-08-23'][0].actualDuration, 0);
+
+  const zeroSnapshot = parseStoredScheduleStoreResult(JSON.stringify({
+    version: 2,
+    days: {
+      '2026-08-23': [{
+        ...recorded,
+        duration: 60,
+        plannedSnapshot: { ...recorded.plannedSnapshot, duration: 0 },
+      }],
+    },
+  }));
+  assert.equal(zeroSnapshot.ok, false);
+});
+
+test('legacy migration refuses zero-minute plans that the historical editor could not create', () => {
+  const legacy = [{
+    id: 'zero-plan',
+    time: '09:00',
+    title: 'Impossible plan',
+    category: '仕事',
+    duration: 0,
+    plannedStress: 20,
+    status: STATUS.PENDING,
+  }];
+  const result = migrateLegacySchedulesResult(JSON.stringify(legacy), '2026-08-23', INITIAL_SCHEDULES);
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.store, { version: 2, days: {} });
 });
 
 test('record corruption that normalization would erase blocks persistence', () => {
