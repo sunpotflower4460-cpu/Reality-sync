@@ -128,6 +128,7 @@ export default function App() {
   const storageProtection = useMemo(() => {
     const protectedDomains = [];
     const writeFailedDomains = [];
+    const conflictDomains = [];
     if (scheduleStorageProtection.persistenceBlocked) protectedDomains.push('予定・実績');
     if (templateStorageProtection.persistenceBlocked) protectedDomains.push('テンプレート');
     if (experimentStorageProtection.persistenceBlocked) protectedDomains.push('実験履歴');
@@ -136,12 +137,16 @@ export default function App() {
     if (templateStorageProtection.writeFailed) writeFailedDomains.push('テンプレート');
     if (experimentStorageProtection.writeFailed) writeFailedDomains.push('実験履歴');
     if (reminderStorageProtection.writeFailed) writeFailedDomains.push('リマインダー設定');
+    if (scheduleStorageProtection.writeConflict) conflictDomains.push('予定・実績');
     return {
       persistenceBlocked: protectedDomains.length > 0,
       writeFailed: writeFailedDomains.length > 0,
+      writeConflict: conflictDomains.length > 0,
       unsupportedVersion: scheduleStorageProtection.unsupportedVersion ?? experimentStorageProtection.unsupportedVersion,
       protectedDomains,
       writeFailedDomains,
+      conflictDomains,
+      conflictDateKeys: scheduleStorageProtection.conflictDateKeys ?? [],
     };
   }, [
     experimentStorageProtection.persistenceBlocked,
@@ -149,13 +154,15 @@ export default function App() {
     experimentStorageProtection.writeFailed,
     reminderStorageProtection.persistenceBlocked,
     reminderStorageProtection.writeFailed,
+    scheduleStorageProtection.conflictDateKeys,
     scheduleStorageProtection.persistenceBlocked,
     scheduleStorageProtection.unsupportedVersion,
+    scheduleStorageProtection.writeConflict,
     scheduleStorageProtection.writeFailed,
     templateStorageProtection.persistenceBlocked,
     templateStorageProtection.writeFailed,
   ]);
-  const protectedMode = storageProtection.persistenceBlocked;
+  const protectedMode = storageProtection.persistenceBlocked || storageProtection.writeConflict;
 
   const selectedSchedule = useMemo(() => schedules.find((schedule) => schedule.id === selectedScheduleId) ?? null, [schedules, selectedScheduleId]);
   const editingSchedule = useMemo(() => editorState?.type === 'edit' ? schedules.find((schedule) => schedule.id === editorState.id) ?? null : null, [editorState, schedules]);
@@ -333,14 +340,25 @@ export default function App() {
         )}
 
         {protectedMode ? (
-          <section className="app-card mt-4 rounded-[1.25rem] border-red-200 p-5 text-center">
-            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 text-red-500"><AlertTriangle className="h-5 w-5" /></div>
-            <h2 className="text-base font-semibold text-slate-800">保存データを保護しています</h2>
-            <p className="mt-2 text-xs leading-relaxed text-slate-500">現在版では保存済みデータを安全に読み取れないため、編集と自動保存を停止しました。元データは上書きしていません。</p>
-            {storageProtection.protectedDomains.length > 0 && <p className="mt-2 text-xs font-medium text-slate-500">保護対象: {storageProtection.protectedDomains.join('・')}</p>}
-            {storageProtection.unsupportedVersion !== null && <p className="mt-2 text-xs font-semibold text-red-600">検出した保存版: {String(storageProtection.unsupportedVersion)}</p>}
-            <button type="button" onClick={() => setIsSettingsOpen(true)} className="mt-4 min-h-11 w-full rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white">設定とデータを開く</button>
-          </section>
+          storageProtection.writeConflict ? (
+            <section role="alert" className="app-card mt-4 rounded-[1.25rem] border-amber-200 p-5 text-center">
+              <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-50 text-amber-600"><AlertTriangle className="h-5 w-5" /></div>
+              <h2 className="text-base font-semibold text-slate-800">別の画面との編集競合を検出しました</h2>
+              <p className="mt-2 text-xs leading-relaxed text-slate-500">同じ日の予定・実績が別タブや別ウィンドウでも変更されたため、自動でどちらかを上書きせず保存を停止しました。この画面の変更はメモリ上に残っています。</p>
+              {storageProtection.conflictDateKeys.length > 0 && <p className="mt-2 text-xs font-medium text-amber-700">競合日: {storageProtection.conflictDateKeys.join('・')}</p>}
+              <p className="mt-2 text-[10px] leading-relaxed text-slate-400">必要な内容をバックアップしてから、他のRealitySync画面を閉じて再読み込みしてください。</p>
+              <button type="button" onClick={() => setIsSettingsOpen(true)} className="mt-4 min-h-11 w-full rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white">設定とデータを開く</button>
+            </section>
+          ) : (
+            <section className="app-card mt-4 rounded-[1.25rem] border-red-200 p-5 text-center">
+              <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 text-red-500"><AlertTriangle className="h-5 w-5" /></div>
+              <h2 className="text-base font-semibold text-slate-800">保存データを保護しています</h2>
+              <p className="mt-2 text-xs leading-relaxed text-slate-500">現在版では保存済みデータを安全に読み取れないため、編集と自動保存を停止しました。元データは上書きしていません。</p>
+              {storageProtection.protectedDomains.length > 0 && <p className="mt-2 text-xs font-medium text-slate-500">保護対象: {storageProtection.protectedDomains.join('・')}</p>}
+              {storageProtection.unsupportedVersion !== null && <p className="mt-2 text-xs font-semibold text-red-600">検出した保存版: {String(storageProtection.unsupportedVersion)}</p>}
+              <button type="button" onClick={() => setIsSettingsOpen(true)} className="mt-4 min-h-11 w-full rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white">設定とデータを開く</button>
+            </section>
+          )
         ) : (
           <>
             {activeTab === TABS.PLAN && <PlanView schedules={schedules} onCreate={() => setEditorState({ type: 'create' })} onEdit={(id) => setEditorState({ type: 'edit', id })} onCopyPrevious={copyPreviousDay} hasPreviousSchedules={previousSchedules.length > 0} onOpenTemplates={() => setIsTemplateModalOpen(true)} templateCount={templates.length} planFeedbackSuggestions={planFeedbackSuggestions} onReviewPlanFeedback={(suggestion) => setSelectedPlanFeedbackId(suggestion.id)} />}
