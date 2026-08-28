@@ -16,6 +16,12 @@ test('experiment mutations evaluate same-tick repeated actions against a synchro
   assert.match(hook, /applyState\(\{ \.\.\.current, experiments: validated, needsWrite: true \}\)/);
 });
 
+test('experiment mutations report false when validation succeeds but the canonical data did not change', () => {
+  const hook = source('src/hooks/useExperiments.js');
+  assert.match(hook, /canonicalExperiments\(validated\) === canonicalExperiments\(current\.experiments\)/);
+  assert.match(hook, /return false;/);
+});
+
 test('starting an experiment rechecks active candidate identity inside the atomic mutation', () => {
   const hook = source('src/hooks/useExperiments.js');
   const start = hook.indexOf('const startExperiment');
@@ -35,6 +41,28 @@ test('revalidation derives source, active-lineage guard, id and next version fro
   assert.match(block, /experiment\.status === 'active' && \(experiment\.learningRootId \|\| experiment\.id\) === rootId/);
   assert.match(block, /createUniqueId\('experiment', current\.map\(\(item\) => item\.id\)\)/);
   assert.match(block, /learningVersion: nextLearningVersion\(current, source\)/);
+});
+
+test('trial capture cannot pass the target count or accept a forged record identity', () => {
+  const hook = source('src/hooks/useExperiments.js');
+  const start = hook.indexOf('const captureTrial');
+  const end = hook.indexOf('const removeTrial', start);
+  const block = hook.slice(start, end);
+  assert.match(block, /target\.trials\.length >= target\.targetRuns/);
+  assert.match(block, /const expectedRecordKey = canonicalRecordKey\(eligibleRecord\)/);
+  assert.match(block, /eligibleRecord\.recordKey !== expectedRecordKey/);
+  assert.match(block, /eligibleRecord\.dateKey < target\.startDateKey/);
+  assert.match(block, /updated\.trials\.length !== target\.trials\.length \+ 1/);
+});
+
+test('finish and abandon refuse lifecycle transitions from a non-active experiment', () => {
+  const hook = source('src/hooks/useExperiments.js');
+  const finish = hook.slice(hook.indexOf('const finish'), hook.indexOf('const abandon'));
+  const abandon = hook.slice(hook.indexOf('const abandon'), hook.indexOf('const deleteExperiment'));
+  assert.match(finish, /target\.status !== 'active'/);
+  assert.match(finish, /updated\.status !== 'completed'/);
+  assert.match(abandon, /target\.status !== 'active'/);
+  assert.match(abandon, /updated\.status !== 'abandoned'/);
 });
 
 test('experiment deletion cannot orphan a child learning version', () => {
