@@ -65,11 +65,13 @@ test('finish and abandon refuse lifecycle transitions from a non-active experime
   assert.match(abandon, /updated\.status !== 'abandoned'/);
 });
 
-test('experiment deletion cannot orphan a child learning version', () => {
+test('experiment deletion cannot orphan a child or erase adopted learning provenance', () => {
   const hook = source('src/hooks/useExperiments.js');
   const start = hook.indexOf('const deleteExperiment');
-  const end = hook.indexOf('const replaceExperiments', start);
+  const end = hook.indexOf('const resolveExperimentForMutation', start);
   const block = hook.slice(start, end);
+  assert.match(block, /const target = current\.find\(\(experiment\) => experiment\.id === experimentId\)/);
+  assert.match(block, /target\.status === 'completed' && target\.decision === 'adopt'/);
   assert.match(block, /current\.some\(\(experiment\) => experiment\.parentExperimentId === experimentId\)/);
   assert.match(block, /return current\.filter\(\(experiment\) => experiment\.id !== experimentId\)/);
 });
