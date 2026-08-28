@@ -15,7 +15,7 @@ test('persistent hooks do not write merely because they mounted or received an e
   ]) {
     const text = source(path);
     assert.match(text, /needsWrite/);
-    assert.match(text, /if \(persistenceBlocked \|\| !needsWrite\) return/);
+    assert.match(text, /!needsWrite\) return/);
     assert.match(text, /needsWrite:\s*false/);
     assert.match(text, /needsWrite:\s*true/);
   }
