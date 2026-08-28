@@ -210,10 +210,12 @@ export function useScheduleTemplates() {
     })
   ), [updateTemplates]);
 
-  const deleteTemplate = useCallback((templateId) => (
+  const deleteTemplate = useCallback((templateId, expectedRevision = null) => (
     updateTemplates((current) => {
-      if (!current.some((template) => template.id === templateId)) return null;
-      return current.filter((template) => template.id !== templateId);
+      const template = current.find((item) => item.id === templateId);
+      if (!template) return null;
+      if (expectedRevision !== null && JSON.stringify(template) !== expectedRevision) return null;
+      return current.filter((item) => item.id !== templateId);
     })
   ), [updateTemplates]);
 
