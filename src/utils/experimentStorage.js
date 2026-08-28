@@ -225,6 +225,35 @@ function explicitMetadataPreserved(raw, normalized) {
   return true;
 }
 
+function experimentLineageValid(experiments) {
+  const byId = new Map(experiments.map((experiment) => [experiment.id, experiment]));
+  const versionsByRoot = new Map();
+
+  for (const experiment of experiments) {
+    const rootId = experiment.learningRootId || experiment.id;
+    const version = experiment.learningVersion || 1;
+    if (!byId.has(rootId)) return false;
+
+    const versions = versionsByRoot.get(rootId) ?? new Set();
+    if (versions.has(version)) return false;
+    versions.add(version);
+    versionsByRoot.set(rootId, versions);
+
+    if (!experiment.parentExperimentId) {
+      if (rootId !== experiment.id || version !== 1) return false;
+      continue;
+    }
+
+    const parent = byId.get(experiment.parentExperimentId);
+    if (!parent) return false;
+    const parentRootId = parent.learningRootId || parent.id;
+    const parentVersion = parent.learningVersion || 1;
+    if (parentRootId !== rootId || parentVersion >= version) return false;
+  }
+
+  return true;
+}
+
 function parsePayload(raw) {
   let parsed;
   try { parsed = JSON.parse(raw); } catch { return { ok: false, rawExperiments: [], unsupportedVersion: null }; }
@@ -250,6 +279,9 @@ export function parseStoredExperimentsForPersistence(raw) {
     if (!explicitMetadataPreserved(payload.rawExperiments[index], experiments[index])) {
       return { ok: false, experiments: [], unsupportedVersion: null };
     }
+  }
+  if (!experimentLineageValid(experiments)) {
+    return { ok: false, experiments: [], unsupportedVersion: null };
   }
   return { ok: true, experiments, unsupportedVersion: null };
 }
