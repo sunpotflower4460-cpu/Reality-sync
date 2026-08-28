@@ -49,3 +49,15 @@ test('web backup import checks File.size before calling file.text', () => {
   assert.ok(textRead > sizeCheck);
   assert.match(settings, /MAX_BACKUP_BYTES/);
 });
+
+test('backup export refuses an oversized payload before native handoff or Blob download', () => {
+  const settings = source('src/components/SettingsModal.jsx');
+  const serialized = settings.indexOf('const text = serializeBackup');
+  const sizeCheck = settings.indexOf('byteLength > MAX_BACKUP_BYTES');
+  const nativeHandoff = settings.indexOf('if (isNativeShell)', serialized);
+  const blobCreation = settings.indexOf('new Blob([text]', serialized);
+  assert.ok(serialized >= 0);
+  assert.ok(sizeCheck > serialized);
+  assert.ok(nativeHandoff > sizeCheck);
+  assert.ok(blobCreation > sizeCheck);
+});
