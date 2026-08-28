@@ -120,6 +120,45 @@ test('restore rolls back a key even when storage mutates before throwing', () =>
   assert.deepEqual(storage.snapshot(), initial);
 });
 
+test('restore refuses to overwrite a not-yet-written domain changed after the initial snapshot', () => {
+  const initial = {
+    [STORAGE_KEY]: 'old-schedules',
+    [TEMPLATE_STORAGE_KEY]: 'old-templates',
+    [EXPERIMENT_STORAGE_KEY]: 'old-experiments',
+    [REMINDER_STORAGE_KEY]: 'old-reminders',
+    [LEGACY_STORAGE_KEY]: 'old-legacy',
+    [REMINDER_NOTIFIED_STORAGE_KEY]: 'old-notified',
+  };
+  const values = new Map(Object.entries(initial));
+  let writes = 0;
+  let injected = false;
+  const storage = {
+    getItem(key) {
+      if (key === EXPERIMENT_STORAGE_KEY && writes === 2 && !injected) {
+        injected = true;
+        values.set(key, 'remote-concurrent-experiment');
+      }
+      return values.has(key) ? values.get(key) : null;
+    },
+    setItem(key, value) {
+      writes += 1;
+      values.set(key, String(value));
+    },
+    removeItem(key) {
+      writes += 1;
+      values.delete(key);
+    },
+    snapshot() { return Object.fromEntries(values); },
+  };
+
+  const result = persistRestoredBackup(backupData(), storage);
+  assert.deepEqual(result, { ok: false, rollbackOk: false });
+  const snapshot = storage.snapshot();
+  assert.equal(snapshot[EXPERIMENT_STORAGE_KEY], 'remote-concurrent-experiment');
+  assert.equal(snapshot[STORAGE_KEY], initial[STORAGE_KEY]);
+  assert.equal(snapshot[TEMPLATE_STORAGE_KEY], initial[TEMPLATE_STORAGE_KEY]);
+});
+
 test('restore does not overwrite a third value that appears concurrently during verification', () => {
   const initial = {
     [STORAGE_KEY]: 'old-schedules',
