@@ -64,6 +64,18 @@ test('template parser keeps missing numeric plan facts invalid instead of coerci
   assert.equal(parseStoredTemplatesResult(nullStress).ok, false);
 });
 
+test('stored template plans require at least one minute, matching the plan editor boundary', () => {
+  const stored = (duration) => JSON.stringify([{
+    id: `duration-${duration}`,
+    name: 'Duration boundary',
+    schedules: [{ time: '09:00', title: 'Focus', category: '仕事', duration, plannedStress: 20, appliedExperimentIds: [] }],
+  }]);
+  assert.equal(parseStoredTemplatesResult(stored(0)).ok, false);
+  const oneMinute = parseStoredTemplatesResult(stored(1));
+  assert.equal(oneMinute.ok, true);
+  assert.equal(oneMinute.templates[0].schedules[0].duration, 1);
+});
+
 test('template parser protects explicit learned-plan markers instead of silently dropping malformed ids', () => {
   const malformedIds = JSON.stringify([{
     id: 'bad-ids',
