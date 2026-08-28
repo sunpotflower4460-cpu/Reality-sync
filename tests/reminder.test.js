@@ -72,10 +72,11 @@ test('cross-midnight reminders wait until the configured delayed time on the new
   );
 });
 
-test('browser reminder monitoring reads today and carryover plans independently when another date is displayed', () => {
+test('browser reminder monitoring prefers the latest in-memory day store while still falling back to persisted dates', () => {
   const hook = readFileSync(new URL('../src/hooks/useDueRecordReminders.js', import.meta.url), 'utf8');
-  assert.match(hook, /dateKey === todayKey \? schedules : readSchedulesForDate\(todayKey\)/);
-  assert.match(hook, /dateKey === previousDateKey \? schedules : readSchedulesForDate\(previousDateKey\)/);
+  assert.match(hook, /const inMemory = scheduleDays\?\.\[targetDateKey\]/);
+  assert.match(hook, /if \(Array\.isArray\(inMemory\)\) return inMemory;/);
+  assert.match(hook, /return readSchedulesForDate\(targetDateKey\);/);
   assert.match(hook, /parseStoredScheduleStoreResult\(window\.localStorage\.getItem\(STORAGE_KEY\)\)/);
   assert.match(hook, /getDuePendingSchedules\(todaySchedules, todayKey, now, preferences\)/);
   assert.match(hook, /getCarryoverDuePendingSchedules\(previousSchedules, previousDateKey, now, preferences\)/);
