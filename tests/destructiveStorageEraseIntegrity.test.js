@@ -1,43 +1,63 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { eraseStoredRealitySyncData, REALITY_SYNC_STORAGE_KEYS } from '../src/utils/restore.js';
+import {
+  eraseStoredRealitySyncData,
+  eraseStoredRealitySyncDataResult,
+  REALITY_SYNC_STORAGE_KEYS,
+} from '../src/utils/restore.js';
 
 function source(relativePath) {
   return readFileSync(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 }
 
-function fakeStorage(initial = {}, failingKey = null) {
+function fakeStorage(initial = {}, failingRemoveKey = null, failingSetKey = null) {
   const values = new Map(Object.entries(initial));
   const removals = [];
+  const writes = [];
   return {
     getItem(key) { return values.has(key) ? values.get(key) : null; },
+    setItem(key, value) {
+      writes.push(key);
+      if (key === failingSetKey) throw new Error('set failed');
+      values.set(key, String(value));
+    },
     removeItem(key) {
       removals.push(key);
-      if (key === failingKey) throw new Error('remove failed');
+      if (key === failingRemoveKey) throw new Error('remove failed');
       values.delete(key);
     },
     removals,
+    writes,
     snapshot() { return Object.fromEntries(values); },
   };
 }
 
-test('erase attempts every RealitySync storage key even if one removal throws', () => {
+test('partial erase failure rolls every RealitySync storage domain back to its original value', () => {
   const initial = Object.fromEntries(REALITY_SYNC_STORAGE_KEYS.map((key) => [key, `value:${key}`]));
   const failingKey = REALITY_SYNC_STORAGE_KEYS[1];
   const storage = fakeStorage(initial, failingKey);
-  assert.equal(eraseStoredRealitySyncData(storage), false);
-  assert.deepEqual(storage.removals, REALITY_SYNC_STORAGE_KEYS);
-  assert.equal(storage.getItem(failingKey), initial[failingKey]);
-  for (const key of REALITY_SYNC_STORAGE_KEYS) {
-    if (key !== failingKey) assert.equal(storage.getItem(key), null);
-  }
+  const result = eraseStoredRealitySyncDataResult(storage);
+
+  assert.deepEqual(result, { ok: false, rollbackOk: true });
+  assert.deepEqual(storage.snapshot(), initial);
+  assert.equal(storage.removals.includes(REALITY_SYNC_STORAGE_KEYS[0]), true);
+  assert.equal(storage.removals.includes(failingKey), true);
+  assert.equal(storage.removals.includes(REALITY_SYNC_STORAGE_KEYS.at(-1)), false);
+});
+
+test('erase reports a failed rollback instead of pretending partially restored storage is safe', () => {
+  const initial = Object.fromEntries(REALITY_SYNC_STORAGE_KEYS.map((key) => [key, `value:${key}`]));
+  const storage = fakeStorage(initial, REALITY_SYNC_STORAGE_KEYS[1], REALITY_SYNC_STORAGE_KEYS[0]);
+  assert.deepEqual(eraseStoredRealitySyncDataResult(storage), { ok: false, rollbackOk: false });
+  assert.notDeepEqual(storage.snapshot(), initial);
 });
 
 test('erase reports success only after every RealitySync key is actually absent', () => {
   const initial = Object.fromEntries(REALITY_SYNC_STORAGE_KEYS.map((key) => [key, `value:${key}`]));
   const storage = fakeStorage(initial);
-  assert.equal(eraseStoredRealitySyncData(storage), true);
+  assert.deepEqual(eraseStoredRealitySyncDataResult(storage), { ok: true, rollbackOk: true });
+  assert.equal(eraseStoredRealitySyncData(fakeStorage(initial)), true);
   assert.deepEqual(storage.snapshot(), {});
 });
 
