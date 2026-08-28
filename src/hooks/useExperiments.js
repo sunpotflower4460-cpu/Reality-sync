@@ -25,26 +25,32 @@ function validatedExperiments(next) {
 }
 
 function loadExperimentState() {
-  if (typeof window === 'undefined') return { experiments: [], persistenceBlocked: false, unsupportedVersion: null };
+  if (typeof window === 'undefined') return { experiments: [], persistenceBlocked: false, unsupportedVersion: null, writeFailed: false };
   try {
     const result = parseStoredExperimentsForPersistence(window.localStorage.getItem(EXPERIMENT_STORAGE_KEY));
     return {
       experiments: result.experiments,
       persistenceBlocked: !result.ok,
       unsupportedVersion: result.unsupportedVersion,
+      writeFailed: false,
     };
   } catch {
-    return { experiments: [], persistenceBlocked: false, unsupportedVersion: null };
+    return { experiments: [], persistenceBlocked: false, unsupportedVersion: null, writeFailed: true };
   }
 }
 
 export function useExperiments() {
   const [state, setState] = useState(loadExperimentState);
-  const { experiments, persistenceBlocked, unsupportedVersion } = state;
+  const { experiments, persistenceBlocked, unsupportedVersion, writeFailed } = state;
 
   useEffect(() => {
     if (persistenceBlocked) return;
-    try { window.localStorage.setItem(EXPERIMENT_STORAGE_KEY, serializeExperiments(experiments)); } catch { /* in-memory mode */ }
+    try {
+      window.localStorage.setItem(EXPERIMENT_STORAGE_KEY, serializeExperiments(experiments));
+      setState((current) => current.writeFailed ? { ...current, writeFailed: false } : current);
+    } catch {
+      setState((current) => current.writeFailed ? current : { ...current, writeFailed: true });
+    }
   }, [experiments, persistenceBlocked]);
 
   useEffect(() => {
@@ -55,6 +61,7 @@ export function useExperiments() {
         experiments: result.experiments,
         persistenceBlocked: !result.ok,
         unsupportedVersion: result.unsupportedVersion,
+        writeFailed: false,
       });
     };
     window.addEventListener('storage', sync);
@@ -137,7 +144,7 @@ export function useExperiments() {
   const replaceExperiments = useCallback((next) => {
     const validated = validatedExperiments(Array.isArray(next) ? next : []);
     if (!validated) return;
-    setState({ experiments: validated, persistenceBlocked: false, unsupportedVersion: null });
+    setState({ experiments: validated, persistenceBlocked: false, unsupportedVersion: null, writeFailed: false });
   }, []);
 
   return {
@@ -150,6 +157,6 @@ export function useExperiments() {
     abandon,
     deleteExperiment,
     replaceExperiments,
-    storageProtection: { persistenceBlocked, unsupportedVersion },
+    storageProtection: { persistenceBlocked, unsupportedVersion, writeFailed },
   };
 }
