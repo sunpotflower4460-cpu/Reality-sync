@@ -338,6 +338,18 @@ export function useExperiments() {
     })
   ), [updateExperiments]);
 
+  // Planning feedback mutates the schedule domain using experiment data. Resolve
+  // that source synchronously from the latest readable experiment storage and
+  // require the exact revision the user reviewed before allowing the mutation.
+  const resolveExperimentForMutation = useCallback((experimentId, expectedRevision) => {
+    const current = latestStateBeforeMutation();
+    if (!current) return null;
+    const experiment = current.experiments.find((item) => item.id === experimentId) ?? null;
+    const revisionMatches = experiment && JSON.stringify(experiment) === expectedRevision;
+    if (current !== stateRef.current) applyState(current);
+    return revisionMatches ? experiment : null;
+  }, [applyState, latestStateBeforeMutation]);
+
   const replaceExperiments = useCallback((next) => {
     const validated = validatedExperiments(Array.isArray(next) ? next : []);
     if (!validated) return false;
@@ -362,6 +374,7 @@ export function useExperiments() {
     finish,
     abandon,
     deleteExperiment,
+    resolveExperimentForMutation,
     replaceExperiments,
     storageProtection: {
       persistenceBlocked,
