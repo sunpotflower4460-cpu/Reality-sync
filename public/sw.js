@@ -14,6 +14,10 @@ function isRuntimeAsset(requestUrl) {
   return url.origin === scopeUrl.origin && url.pathname.startsWith(new URL('assets/', scopeUrl).pathname);
 }
 
+function isAppShellNavigation(url) {
+  return url.pathname === scopeUrl.pathname || url.pathname === indexUrl.pathname;
+}
+
 async function trimRuntimeAssets(cache) {
   const runtimeKeys = (await cache.keys()).filter((request) => isRuntimeAsset(request.url));
   const overflow = runtimeKeys.length - MAX_RUNTIME_ASSET_ENTRIES;
@@ -61,6 +65,9 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin || !url.href.startsWith(scopeUrl.href)) return;
 
   if (request.mode === 'navigate') {
+    // Privacy/terms/support are real documents under the same service-worker
+    // scope. Never let one of those responses replace the cached SPA shell.
+    if (!isAppShellNavigation(url)) return;
     event.respondWith((async () => {
       try {
         const response = await fetch(request);
