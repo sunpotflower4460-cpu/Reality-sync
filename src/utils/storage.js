@@ -197,6 +197,31 @@ export function parseStoredScheduleStore(raw) {
   return parseStoredScheduleStoreResult(raw).store;
 }
 
+function stableDay(schedules) {
+  return JSON.stringify(Array.isArray(schedules) ? schedules : []);
+}
+
+export function mergeScheduleStoreWrite(latestStore, localStore, dirtyDateKeys, baseDays = {}) {
+  const latest = normalizeScheduleStore(latestStore);
+  const local = normalizeScheduleStore(localStore);
+  const dirty = [...new Set(Array.isArray(dirtyDateKeys) ? dirtyDateKeys : [])]
+    .filter(isValidDateKey);
+  const conflictDateKeys = dirty.filter((dateKey) => (
+    stableDay(latest.days[dateKey]) !== stableDay(baseDays[dateKey])
+  ));
+
+  if (conflictDateKeys.length > 0) {
+    return { ok: false, conflictDateKeys, store: latest };
+  }
+
+  const days = { ...latest.days };
+  for (const dateKey of dirty) {
+    if (hasOwn(local.days, dateKey)) days[dateKey] = local.days[dateKey];
+    else delete days[dateKey];
+  }
+  return { ok: true, conflictDateKeys: [], store: { version: STORAGE_VERSION, days } };
+}
+
 function stableSchedules(schedules) {
   return JSON.stringify(normalizeSchedules(schedules, []));
 }
