@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { REMINDER_STORAGE_KEY } from '../constants.js';
 import {
   normalizeReminderPreferences,
@@ -51,6 +51,15 @@ function loadReminderState() {
 
 export function useReminderPreferences() {
   const [state, setState] = useState(loadReminderState);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const applyState = useCallback((updater) => {
+    const current = stateRef.current;
+    const next = typeof updater === 'function' ? updater(current) : updater;
+    stateRef.current = next;
+    setState(next);
+    return next;
+  }, []);
   const {
     preferences,
     persistenceBlocked,
@@ -67,12 +76,12 @@ export function useReminderPreferences() {
         window.localStorage.getItem(REMINDER_STORAGE_KEY),
       );
       if (!latest.ok) {
-        setState((current) => ({ ...current, persistenceBlocked: true, needsWrite: false }));
+        applyState((current) => ({ ...current, persistenceBlocked: true, needsWrite: false }));
         return;
       }
       const latestSerialized = serializePreferences(latest.preferences);
       if (latestSerialized !== baseSerialized) {
-        setState((current) => ({
+        applyState((current) => ({
           ...current,
           writeConflict: true,
           writeFailed: false,
@@ -83,7 +92,7 @@ export function useReminderPreferences() {
 
       const writtenSerialized = serializePreferences(preferences);
       window.localStorage.setItem(REMINDER_STORAGE_KEY, writtenSerialized);
-      setState((current) => {
+      applyState((current) => {
         const currentSerialized = serializePreferences(current.preferences);
         const changedAgain = currentSerialized !== writtenSerialized;
         return {
@@ -94,15 +103,15 @@ export function useReminderPreferences() {
         };
       });
     } catch {
-      setState((current) => current.writeFailed ? current : { ...current, writeFailed: true });
+      applyState((current) => current.writeFailed ? current : { ...current, writeFailed: true });
     }
-  }, [baseSerialized, needsWrite, persistenceBlocked, preferences, writeConflict]);
+  }, [applyState, baseSerialized, needsWrite, persistenceBlocked, preferences, writeConflict]);
 
   useEffect(() => {
     const syncPreferences = (event) => {
       if (event.key !== REMINDER_STORAGE_KEY) return;
       const result = parseStoredReminderPreferencesResult(event.newValue);
-      setState((current) => {
+      applyState((current) => {
         if (!result.ok) {
           return { ...current, persistenceBlocked: true, writeFailed: false, needsWrite: false };
         }
@@ -126,22 +135,22 @@ export function useReminderPreferences() {
     };
     window.addEventListener('storage', syncPreferences);
     return () => window.removeEventListener('storage', syncPreferences);
-  }, []);
+  }, [applyState]);
 
   const setPreferences = useCallback((nextValue) => {
-    setState((current) => {
-      if (current.persistenceBlocked || current.writeConflict) return current;
-      const next = typeof nextValue === 'function' ? nextValue(current.preferences) : nextValue;
-      const validated = validateReminderPreferences(next);
-      if (!validated) return current;
-      return { ...current, preferences: validated, needsWrite: true };
-    });
-  }, []);
+    const current = stateRef.current;
+    if (current.persistenceBlocked || current.writeConflict) return false;
+    const next = typeof nextValue === 'function' ? nextValue(current.preferences) : nextValue;
+    const validated = validateReminderPreferences(next);
+    if (!validated) return false;
+    applyState({ ...current, preferences: validated, needsWrite: true });
+    return true;
+  }, [applyState]);
 
   const replacePreferences = useCallback((nextValue) => {
     const validated = validateReminderPreferences(nextValue);
-    if (!validated) return;
-    setState({
+    if (!validated) return false;
+    applyState({
       preferences: validated,
       persistenceBlocked: false,
       writeFailed: false,
@@ -149,7 +158,8 @@ export function useReminderPreferences() {
       baseSerialized: serializePreferences(validated),
       writeConflict: false,
     });
-  }, []);
+    return true;
+  }, [applyState]);
 
   return {
     preferences,
