@@ -14,11 +14,7 @@ import {
   serializeExperiments,
 } from '../utils/experiment.js';
 import { parseStoredExperimentsForPersistence } from '../utils/experimentStorage.js';
-
-function createExperimentId() {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-  return `experiment-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
+import { createUniqueId, hasDuplicateIds } from '../utils/id.js';
 
 function loadExperimentState() {
   if (typeof window === 'undefined') return { experiments: [], persistenceBlocked: false, unsupportedVersion: null };
@@ -61,17 +57,21 @@ export function useExperiments() {
     setState((current) => {
       if (current.persistenceBlocked) return current;
       const next = typeof updater === 'function' ? updater(current.experiments) : updater;
-      return { ...current, experiments: normalizeExperiments(next) };
+      if (!Array.isArray(next) || hasDuplicateIds(next)) return current;
+      const normalized = normalizeExperiments(next);
+      if (normalized.length !== next.length) return current;
+      return { ...current, experiments: normalized };
     });
   }, []);
 
   const startExperiment = useCallback((candidate, options) => {
     if (persistenceBlocked) return false;
-    const experiment = createExperimentFromCandidate(candidate, { ...options, id: createExperimentId() });
+    const id = createUniqueId('experiment', experiments.map((experiment) => experiment.id));
+    const experiment = createExperimentFromCandidate(candidate, { ...options, id });
     if (!experiment) return false;
     updateExperiments((current) => [experiment, ...current]);
     return true;
-  }, [persistenceBlocked, updateExperiments]);
+  }, [experiments, persistenceBlocked, updateExperiments]);
 
   const startRevalidation = useCallback((sourceExperimentId, retentionSummary, options = {}) => {
     if (persistenceBlocked) return false;
@@ -95,7 +95,7 @@ export function useExperiments() {
       ...options,
       contextRule,
       contextBaseline,
-      id: createExperimentId(),
+      id: createUniqueId('experiment', experiments.map((item) => item.id)),
       startDateKey: shiftDateKey(today, 1),
       learningVersion: nextLearningVersion(experiments, source),
       createdAt: new Date().toISOString(),
@@ -128,7 +128,11 @@ export function useExperiments() {
   }, [updateExperiments]);
 
   const replaceExperiments = useCallback((next) => {
-    setState({ experiments: normalizeExperiments(next), persistenceBlocked: false, unsupportedVersion: null });
+    const candidate = Array.isArray(next) ? next : [];
+    if (hasDuplicateIds(candidate)) return;
+    const normalized = normalizeExperiments(candidate);
+    if (normalized.length !== candidate.length) return;
+    setState({ experiments: normalized, persistenceBlocked: false, unsupportedVersion: null });
   }, []);
 
   return {
