@@ -16,6 +16,14 @@ import {
 import { parseStoredExperimentsForPersistence } from '../utils/experimentStorage.js';
 import { createUniqueId, hasDuplicateIds } from '../utils/id.js';
 
+function validatedExperiments(next) {
+  if (!Array.isArray(next) || hasDuplicateIds(next)) return null;
+  const normalized = normalizeExperiments(next);
+  if (normalized.length !== next.length) return null;
+  const result = parseStoredExperimentsForPersistence(serializeExperiments(normalized));
+  return result.ok ? result.experiments : null;
+}
+
 function loadExperimentState() {
   if (typeof window === 'undefined') return { experiments: [], persistenceBlocked: false, unsupportedVersion: null };
   try {
@@ -57,10 +65,9 @@ export function useExperiments() {
     setState((current) => {
       if (current.persistenceBlocked) return current;
       const next = typeof updater === 'function' ? updater(current.experiments) : updater;
-      if (!Array.isArray(next) || hasDuplicateIds(next)) return current;
-      const normalized = normalizeExperiments(next);
-      if (normalized.length !== next.length) return current;
-      return { ...current, experiments: normalized };
+      const validated = validatedExperiments(next);
+      if (!validated) return current;
+      return { ...current, experiments: validated };
     });
   }, []);
 
@@ -128,11 +135,9 @@ export function useExperiments() {
   }, [updateExperiments]);
 
   const replaceExperiments = useCallback((next) => {
-    const candidate = Array.isArray(next) ? next : [];
-    if (hasDuplicateIds(candidate)) return;
-    const normalized = normalizeExperiments(candidate);
-    if (normalized.length !== candidate.length) return;
-    setState({ experiments: normalized, persistenceBlocked: false, unsupportedVersion: null });
+    const validated = validatedExperiments(Array.isArray(next) ? next : []);
+    if (!validated) return;
+    setState({ experiments: validated, persistenceBlocked: false, unsupportedVersion: null });
   }, []);
 
   return {
