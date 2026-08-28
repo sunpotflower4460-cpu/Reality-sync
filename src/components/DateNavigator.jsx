@@ -1,16 +1,20 @@
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
-import { dateKeyFromDate, formatDateLabel, isToday, shiftDateKey } from '../utils/date.js';
+import { dateKeyFromDate, formatDateLabel, isToday, isValidDateKey, shiftDateKey } from '../utils/date.js';
 
 export function DateNavigator({ dateKey, onChange }) {
   const today = dateKeyFromDate();
   const todaySelected = isToday(dateKey);
+  const selectDate = (nextDateKey) => {
+    if (!isValidDateKey(nextDateKey)) return;
+    onChange(nextDateKey);
+  };
 
   return (
     <div className="mt-1.5">
       <div className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center gap-0.5 rounded-[0.95rem] border border-slate-200/75 bg-slate-100/72 p-0.5">
         <button
           type="button"
-          onClick={() => onChange(shiftDateKey(dateKey, -1))}
+          onClick={() => selectDate(shiftDateKey(dateKey, -1))}
           aria-label="前の日へ"
           className="tap-target flex items-center justify-center rounded-[0.8rem] text-slate-500 transition hover:bg-white/80 hover:text-slate-700 active:bg-white"
         >
@@ -26,8 +30,9 @@ export function DateNavigator({ dateKey, onChange }) {
           <input
             type="date"
             value={dateKey}
+            min="0100-01-01"
             max="9999-12-31"
-            onChange={(event) => event.target.value && onChange(event.target.value)}
+            onChange={(event) => selectDate(event.target.value)}
             aria-label="表示する日付を選択"
             className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
           />
@@ -35,7 +40,7 @@ export function DateNavigator({ dateKey, onChange }) {
 
         <button
           type="button"
-          onClick={() => onChange(shiftDateKey(dateKey, 1))}
+          onClick={() => selectDate(shiftDateKey(dateKey, 1))}
           aria-label="次の日へ"
           className="tap-target flex items-center justify-center rounded-[0.8rem] text-slate-500 transition hover:bg-white/80 hover:text-slate-700 active:bg-white"
         >
@@ -46,7 +51,7 @@ export function DateNavigator({ dateKey, onChange }) {
       {!todaySelected && (
         <button
           type="button"
-          onClick={() => onChange(today)}
+          onClick={() => selectDate(today)}
           className="mx-auto mt-0.5 flex min-h-11 items-center justify-center rounded-full px-4 text-[9px] font-semibold text-indigo-600 transition hover:bg-indigo-50 active:bg-indigo-100"
         >
           今日に戻る
