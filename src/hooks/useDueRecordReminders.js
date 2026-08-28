@@ -67,7 +67,7 @@ async function showBrowserNotification(schedule, dateKey) {
   }
 }
 
-export function useDueRecordReminders({ schedules, dateKey, preferences }) {
+export function useDueRecordReminders({ schedules, dateKey, scheduleDays, preferences }) {
   const [now, setNow] = useState(() => new Date());
   const sessionNotifiedRef = useRef(new Set());
 
@@ -101,13 +101,19 @@ export function useDueRecordReminders({ schedules, dateKey, preferences }) {
   );
   const todayKey = dateKeyFromDate(now);
   const previousDateKey = shiftDateKey(todayKey, -1);
+  const schedulesForDate = (targetDateKey) => {
+    if (dateKey === targetDateKey) return schedules;
+    const inMemory = scheduleDays?.[targetDateKey];
+    if (Array.isArray(inMemory)) return inMemory;
+    return readSchedulesForDate(targetDateKey);
+  };
   const todaySchedules = useMemo(
-    () => dateKey === todayKey ? schedules : readSchedulesForDate(todayKey),
-    [dateKey, now, schedules, todayKey],
+    () => schedulesForDate(todayKey),
+    [dateKey, scheduleDays, schedules, todayKey],
   );
   const previousSchedules = useMemo(
-    () => dateKey === previousDateKey ? schedules : readSchedulesForDate(previousDateKey),
-    [dateKey, now, previousDateKey, schedules],
+    () => schedulesForDate(previousDateKey),
+    [dateKey, previousDateKey, scheduleDays, schedules],
   );
   const notificationCandidates = useMemo(() => [
     ...getDuePendingSchedules(todaySchedules, todayKey, now, preferences)
