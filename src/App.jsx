@@ -41,6 +41,9 @@ function createScheduleId() {
 }
 function instantiatePlans(source) { return source.map((schedule) => createPendingScheduleCopy(schedule, createScheduleId())); }
 function scheduleRevisionKey(schedule) { return schedule ? JSON.stringify(schedule) : 'none'; }
+function timeKeyFromDate(date) {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
 
 const LOCAL_STORAGE_KEYS = Object.freeze([
   STORAGE_KEY,
@@ -81,16 +84,18 @@ export default function App() {
   } = useExperiments();
   const { preferences: reminderPreferences, setPreferences: setReminderPreferences, replacePreferences: replaceReminderPreferences } = useReminderPreferences();
   const { canInstall, isInstalled, install } = usePwaInstall();
-  const todayKey = dateKeyFromDate();
+  const observationNow = new Date();
+  const todayKey = dateKeyFromDate(observationNow);
+  const observationTime = timeKeyFromDate(observationNow);
   const dueSchedules = useDueRecordReminders({ schedules, dateKey: selectedDate, preferences: reminderPreferences });
   const stats = useMemo(() => calculateStats(schedules), [schedules]);
   const weeklyInsights = useMemo(
-    () => calculateWeeklyInsights(store.days, selectedDate, todayKey),
-    [selectedDate, store.days, todayKey],
+    () => calculateWeeklyInsights(store.days, selectedDate, todayKey, observationTime),
+    [observationTime, selectedDate, store.days, todayKey],
   );
   const monthlyInsights = useMemo(
-    () => calculateMonthlyInsights(store.days, selectedDate, todayKey),
-    [selectedDate, store.days, todayKey],
+    () => calculateMonthlyInsights(store.days, selectedDate, todayKey, observationTime),
+    [observationTime, selectedDate, store.days, todayKey],
   );
   const longitudinalInsights = useMemo(() => calculateLongitudinalInsights(store.days, selectedDate), [selectedDate, store.days]);
   const previousTodayKeyRef = useRef(todayKey);
