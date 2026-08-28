@@ -305,6 +305,8 @@ export function useExperiments() {
   const startRevalidation = useCallback((sourceExperimentId, retentionSummary, options = {}) => {
     const today = dateKeyFromDate();
     if (!retentionSummary?.reviewCandidate || retentionSummary.throughDateKey !== today) return false;
+    const sourceRevision = typeof options.sourceRevision === 'string' ? options.sourceRevision : null;
+    if (!sourceRevision) return false;
 
     const contextRule = options.contextRule === undefined || options.contextRule === null
       ? null
@@ -314,17 +316,19 @@ export function useExperiments() {
       ? buildContextualRetentionBaseline(contextRule, retentionSummary, options.days)
       : null;
     if (contextRule && !contextBaseline?.ok) return false;
+    const { sourceRevision: ignoredSourceRevision, ...creationOptions } = options;
+    void ignoredSourceRevision;
 
     return updateExperiments((current) => {
       const source = current.find((experiment) => experiment.id === sourceExperimentId);
-      if (!source) return null;
+      if (!source || JSON.stringify(source) !== sourceRevision) return null;
       const rootId = source.learningRootId || source.id;
       if (current.some((experiment) => (
         experiment.status === 'active' && (experiment.learningRootId || experiment.id) === rootId
       ))) return null;
 
       const experiment = createRevalidationExperiment(source, retentionSummary, {
-        ...options,
+        ...creationOptions,
         contextRule,
         contextBaseline,
         id: createUniqueId('experiment', current.map((item) => item.id)),
