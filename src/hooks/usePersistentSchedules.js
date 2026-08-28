@@ -83,6 +83,12 @@ function dayRevision(schedules) {
   return JSON.stringify(Array.isArray(schedules) ? schedules : []);
 }
 
+function dirtyDatesChanged(leftStore, rightStore, dirtyDateKeys) {
+  return dirtyDateKeys.filter((key) => (
+    dayRevision(leftStore.days[key] ?? []) !== dayRevision(rightStore.days[key] ?? [])
+  ));
+}
+
 export function usePersistentSchedules(dateKey) {
   const [state, setState] = useState(loadScheduleState);
   const stateRef = useRef(state);
@@ -111,18 +117,22 @@ export function usePersistentSchedules(dateKey) {
     if (persistenceBlocked || writeConflict || !needsWrite) return;
     let persistedStore = store;
     try {
-      if (dirtyDateKeys.length > 0) {
-        const latest = parseStoredScheduleStoreResult(window.localStorage.getItem(STORAGE_KEY));
-        if (!latest.ok) {
-          applyState((current) => ({
-            ...current,
-            persistenceBlocked: true,
-            unsupportedVersion: latest.unsupportedVersion,
-            needsWrite: false,
-          }));
-          return;
-        }
+      // Final synchronous preflight immediately before the write. This closes the
+      // wider read -> render/effect window and prevents overwriting a storage
+      // change that arrived after the mutation was accepted but before commit.
+      const latestRaw = window.localStorage.getItem(STORAGE_KEY);
+      const latest = parseStoredScheduleStoreResult(latestRaw);
+      if (!latest.ok) {
+        applyState((current) => ({
+          ...current,
+          persistenceBlocked: true,
+          unsupportedVersion: latest.unsupportedVersion,
+          needsWrite: false,
+        }));
+        return;
+      }
 
+      if (dirtyDateKeys.length > 0) {
         const merged = mergeScheduleStoreWrite(latest.store, store, dirtyDateKeys, baseDays);
         if (!merged.ok) {
           applyState((current) => ({
@@ -135,15 +145,82 @@ export function usePersistentSchedules(dateKey) {
           return;
         }
         persistedStore = merged.store;
+      } else if (latestRaw !== null) {
+        // A no-dirty write is only the one-time legacy migration. If another tab
+        // created a versioned store first, never replace it with this tab's older
+        // migration snapshot. Identical content means the other tab already did
+        // the same migration and can be accepted as durable.
+        if (JSON.stringify(latest.store) !== JSON.stringify(store)) {
+          applyState((current) => ({
+            ...current,
+            writeConflict: true,
+            conflictDateKeys: [],
+            writeFailed: false,
+            needsWrite: false,
+          }));
+          return;
+        }
+        persistedStore = latest.store;
       }
 
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persistedStore));
+      const beforeWriteSerialized = JSON.stringify(latest.store);
+      const writtenSerialized = JSON.stringify(persistedStore);
+      if (latestRaw === null || latestRaw !== writtenSerialized) {
+        window.localStorage.setItem(STORAGE_KEY, writtenSerialized);
+      }
+
+      // setItem returning is not enough to claim durability. Read back the exact
+      // store immediately. If a concurrent tab replaced only non-dirty days after
+      // our write, preserve that newer store; if any dirty day differs, freeze in
+      // conflict mode rather than reporting a false successful save.
+      const readBack = parseStoredScheduleStoreResult(window.localStorage.getItem(STORAGE_KEY));
+      if (!readBack.ok) {
+        applyState((current) => ({
+          ...current,
+          persistenceBlocked: true,
+          unsupportedVersion: readBack.unsupportedVersion,
+          needsWrite: false,
+        }));
+        return;
+      }
+      const readBackSerialized = JSON.stringify(readBack.store);
+      if (dirtyDateKeys.length > 0) {
+        const changedDirtyDates = dirtyDatesChanged(readBack.store, persistedStore, dirtyDateKeys);
+        if (changedDirtyDates.length > 0) {
+          if (readBackSerialized === beforeWriteSerialized) {
+            applyState((current) => ({ ...current, writeFailed: true }));
+          } else {
+            applyState((current) => ({
+              ...current,
+              writeConflict: true,
+              conflictDateKeys: changedDirtyDates,
+              writeFailed: false,
+              needsWrite: false,
+            }));
+          }
+          return;
+        }
+        persistedStore = readBack.store;
+      } else if (readBackSerialized !== writtenSerialized) {
+        if (readBackSerialized === beforeWriteSerialized) {
+          applyState((current) => ({ ...current, writeFailed: true }));
+        } else {
+          applyState((current) => ({
+            ...current,
+            writeConflict: true,
+            conflictDateKeys: [],
+            writeFailed: false,
+            needsWrite: false,
+          }));
+        }
+        return;
+      }
     } catch {
       applyState((current) => current.writeFailed ? current : { ...current, writeFailed: true });
       return;
     }
 
-    // The primary versioned store is already durable at this point. Commit the
+    // The primary versioned store is read-back verified at this point. Commit the
     // successful write before attempting to remove an obsolete legacy key, so a
     // cleanup-only failure cannot make the next retry conflict with our own data.
     applyState((current) => {
