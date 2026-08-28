@@ -83,7 +83,35 @@ export function useScheduleTemplates() {
       }
 
       const writtenSerialized = serializeTemplates(templates);
+      // Re-check immediately before setItem so a storage change that arrived
+      // after the first preflight is never overwritten as if nothing happened.
+      const preWrite = parseStoredTemplatesResult(window.localStorage.getItem(TEMPLATE_STORAGE_KEY));
+      if (!preWrite.ok) {
+        applyState((current) => ({ ...current, persistenceBlocked: true, needsWrite: false }));
+        return;
+      }
+      const preWriteSerialized = serializeTemplates(preWrite.templates);
+      if (preWriteSerialized !== latestSerialized) {
+        applyState((current) => ({ ...current, writeConflict: true, writeFailed: false, needsWrite: false }));
+        return;
+      }
+
       window.localStorage.setItem(TEMPLATE_STORAGE_KEY, writtenSerialized);
+      const readBack = parseStoredTemplatesResult(window.localStorage.getItem(TEMPLATE_STORAGE_KEY));
+      if (!readBack.ok) {
+        applyState((current) => ({ ...current, persistenceBlocked: true, needsWrite: false }));
+        return;
+      }
+      const readBackSerialized = serializeTemplates(readBack.templates);
+      if (readBackSerialized !== writtenSerialized) {
+        if (readBackSerialized === preWriteSerialized) {
+          applyState((current) => ({ ...current, writeFailed: true }));
+        } else {
+          applyState((current) => ({ ...current, writeConflict: true, writeFailed: false, needsWrite: false }));
+        }
+        return;
+      }
+
       applyState((current) => {
         const currentSerialized = serializeTemplates(current.templates);
         const changedAgain = currentSerialized !== writtenSerialized;
