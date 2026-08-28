@@ -25,6 +25,19 @@ test('service worker scopes runtime caching, awaits writes and bounds old hashed
   assert.match(worker, /Response\.error\(\)/);
 });
 
+test('navigation caching uses canonical app-shell keys instead of accumulating query-specific HTML snapshots', async () => {
+  const worker = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
+  assert.match(worker, /async function putNavigationResponse\(response\)/);
+  assert.match(worker, /cache\.put\(scopeUrl\.href, response\.clone\(\)\)/);
+  assert.match(worker, /cache\.put\(indexUrl\.href, response\.clone\(\)\)/);
+  const navigationStart = worker.indexOf("if (request.mode === 'navigate')");
+  const navigationEnd = worker.indexOf("event.respondWith((async () => {", navigationStart + 1);
+  const navigationBlock = worker.slice(navigationStart, navigationEnd);
+  assert.match(navigationBlock, /await putNavigationResponse\(response\)/);
+  assert.doesNotMatch(navigationBlock, /cache\.match\(request\)/);
+  assert.doesNotMatch(navigationBlock, /putResponse\(request, response\)/);
+});
+
 test('PWA install prompt is consumed before awaiting and cannot reject into the UI event loop', async () => {
   const hook = await readFile(new URL('../src/hooks/usePwaInstall.js', import.meta.url), 'utf8');
   const inFlightGuard = hook.indexOf('if (!promptEvent || installInFlightRef.current) return null;');
