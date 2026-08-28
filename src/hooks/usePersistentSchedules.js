@@ -211,14 +211,58 @@ export function usePersistentSchedules(dateKey) {
     return () => window.removeEventListener('storage', syncFromStorage);
   }, [applyState]);
 
-  // Apply UI mutations synchronously against the latest hook state so callers
-  // know whether a save was actually accepted before closing their editor.
+  const latestStateBeforeMutation = useCallback(() => {
+    const current = stateRef.current;
+    if (current.persistenceBlocked || current.writeConflict) return null;
+    // The only whole-store write with no dirty dates is the known legacy
+    // migration. Preserve that in-memory migration until its write effect runs.
+    if (current.needsWrite && current.dirtyDateKeys.length === 0) return current;
+    try {
+      const latest = parseStoredScheduleStoreResult(window.localStorage.getItem(STORAGE_KEY));
+      if (!latest.ok) {
+        applyState({
+          ...current,
+          persistenceBlocked: true,
+          unsupportedVersion: latest.unsupportedVersion,
+          needsWrite: false,
+        });
+        return null;
+      }
+      const merged = mergeScheduleStoreWrite(
+        latest.store,
+        current.store,
+        current.dirtyDateKeys,
+        current.baseDays,
+      );
+      if (!merged.ok) {
+        applyState({
+          ...current,
+          writeConflict: true,
+          conflictDateKeys: merged.conflictDateKeys,
+          writeFailed: false,
+          needsWrite: false,
+        });
+        return null;
+      }
+      return { ...current, store: merged.store, writeFailed: false };
+    } catch {
+      applyState({ ...current, persistenceBlocked: true, needsWrite: false });
+      return null;
+    }
+  }, [applyState]);
+
+  // Apply UI mutations synchronously against both the latest hook state and the
+  // latest readable device store. This catches a remote write even if its
+  // storage event has not been delivered to React yet.
   const setSchedules = useCallback((nextValue) => {
-    const currentState = stateRef.current;
-    if (currentState.persistenceBlocked || currentState.writeConflict) return false;
+    const currentState = latestStateBeforeMutation();
+    if (!currentState) return false;
     const currentDay = currentState.store.days[dateKey] ?? [];
     const nextDay = typeof nextValue === 'function' ? nextValue(currentDay) : nextValue;
-    if (!Array.isArray(nextDay)) return false;
+    if (!Array.isArray(nextDay)) {
+      if (currentState !== stateRef.current) applyState(currentState);
+      return false;
+    }
     const result = parseStoredScheduleStoreResult(JSON.stringify({
       version: STORAGE_VERSION,
       days: { [dateKey]: nextDay },
@@ -244,15 +288,11 @@ export function usePersistentSchedules(dateKey) {
     };
     applyState(nextState);
     return true;
-  }, [applyState, dateKey]);
+  }, [applyState, dateKey, latestStateBeforeMutation]);
 
   const clearDay = useCallback(() => {
-    const currentState = stateRef.current;
-    if (
-      currentState.persistenceBlocked
-      || currentState.writeConflict
-      || !(dateKey in currentState.store.days)
-    ) return false;
+    const currentState = latestStateBeforeMutation();
+    if (!currentState || !(dateKey in currentState.store.days)) return false;
     const currentDay = currentState.store.days[dateKey] ?? [];
     const days = { ...currentState.store.days };
     delete days[dateKey];
@@ -270,7 +310,7 @@ export function usePersistentSchedules(dateKey) {
     };
     applyState(nextState);
     return true;
-  }, [applyState, dateKey]);
+  }, [applyState, dateKey, latestStateBeforeMutation]);
 
   const replaceStore = useCallback((nextStore) => {
     const result = parseStoredScheduleStoreResult(JSON.stringify(nextStore));
