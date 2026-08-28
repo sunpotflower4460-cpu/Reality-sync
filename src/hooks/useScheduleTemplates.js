@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { TEMPLATE_STORAGE_KEY } from '../constants.js';
+import { createUniqueId, hasDuplicateIds } from '../utils/id.js';
 import { createTemplateFromSchedules, normalizeTemplates, parseStoredTemplatesResult } from '../utils/template.js';
-
-function createTemplateId() {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-  return `template-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
 
 function loadTemplateState() {
   if (typeof window === 'undefined') return { templates: [], persistenceBlocked: false };
@@ -44,24 +40,32 @@ export function useScheduleTemplates() {
     setState((current) => {
       if (current.persistenceBlocked) return current;
       const next = typeof updater === 'function' ? updater(current.templates) : updater;
-      return { ...current, templates: normalizeTemplates(next) };
+      if (!Array.isArray(next) || hasDuplicateIds(next)) return current;
+      const normalized = normalizeTemplates(next);
+      if (normalized.length !== next.length) return current;
+      return { ...current, templates: normalized };
     });
   }, []);
 
   const saveTemplate = useCallback((name, schedules) => {
     if (persistenceBlocked) return false;
-    const template = createTemplateFromSchedules(name, schedules, createTemplateId());
+    const id = createUniqueId('template', templates.map((template) => template.id));
+    const template = createTemplateFromSchedules(name, schedules, id);
     if (!template) return false;
-    updateTemplates((current) => [...current, template]);
+    updateTemplates((current) => [template, ...current]);
     return true;
-  }, [persistenceBlocked, updateTemplates]);
+  }, [persistenceBlocked, templates, updateTemplates]);
 
   const deleteTemplate = useCallback((templateId) => {
     updateTemplates((current) => current.filter((template) => template.id !== templateId));
   }, [updateTemplates]);
 
   const replaceTemplates = useCallback((nextTemplates) => {
-    setState({ templates: normalizeTemplates(nextTemplates), persistenceBlocked: false });
+    const candidate = Array.isArray(nextTemplates) ? nextTemplates : [];
+    if (hasDuplicateIds(candidate)) return;
+    const normalized = normalizeTemplates(candidate);
+    if (normalized.length !== candidate.length) return;
+    setState({ templates: normalized, persistenceBlocked: false });
   }, []);
 
   return {
