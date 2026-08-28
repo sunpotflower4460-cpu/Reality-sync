@@ -83,6 +83,13 @@ export function usePersistentSchedules(dateKey) {
   const [state, setState] = useState(loadScheduleState);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const applyState = useCallback((updater) => {
+    const current = stateRef.current;
+    const next = typeof updater === 'function' ? updater(current) : updater;
+    stateRef.current = next;
+    setState(next);
+    return next;
+  }, []);
   const {
     store,
     persistenceBlocked,
@@ -103,7 +110,7 @@ export function usePersistentSchedules(dateKey) {
       if (dirtyDateKeys.length > 0) {
         const latest = parseStoredScheduleStoreResult(window.localStorage.getItem(STORAGE_KEY));
         if (!latest.ok) {
-          setState((current) => ({
+          applyState((current) => ({
             ...current,
             persistenceBlocked: true,
             unsupportedVersion: latest.unsupportedVersion,
@@ -114,7 +121,7 @@ export function usePersistentSchedules(dateKey) {
 
         const merged = mergeScheduleStoreWrite(latest.store, store, dirtyDateKeys, baseDays);
         if (!merged.ok) {
-          setState((current) => ({
+          applyState((current) => ({
             ...current,
             writeConflict: true,
             conflictDateKeys: merged.conflictDateKeys,
@@ -129,7 +136,7 @@ export function usePersistentSchedules(dateKey) {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persistedStore));
       window.localStorage.removeItem(LEGACY_STORAGE_KEY);
 
-      setState((current) => {
+      applyState((current) => {
         const written = new Set(dirtyDateKeys);
         const remainingDirty = current.dirtyDateKeys.filter((key) => !written.has(key));
         const remainingBaseDays = Object.fromEntries(
@@ -147,15 +154,15 @@ export function usePersistentSchedules(dateKey) {
         };
       });
     } catch {
-      setState((current) => current.writeFailed ? current : { ...current, writeFailed: true });
+      applyState((current) => current.writeFailed ? current : { ...current, writeFailed: true });
     }
-  }, [baseDays, dirtyDateKeys, needsWrite, persistenceBlocked, store, writeConflict]);
+  }, [applyState, baseDays, dirtyDateKeys, needsWrite, persistenceBlocked, store, writeConflict]);
 
   useEffect(() => {
     const syncFromStorage = (event) => {
       if (event.key !== STORAGE_KEY) return;
       const result = parseStoredScheduleStoreResult(event.newValue);
-      setState((current) => {
+      applyState((current) => {
         if (!result.ok) {
           return {
             ...current,
@@ -202,7 +209,7 @@ export function usePersistentSchedules(dateKey) {
 
     window.addEventListener('storage', syncFromStorage);
     return () => window.removeEventListener('storage', syncFromStorage);
-  }, []);
+  }, [applyState]);
 
   // Apply UI mutations synchronously against the latest hook state so callers
   // know whether a save was actually accepted before closing their editor.
@@ -235,10 +242,9 @@ export function usePersistentSchedules(dateKey) {
         },
       },
     };
-    stateRef.current = nextState;
-    setState(nextState);
+    applyState(nextState);
     return true;
-  }, [dateKey]);
+  }, [applyState, dateKey]);
 
   const clearDay = useCallback(() => {
     const currentState = stateRef.current;
@@ -262,15 +268,14 @@ export function usePersistentSchedules(dateKey) {
         : { ...currentState.baseDays, [dateKey]: currentDay },
       store: { ...currentState.store, days },
     };
-    stateRef.current = nextState;
-    setState(nextState);
+    applyState(nextState);
     return true;
-  }, [dateKey]);
+  }, [applyState, dateKey]);
 
   const replaceStore = useCallback((nextStore) => {
     const result = parseStoredScheduleStoreResult(JSON.stringify(nextStore));
     if (!result.ok) return false;
-    const nextState = {
+    applyState({
       store: result.store,
       persistenceBlocked: false,
       unsupportedVersion: null,
@@ -279,11 +284,9 @@ export function usePersistentSchedules(dateKey) {
       // state replacement, so do not echo a stale whole-store write on mount.
       needsWrite: false,
       ...initialWriteTracking(),
-    };
-    stateRef.current = nextState;
-    setState(nextState);
+    });
     return true;
-  }, []);
+  }, [applyState]);
 
   return {
     schedules,
