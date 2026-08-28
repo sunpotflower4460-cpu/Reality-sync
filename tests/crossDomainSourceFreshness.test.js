@@ -6,6 +6,17 @@ function source(relativePath) {
   return readFileSync(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 }
 
+test('schedule source resolver preflights device storage and requires the exact reviewed day revision', () => {
+  const hook = source('src/hooks/usePersistentSchedules.js');
+  const start = hook.indexOf('const resolveSchedulesForMutation');
+  const end = hook.indexOf('const clearDay', start);
+  const block = hook.slice(start, end);
+  assert.match(block, /const currentState = latestStateBeforeMutation\(\)/);
+  assert.match(block, /const latestDay = currentState\.store\.days\[dateKey\] \?\? \[\]/);
+  assert.match(block, /dayRevision\(latestDay\) === expectedRevision/);
+  assert.match(block, /return revisionMatches \? latestDay : null/);
+});
+
 test('template source resolver preflights device storage and requires the exact reviewed revision', () => {
   const hook = source('src/hooks/useScheduleTemplates.js');
   const start = hook.indexOf('const resolveTemplateForMutation');
@@ -28,10 +39,13 @@ test('experiment source resolver preflights device storage and requires the exac
   assert.match(block, /return revisionMatches \? experiment : null/);
 });
 
-test('cross-domain planning writes resolve source freshness before mutating schedules', () => {
+test('cross-domain planning writes resolve source freshness before mutating another domain', () => {
   const app = source('src/App.jsx');
+  const saveTemplateBlock = app.slice(app.indexOf('const saveCurrentDayAsTemplate'), app.indexOf('const applyTemplate'));
   const templateBlock = app.slice(app.indexOf('const applyTemplate'), app.indexOf('const applySelectedPlanFeedback'));
   const feedbackBlock = app.slice(app.indexOf('const applySelectedPlanFeedback'), app.indexOf('const restoreBackup'));
+  assert.match(saveTemplateBlock, /resolveSchedulesForMutation\(dayRevisionKey\(schedules\)\)/);
+  assert.match(saveTemplateBlock, /saveTemplate\(name, sourceSchedules\)/);
   assert.match(templateBlock, /resolveTemplateForMutation\(template\.id, templateRevision\)/);
   assert.match(templateBlock, /if \(!latestTemplate\) return false;/);
   assert.match(feedbackBlock, /resolveExperimentForMutation\(/);
