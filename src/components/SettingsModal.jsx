@@ -111,6 +111,12 @@ export function SettingsModal({
       return;
     }
     const text = serializeBackup({ store, templates, experiments, reminderPreferences });
+    const byteLength = new TextEncoder().encode(text).byteLength;
+    if (byteLength > MAX_BACKUP_BYTES) {
+      setMessage('');
+      setError('現在のバックアップ上限10MBを超えているため、この状態では書き出せません。');
+      return;
+    }
 
     if (isNativeShell) {
       const handler = nativeMessageHandler('realitySyncBackupExport');
