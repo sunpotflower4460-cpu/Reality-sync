@@ -30,13 +30,13 @@ test('duplicate entity ids are detectable before normalization can drop an item'
   assert.equal(hasDuplicateIds([{ id: 1 }, { id: '1' }]), true);
 });
 
-test('schedule, template and experiment creation flows use collision-safe ids', () => {
+test('schedule, template and experiment creation flows use collision-safe ids and validated state updates', () => {
   const app = source('src/App.jsx');
   const templates = source('src/hooks/useScheduleTemplates.js');
   const experiments = source('src/hooks/useExperiments.js');
   assert.match(app, /createUniqueId\('schedule'/);
   assert.match(templates, /createUniqueId\('template'/);
   assert.match(experiments, /createUniqueId\('experiment'/);
-  assert.match(templates, /hasDuplicateIds\(next\)/);
-  assert.match(experiments, /hasDuplicateIds\(next\)/);
+  assert.match(templates, /parseStoredTemplatesResult\(JSON\.stringify\(next\)\)/);
+  assert.match(experiments, /parseStoredExperimentsForPersistence\(JSON\.stringify\(\{/);
 });
