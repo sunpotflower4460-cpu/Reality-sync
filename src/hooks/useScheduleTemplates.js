@@ -10,25 +10,26 @@ function validateTemplates(next) {
 }
 
 function loadTemplateState() {
-  if (typeof window === 'undefined') return { templates: [], persistenceBlocked: false };
+  if (typeof window === 'undefined') return { templates: [], persistenceBlocked: false, writeFailed: false };
   try {
     const result = parseStoredTemplatesResult(window.localStorage.getItem(TEMPLATE_STORAGE_KEY));
-    return { templates: result.templates, persistenceBlocked: !result.ok };
+    return { templates: result.templates, persistenceBlocked: !result.ok, writeFailed: false };
   } catch {
-    return { templates: [], persistenceBlocked: false };
+    return { templates: [], persistenceBlocked: false, writeFailed: true };
   }
 }
 
 export function useScheduleTemplates() {
   const [state, setState] = useState(loadTemplateState);
-  const { templates, persistenceBlocked } = state;
+  const { templates, persistenceBlocked, writeFailed } = state;
 
   useEffect(() => {
     if (persistenceBlocked) return;
     try {
       window.localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
+      setState((current) => current.writeFailed ? { ...current, writeFailed: false } : current);
     } catch {
-      // In-memory template mode remains usable when storage is unavailable.
+      setState((current) => current.writeFailed ? current : { ...current, writeFailed: true });
     }
   }, [persistenceBlocked, templates]);
 
@@ -36,7 +37,7 @@ export function useScheduleTemplates() {
     const syncTemplates = (event) => {
       if (event.key !== TEMPLATE_STORAGE_KEY) return;
       const result = parseStoredTemplatesResult(event.newValue);
-      setState({ templates: result.templates, persistenceBlocked: !result.ok });
+      setState({ templates: result.templates, persistenceBlocked: !result.ok, writeFailed: false });
     };
     window.addEventListener('storage', syncTemplates);
     return () => window.removeEventListener('storage', syncTemplates);
@@ -68,7 +69,7 @@ export function useScheduleTemplates() {
   const replaceTemplates = useCallback((nextTemplates) => {
     const validated = validateTemplates(Array.isArray(nextTemplates) ? nextTemplates : []);
     if (!validated) return;
-    setState({ templates: validated, persistenceBlocked: false });
+    setState({ templates: validated, persistenceBlocked: false, writeFailed: false });
   }, []);
 
   return {
@@ -76,6 +77,6 @@ export function useScheduleTemplates() {
     saveTemplate,
     deleteTemplate,
     replaceTemplates,
-    storageProtection: { persistenceBlocked },
+    storageProtection: { persistenceBlocked, writeFailed },
   };
 }
