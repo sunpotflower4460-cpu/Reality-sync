@@ -214,6 +214,10 @@ export function useExperiments() {
       if (event.key !== EXPERIMENT_STORAGE_KEY) return;
       const result = parseStoredExperimentsForPersistence(event.newValue);
       applyState((current) => {
+        // Conflict mode freezes the local learning history for rescue/export.
+        // Ignore later storage events, including malformed values, so recovery
+        // options cannot be disabled by remote activity after the conflict.
+        if (current.writeConflict) return current;
         if (!result.ok) {
           return {
             ...current,
@@ -240,7 +244,6 @@ export function useExperiments() {
             writeFailed: false,
           };
         }
-        if (current.writeConflict) return current;
         return {
           experiments: result.experiments,
           persistenceBlocked: false,
