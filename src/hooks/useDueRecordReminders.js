@@ -10,20 +10,44 @@ import {
 import { BACKUP_RESTORED_EVENT } from '../utils/restore.js';
 import { parseStoredScheduleStoreResult } from '../utils/storage.js';
 
+function normalizedStoredNotificationKeys(rawValue, dateKeys) {
+  let parsed;
+  try {
+    parsed = rawValue ? JSON.parse(rawValue) : [];
+  } catch {
+    parsed = [];
+  }
+  return [...new Set(dateKeys.flatMap((dateKey) => normalizeNotifiedReminderKeys(parsed, dateKey)))];
+}
+
 function readNotifiedKeys(dateKeys) {
   try {
-    const raw = window.localStorage.getItem(REMINDER_NOTIFIED_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return [...new Set(dateKeys.flatMap((dateKey) => normalizeNotifiedReminderKeys(parsed, dateKey)))];
+    return normalizedStoredNotificationKeys(
+      window.localStorage.getItem(REMINDER_NOTIFIED_STORAGE_KEY),
+      dateKeys,
+    );
   } catch {
     return [];
   }
 }
 
-function writeNotifiedKeys(keys) {
+function writeNotifiedKeys(keys, dateKeys) {
   try {
-    window.localStorage.setItem(REMINDER_NOTIFIED_STORAGE_KEY, JSON.stringify([...new Set(keys)]));
-    return true;
+    // Merge with the latest retained keys immediately before writing. Without
+    // this, two tabs notifying different schedules can each overwrite the
+    // other's dedupe key and make a previously shown notification eligible
+    // again on a later pass.
+    const latest = normalizedStoredNotificationKeys(
+      window.localStorage.getItem(REMINDER_NOTIFIED_STORAGE_KEY),
+      dateKeys,
+    );
+    const merged = [...new Set([...latest, ...keys])];
+    window.localStorage.setItem(REMINDER_NOTIFIED_STORAGE_KEY, JSON.stringify(merged));
+    const readBack = normalizedStoredNotificationKeys(
+      window.localStorage.getItem(REMINDER_NOTIFIED_STORAGE_KEY),
+      dateKeys,
+    );
+    return merged.every((key) => readBack.includes(key));
   } catch {
     return false;
   }
@@ -153,7 +177,9 @@ export function useDueRecordReminders({ schedules, dateKey, scheduleDays, prefer
         notified.add(key);
         // Persist when possible; the session ref remains authoritative for this
         // tab if storage is unavailable so the same alert is not sent every minute.
-        writeNotifiedKeys([...notified]);
+        // The write helper merges retained keys from other tabs before replacing
+        // the bounded today/yesterday cache.
+        writeNotifiedKeys([...notified], retainedDateKeys);
         if (cancelled) return;
       }
     };
