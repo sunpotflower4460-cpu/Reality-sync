@@ -125,7 +125,57 @@ export function useExperiments() {
       }
 
       const writtenSerialized = canonicalExperiments(experiments);
+      const preWrite = parseStoredExperimentsForPersistence(
+        window.localStorage.getItem(EXPERIMENT_STORAGE_KEY),
+      );
+      if (!preWrite.ok) {
+        applyState((current) => ({
+          ...current,
+          persistenceBlocked: true,
+          unsupportedVersion: preWrite.unsupportedVersion,
+          needsWrite: false,
+        }));
+        return;
+      }
+      const preWriteSerialized = canonicalExperiments(preWrite.experiments);
+      if (preWriteSerialized !== latestSerialized) {
+        applyState((current) => ({
+          ...current,
+          writeConflict: true,
+          writeFailed: false,
+          needsWrite: false,
+        }));
+        return;
+      }
+
       window.localStorage.setItem(EXPERIMENT_STORAGE_KEY, writtenSerialized);
+      const readBack = parseStoredExperimentsForPersistence(
+        window.localStorage.getItem(EXPERIMENT_STORAGE_KEY),
+      );
+      if (!readBack.ok) {
+        applyState((current) => ({
+          ...current,
+          persistenceBlocked: true,
+          unsupportedVersion: readBack.unsupportedVersion,
+          needsWrite: false,
+        }));
+        return;
+      }
+      const readBackSerialized = canonicalExperiments(readBack.experiments);
+      if (readBackSerialized !== writtenSerialized) {
+        if (readBackSerialized === preWriteSerialized) {
+          applyState((current) => ({ ...current, writeFailed: true }));
+        } else {
+          applyState((current) => ({
+            ...current,
+            writeConflict: true,
+            writeFailed: false,
+            needsWrite: false,
+          }));
+        }
+        return;
+      }
+
       applyState((current) => {
         const currentSerialized = canonicalExperiments(current.experiments);
         const changedAgain = currentSerialized !== writtenSerialized;
