@@ -165,12 +165,21 @@ export function useReminderPreferences() {
 
   useEffect(() => {
     const syncPreferences = (event) => {
-      if (event.key !== REMINDER_STORAGE_KEY) return;
+      if (event.key !== REMINDER_STORAGE_KEY && event.key !== null) return;
       const result = parseStoredReminderPreferencesResult(event.newValue);
       applyState((current) => {
         // Conflict mode is a rescue snapshot. Ignore every later storage event,
         // including malformed values, so backup export remains available.
         if (current.writeConflict) return current;
+        if (event.newValue === null && current.needsWrite) {
+          return {
+            ...current,
+            persistenceBlocked: false,
+            writeConflict: true,
+            writeFailed: false,
+            needsWrite: false,
+          };
+        }
         if (!result.ok) {
           return { ...current, persistenceBlocked: true };
         }
