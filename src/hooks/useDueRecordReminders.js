@@ -119,6 +119,21 @@ export function useDueRecordReminders({ schedules, dateKey, scheduleDays, prefer
     return () => window.removeEventListener(BACKUP_RESTORED_EVENT, resetAfterRestore);
   }, []);
 
+  useEffect(() => {
+    const resetAfterExternalRestore = (event) => {
+      // Backup restore/erase removes the persisted notification ledger. Storage
+      // events do not fire in the tab that performed the change (handled by the
+      // custom event above), but they do fire in other open tabs. Clear the
+      // per-tab session ledger there too so restored schedules with the same
+      // date/id are not incorrectly treated as already notified.
+      if (event.key !== REMINDER_NOTIFIED_STORAGE_KEY || event.newValue !== null) return;
+      sessionNotifiedRef.current.clear();
+      setNow(new Date());
+    };
+    window.addEventListener('storage', resetAfterExternalRestore);
+    return () => window.removeEventListener('storage', resetAfterExternalRestore);
+  }, []);
+
   const dueSchedules = useMemo(
     () => getDuePendingSchedules(schedules, dateKey, now, preferences),
     [dateKey, now, preferences, schedules],
