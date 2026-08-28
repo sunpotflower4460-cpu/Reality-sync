@@ -28,6 +28,20 @@ test('known legacy stores still opt into the one required migration write', () =
   assert.match(experiments, /raw\.trimStart\(\)\.startsWith\('\['\)/);
 });
 
+test('successful primary schedule persistence is committed before best-effort legacy cleanup', () => {
+  const schedules = source('src/hooks/usePersistentSchedules.js');
+  const write = schedules.indexOf('window.localStorage.setItem(STORAGE_KEY');
+  const commitComment = schedules.indexOf('The primary versioned store is already durable at this point.', write);
+  const stateCommit = schedules.indexOf('applyState((current) => {', commitComment);
+  const legacyCleanup = schedules.indexOf('window.localStorage.removeItem(LEGACY_STORAGE_KEY)', stateCommit);
+  const cleanupCatch = schedules.indexOf('Legacy data is ignored whenever the versioned store exists.', legacyCleanup);
+  assert.ok(write >= 0);
+  assert.ok(commitComment > write);
+  assert.ok(stateCommit > commitComment);
+  assert.ok(legacyCleanup > stateCommit);
+  assert.ok(cleanupCatch > legacyCleanup);
+});
+
 test('backup restore and erase state replacements do not echo whole-store writes', () => {
   const schedules = source('src/hooks/usePersistentSchedules.js');
   const templates = source('src/hooks/useScheduleTemplates.js');
