@@ -33,19 +33,28 @@ test('record and plan editors recheck their opening revision inside the atomic d
   assert.match(deleteSchedule, /if \(!accepted\) return false;/);
 });
 
-test('destructive day replacements abort if the day changed while confirmation was open', () => {
+test('destructive day replacements abort if target or reviewed source changed while confirmation was open', () => {
   const app = source('src/App.jsx');
   const copy = app.slice(app.indexOf('const copyPreviousDay'), app.indexOf('const applyTemplate'));
   const template = app.slice(app.indexOf('const applyTemplate'), app.indexOf('const applySelectedPlanFeedback'));
-  assert.match(copy, /const baseRevision = dayRevisionKey\(schedules\)/);
-  assert.match(copy, /dayRevisionKey\(current\) === baseRevision \? instantiatePlans\(previousSchedules\) : null/);
-  assert.match(template, /const baseRevision = dayRevisionKey\(schedules\)/);
-  assert.match(template, /dayRevisionKey\(current\) === baseRevision \? instantiatePlans\(template\.schedules\) : null/);
+
+  assert.match(copy, /const targetRevision = dayRevisionKey\(schedules\)/);
+  assert.match(copy, /const sourceRevision = dayRevisionKey\(previousSchedules\)/);
+  assert.match(copy, /setSchedules\(\(current, latestStore\) =>/);
+  assert.match(copy, /dayRevisionKey\(current\) !== targetRevision/);
+  assert.match(copy, /dayRevisionKey\(latestSource\) !== sourceRevision/);
+  assert.match(copy, /instantiatePlans\(latestSource\)/);
+
+  assert.match(template, /const targetRevision = dayRevisionKey\(schedules\)/);
+  assert.match(template, /const templateRevision = entityRevisionKey\(template\)/);
+  assert.match(template, /resolveTemplateForMutation\(template\.id, templateRevision\)/);
+  assert.match(template, /dayRevisionKey\(current\) === targetRevision \? instantiatePlans\(latestTemplate\.schedules\) : null/);
 });
 
 test('plan feedback is recomputed against the latest atomic day rather than a stale rendered schedule list', () => {
   const app = source('src/App.jsx');
   const block = app.slice(app.indexOf('const applySelectedPlanFeedback'), app.indexOf('const restoreBackup'));
+  assert.match(block, /resolveExperimentForMutation\(/);
   assert.match(block, /const accepted = setSchedules\(\(current\) =>/);
   assert.match(block, /createUniqueId\('schedule', current\.map\(\(schedule\) => schedule\.id\)\)/);
   assert.match(block, /applyPlanFeedback\(\s*experiment,\s*selectedDate,\s*current,/s);
