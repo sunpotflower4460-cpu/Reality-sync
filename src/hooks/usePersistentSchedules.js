@@ -79,6 +79,10 @@ function overlayDirtyDays(baseStore, localStore, dirtyDateKeys) {
   return { version: STORAGE_VERSION, days };
 }
 
+function dayRevision(schedules) {
+  return JSON.stringify(Array.isArray(schedules) ? schedules : []);
+}
+
 export function usePersistentSchedules(dateKey) {
   const [state, setState] = useState(loadScheduleState);
   const stateRef = useRef(state);
@@ -305,6 +309,18 @@ export function usePersistentSchedules(dateKey) {
     return true;
   }, [applyState, dateKey, latestStateBeforeMutation]);
 
+  // Template creation crosses from the schedule domain into template storage.
+  // Re-read/merge the schedule store first and only expose the selected day when
+  // it is still exactly the revision shown to the user.
+  const resolveSchedulesForMutation = useCallback((expectedRevision) => {
+    const currentState = latestStateBeforeMutation();
+    if (!currentState) return null;
+    const latestDay = currentState.store.days[dateKey] ?? [];
+    const revisionMatches = dayRevision(latestDay) === expectedRevision;
+    if (currentState !== stateRef.current) applyState(currentState);
+    return revisionMatches ? latestDay : null;
+  }, [applyState, dateKey, latestStateBeforeMutation]);
+
   const clearDay = useCallback(() => {
     const currentState = latestStateBeforeMutation();
     if (!currentState || !(dateKey in currentState.store.days)) return false;
@@ -346,6 +362,7 @@ export function usePersistentSchedules(dateKey) {
   return {
     schedules,
     setSchedules,
+    resolveSchedulesForMutation,
     clearDay,
     store,
     replaceStore,
