@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { EXPERIMENT_STORAGE_KEY } from '../constants.js';
+import { EXPERIMENT_STORAGE_KEY, EXPERIMENT_STORAGE_VERSION } from '../constants.js';
 import { buildContextualRetentionBaseline, normalizeContextRule } from '../utils/contextRule.js';
 import { dateKeyFromDate, shiftDateKey } from '../utils/date.js';
 import {
@@ -9,7 +9,6 @@ import {
   createRevalidationExperiment,
   finishExperiment,
   nextLearningVersion,
-  normalizeExperiments,
   removeExperimentTrial,
   serializeExperiments,
 } from '../utils/experiment.js';
@@ -18,9 +17,10 @@ import { createUniqueId, hasDuplicateIds } from '../utils/id.js';
 
 function validatedExperiments(next) {
   if (!Array.isArray(next) || hasDuplicateIds(next)) return null;
-  const normalized = normalizeExperiments(next);
-  if (normalized.length !== next.length) return null;
-  const result = parseStoredExperimentsForPersistence(serializeExperiments(normalized));
+  const result = parseStoredExperimentsForPersistence(JSON.stringify({
+    version: EXPERIMENT_STORAGE_VERSION,
+    experiments: next,
+  }));
   return result.ok ? result.experiments : null;
 }
 
