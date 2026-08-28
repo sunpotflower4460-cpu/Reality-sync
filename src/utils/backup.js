@@ -40,20 +40,25 @@ function experimentLineageValid(experiments) {
 }
 
 function appliedExperimentReferencesValid(scheduleStore, templates, experiments) {
-  const adoptedIds = new Set(experiments
-    .filter((experiment) => (
-      experiment.status === EXPERIMENT_STATUS.COMPLETED
-      && experiment.decision === EXPERIMENT_DECISION.ADOPT
-    ))
-    .map((experiment) => experiment.id));
-
+  const byId = new Map(experiments.map((experiment) => [experiment.id, experiment]));
   const rows = [
     ...Object.values(scheduleStore.days).flat(),
     ...templates.flatMap((template) => template.schedules),
   ];
+
   return rows.every((row) => (
     Array.isArray(row.appliedExperimentIds)
-    && row.appliedExperimentIds.every((id) => adoptedIds.has(id))
+    && row.appliedExperimentIds.every((id) => {
+      const experiment = byId.get(id);
+      // Older releases allowed an adopted leaf experiment to be deleted while
+      // schedules/templates kept its applied marker. Preserve that opaque legacy
+      // provenance instead of making a real historical backup unrestorable.
+      if (!experiment) return true;
+      // If the referenced experiment is present, however, its lifecycle is known
+      // and must agree with what an applied marker means.
+      return experiment.status === EXPERIMENT_STATUS.COMPLETED
+        && experiment.decision === EXPERIMENT_DECISION.ADOPT;
+    })
   ));
 }
 
