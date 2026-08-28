@@ -5,6 +5,7 @@ import { isValidTime, normalizeSchedules } from './schedule.js';
 const VALID_STATUSES = new Set(Object.values(STATUS));
 const VALID_MOODS = new Set(Object.values(MOOD));
 const VALID_CATEGORIES = new Set(CATEGORIES);
+const STORE_FIELDS = new Set(['version', 'days']);
 const SCHEDULE_FIELDS = new Set([
   'id',
   'time',
@@ -152,6 +153,7 @@ export function normalizeScheduleStore(value) {
 }
 
 function storedScheduleShapePreserved(parsed) {
+  if (Object.keys(parsed).some((key) => !STORE_FIELDS.has(key))) return false;
   if (!parsed.days || typeof parsed.days !== 'object' || Array.isArray(parsed.days)) return false;
   for (const [dateKey, schedules] of Object.entries(parsed.days)) {
     if (!isValidDateKey(dateKey) || !Array.isArray(schedules)) return false;
