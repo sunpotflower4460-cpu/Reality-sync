@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { EXPERIMENT_STORAGE_KEY, EXPERIMENT_STORAGE_VERSION } from '../constants.js';
 import { buildContextualRetentionBaseline, normalizeContextRule } from '../utils/contextRule.js';
 import { dateKeyFromDate, shiftDateKey } from '../utils/date.js';
@@ -69,6 +69,8 @@ function loadExperimentState() {
 
 export function useExperiments() {
   const [state, setState] = useState(loadExperimentState);
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const {
     experiments,
     persistenceBlocked,
@@ -164,33 +166,36 @@ export function useExperiments() {
     return () => window.removeEventListener('storage', sync);
   }, []);
 
+  // User actions can fire more than once before React renders the first update.
+  // Keep a synchronous snapshot so a second click evaluates against the first
+  // accepted mutation rather than the stale render-time experiments array.
   const updateExperiments = useCallback((updater) => {
-    setState((current) => {
-      if (current.persistenceBlocked || current.writeConflict) return current;
-      const next = typeof updater === 'function' ? updater(current.experiments) : updater;
-      const validated = validatedExperiments(next);
-      if (!validated) return current;
-      return { ...current, experiments: validated, needsWrite: true };
-    });
+    const current = stateRef.current;
+    if (current.persistenceBlocked || current.writeConflict) return false;
+    const next = typeof updater === 'function' ? updater(current.experiments) : updater;
+    const validated = validatedExperiments(next);
+    if (!validated) return false;
+    const nextState = { ...current, experiments: validated, needsWrite: true };
+    stateRef.current = nextState;
+    setState(nextState);
+    return true;
   }, []);
 
-  const startExperiment = useCallback((candidate, options) => {
-    if (persistenceBlocked || writeConflict) return false;
-    const id = createUniqueId('experiment', experiments.map((experiment) => experiment.id));
-    const experiment = createExperimentFromCandidate(candidate, { ...options, id });
-    if (!experiment) return false;
-    updateExperiments((current) => [experiment, ...current]);
-    return true;
-  }, [experiments, persistenceBlocked, updateExperiments, writeConflict]);
+  const startExperiment = useCallback((candidate, options) => (
+    updateExperiments((current) => {
+      if (!candidate?.id) return null;
+      if (current.some((experiment) => (
+        experiment.status === 'active' && experiment.candidateId === candidate.id
+      ))) return null;
+      const id = createUniqueId('experiment', current.map((experiment) => experiment.id));
+      const experiment = createExperimentFromCandidate(candidate, { ...options, id });
+      return experiment ? [experiment, ...current] : null;
+    })
+  ), [updateExperiments]);
 
   const startRevalidation = useCallback((sourceExperimentId, retentionSummary, options = {}) => {
-    if (persistenceBlocked || writeConflict) return false;
     const today = dateKeyFromDate();
     if (!retentionSummary?.reviewCandidate || retentionSummary.throughDateKey !== today) return false;
-    const source = experiments.find((experiment) => experiment.id === sourceExperimentId);
-    if (!source) return false;
-    const rootId = source.learningRootId || source.id;
-    if (experiments.some((experiment) => experiment.status === 'active' && (experiment.learningRootId || experiment.id) === rootId)) return false;
 
     const contextRule = options.contextRule === undefined || options.contextRule === null
       ? null
@@ -201,46 +206,67 @@ export function useExperiments() {
       : null;
     if (contextRule && !contextBaseline?.ok) return false;
 
-    const experiment = createRevalidationExperiment(source, retentionSummary, {
-      ...options,
-      contextRule,
-      contextBaseline,
-      id: createUniqueId('experiment', experiments.map((item) => item.id)),
-      startDateKey: shiftDateKey(today, 1),
-      learningVersion: nextLearningVersion(experiments, source),
-      createdAt: new Date().toISOString(),
+    return updateExperiments((current) => {
+      const source = current.find((experiment) => experiment.id === sourceExperimentId);
+      if (!source) return null;
+      const rootId = source.learningRootId || source.id;
+      if (current.some((experiment) => (
+        experiment.status === 'active' && (experiment.learningRootId || experiment.id) === rootId
+      ))) return null;
+
+      const experiment = createRevalidationExperiment(source, retentionSummary, {
+        ...options,
+        contextRule,
+        contextBaseline,
+        id: createUniqueId('experiment', current.map((item) => item.id)),
+        startDateKey: shiftDateKey(today, 1),
+        learningVersion: nextLearningVersion(current, source),
+        createdAt: new Date().toISOString(),
+      });
+      return experiment ? [experiment, ...current] : null;
     });
-    if (!experiment) return false;
-    updateExperiments((current) => [experiment, ...current]);
-    return true;
-  }, [experiments, persistenceBlocked, updateExperiments, writeConflict]);
+  }, [updateExperiments]);
 
   const captureTrial = useCallback((experimentId, eligibleRecord) => {
-    updateExperiments((current) => current.map((experiment) => experiment.id === experimentId ? addExperimentTrial(experiment, eligibleRecord) : experiment));
+    return updateExperiments((current) => current.map((experiment) => (
+      experiment.id === experimentId ? addExperimentTrial(experiment, eligibleRecord) : experiment
+    )));
   }, [updateExperiments]);
 
   const removeTrial = useCallback((experimentId, recordKey) => {
-    updateExperiments((current) => current.map((experiment) => experiment.id === experimentId ? removeExperimentTrial(experiment, recordKey) : experiment));
+    return updateExperiments((current) => current.map((experiment) => (
+      experiment.id === experimentId ? removeExperimentTrial(experiment, recordKey) : experiment
+    )));
   }, [updateExperiments]);
 
   const finish = useCallback((experimentId, decision) => {
     const completedAt = new Date().toISOString();
     const decisionDateKey = dateKeyFromDate();
-    updateExperiments((current) => current.map((experiment) => experiment.id === experimentId ? finishExperiment(experiment, decision, completedAt, decisionDateKey) : experiment));
+    return updateExperiments((current) => current.map((experiment) => (
+      experiment.id === experimentId
+        ? finishExperiment(experiment, decision, completedAt, decisionDateKey)
+        : experiment
+    )));
   }, [updateExperiments]);
 
   const abandon = useCallback((experimentId) => {
-    updateExperiments((current) => current.map((experiment) => experiment.id === experimentId ? abandonExperiment(experiment) : experiment));
+    return updateExperiments((current) => current.map((experiment) => (
+      experiment.id === experimentId ? abandonExperiment(experiment) : experiment
+    )));
   }, [updateExperiments]);
 
-  const deleteExperiment = useCallback((experimentId) => {
-    updateExperiments((current) => current.filter((experiment) => experiment.id !== experimentId));
-  }, [updateExperiments]);
+  const deleteExperiment = useCallback((experimentId) => (
+    updateExperiments((current) => {
+      if (!current.some((experiment) => experiment.id === experimentId)) return null;
+      if (current.some((experiment) => experiment.parentExperimentId === experimentId)) return null;
+      return current.filter((experiment) => experiment.id !== experimentId);
+    })
+  ), [updateExperiments]);
 
   const replaceExperiments = useCallback((next) => {
     const validated = validatedExperiments(Array.isArray(next) ? next : []);
-    if (!validated) return;
-    setState({
+    if (!validated) return false;
+    const nextState = {
       experiments: validated,
       persistenceBlocked: false,
       unsupportedVersion: null,
@@ -248,7 +274,10 @@ export function useExperiments() {
       needsWrite: false,
       baseSerialized: canonicalExperiments(validated),
       writeConflict: false,
-    });
+    };
+    stateRef.current = nextState;
+    setState(nextState);
+    return true;
   }, []);
 
   return {
