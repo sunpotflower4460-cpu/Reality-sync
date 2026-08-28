@@ -141,3 +141,19 @@ test('native App Store shell presents JavaScript confirm calls through UIKit so 
   assert.match(native, /completionHandler\(true\)/);
   assert.match(native, /runJavaScriptAlertPanelWithMessage/);
 });
+
+test('native file navigation applies the same bundled-root boundary to normal and popup flows', () => {
+  const native = source('ios/RealitySync/ViewController.swift');
+  assert.match(native, /private func isBundledFileURL\(_ url: URL\) -> Bool/);
+  assert.match(native, /candidatePath == rootPath \|\| candidatePath\.hasPrefix\(rootPath \+ "\/"\)/);
+  assert.match(native, /decisionHandler\(isBundledFileURL\(url\) \? \.allow : \.cancel\)/);
+  assert.match(native, /if isBundledFileURL\(url\) \{\s*webView\.load\(navigationAction\.request\)/s);
+  assert.doesNotMatch(native, /if url\.isFileURL \{\s*webView\.load\(navigationAction\.request\)/s);
+});
+
+test('iOS icon generator uses a consistent opaque RGB bitmap on Apple Silicon runners', () => {
+  const iconGenerator = source('scripts/generate-ios-icon.swift');
+  assert.match(iconGenerator, /samplesPerPixel: 3/);
+  assert.match(iconGenerator, /hasAlpha: false/);
+  assert.doesNotMatch(iconGenerator, /samplesPerPixel: 4,[\s\S]{0,80}hasAlpha: false/);
+});
