@@ -26,7 +26,9 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
   const hasRecordedStress = Number.isFinite(schedule.actualStress);
   const [recordMode, setRecordMode] = useState(schedule.status !== STATUS.PENDING ? schedule.status : STATUS.AS_PLANNED);
   const [actualTitle, setActualTitle] = useState(() => replacementTitleForEditing(schedule));
-  const [actualCategory, setActualCategory] = useState(schedule.actualCategory || recordedPlan.category || 'その他');
+  const [actualCategory, setActualCategory] = useState(
+    schedule.status === STATUS.CHANGED ? (schedule.actualCategory ?? '') : '',
+  );
   const [mood, setMood] = useState(schedule.mood ?? null);
   const [actualStress, setActualStress] = useState(hasRecordedStress ? schedule.actualStress : null);
   const [stressEditing, setStressEditing] = useState(hasRecordedStress);
@@ -35,7 +37,9 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
     schedule.status === STATUS.SKIPPED ? 0 : (schedule.actualDuration ?? ''),
   );
   const [actualStartTime, setActualStartTime] = useState(schedule.actualStartTime || '');
-  const [actualStartDateKey, setActualStartDateKey] = useState(schedule.actualStartDateKey || dateKey || '');
+  const [actualStartDateKey, setActualStartDateKey] = useState(
+    schedule.actualStartDateKey || (schedule.actualStartTime ? '' : (dateKey || '')),
+  );
   const [deviationReason, setDeviationReason] = useState(schedule.deviationReason || '');
   const [error, setError] = useState('');
 
@@ -76,12 +80,17 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
       return;
     }
 
-    if (recordMode !== STATUS.SKIPPED && actualStartTime && !isValidDateKey(actualStartDateKey)) {
+    if (recordMode !== STATUS.SKIPPED && actualStartDateKey && !actualStartTime) {
+      setError('開始日だけでは保存できません。開始時刻も入力するか、開始日を空欄にしてください。');
+      return;
+    }
+
+    if (recordMode !== STATUS.SKIPPED && actualStartDateKey && !isValidDateKey(actualStartDateKey)) {
       setError('実際の開始日を正しい日付で入力してください。');
       return;
     }
 
-    if (recordMode !== STATUS.SKIPPED && actualStartTime && actualStartDateKey > dateKeyFromDate()) {
+    if (recordMode !== STATUS.SKIPPED && actualStartDateKey && actualStartDateKey > dateKeyFromDate()) {
       setError('実際の開始日に未来の日付は保存できません。');
       return;
     }
@@ -89,7 +98,7 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
     const recordedCategory = recordMode === STATUS.SKIPPED
       ? null
       : recordMode === STATUS.CHANGED
-        ? actualCategory
+        ? (actualCategory || null)
         : schedule.status === STATUS.AS_PLANNED
           ? schedule.actualCategory || recordedPlan.category
           : recordedPlan.category;
@@ -105,7 +114,7 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
       actualStress: Number.isFinite(actualStress) ? actualStress : null,
       actualDuration: recordMode === STATUS.SKIPPED ? 0 : (durationBlank ? null : parsedDuration),
       actualStartTime: recordMode === STATUS.SKIPPED ? null : (actualStartTime || null),
-      actualStartDateKey: recordMode === STATUS.SKIPPED || !actualStartTime ? null : actualStartDateKey,
+      actualStartDateKey: recordMode === STATUS.SKIPPED || !actualStartTime || !actualStartDateKey ? null : actualStartDateKey,
       deviationReason: recordMode === STATUS.CHANGED || recordMode === STATUS.SKIPPED
         ? deviationReason.trim() || null
         : null,
@@ -172,7 +181,7 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
         {recordMode === STATUS.CHANGED && (
           <div className="animate-slide-down space-y-3 rounded-[1rem] border border-amber-100 bg-amber-50/65 p-3">
             <label className="block"><span className="mb-1.5 block text-[10px] font-semibold text-amber-800">代わりに行ったこと</span><input type="text" value={actualTitle} onChange={(event) => { setActualTitle(event.target.value); setError(''); }} placeholder="例: ベッドで本を読んだ" className="w-full rounded-xl border border-amber-200 bg-white p-3 text-sm outline-none focus:border-amber-400" /></label>
-            <label className="block"><span className="mb-1.5 block text-[10px] font-semibold text-amber-800">カテゴリ</span><select value={actualCategory} onChange={(event) => setActualCategory(event.target.value)} className="w-full rounded-xl border border-amber-200 bg-white p-3 text-sm text-slate-700 outline-none focus:border-amber-400">{CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
+            <label className="block"><span className="mb-1.5 block text-[10px] font-semibold text-amber-800">カテゴリ <span className="font-normal text-amber-600/70">（任意）</span></span><select value={actualCategory} onChange={(event) => setActualCategory(event.target.value)} className="w-full rounded-xl border border-amber-200 bg-white p-3 text-sm text-slate-700 outline-none focus:border-amber-400"><option value="">未記録</option>{CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
           </div>
         )}
 
@@ -190,7 +199,7 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
           )}
 
           <div className="space-y-2.5 p-3.5">
-            <div className="flex items-end justify-between gap-3"><div><p className="text-[12px] font-semibold text-slate-800">実際の負荷 <span className="font-normal text-slate-400">（任意）</span></p><p className="mt-0.5 text-[8px] font-normal text-slate-400">予定では {recordedPlan.plannedStress}。未記録は予定値で補いません</p></div><span className={`text-[18px] font-semibold ${actualStress === null ? 'text-slate-300' : actualStress > 80 ? 'text-rose-500' : 'text-indigo-600'}`}>{actualStress ?? '—'}</span></div>
+            <div className="flex items-end justify-between gap-3"><div><p className="text-[12px] font-semibold text-slate-800">実際の負荷 <span className="font-normal text-slate-400">（任意）</span></p><p className="mt-0.5 block text-[8px] font-normal text-slate-400">予定では {recordedPlan.plannedStress}。未記録は予定値で補いません</p></div><span className={`text-[18px] font-semibold ${actualStress === null ? 'text-slate-300' : actualStress > 80 ? 'text-rose-500' : 'text-indigo-600'}`}>{actualStress ?? '—'}</span></div>
             {!stressEditing ? (
               <button type="button" onClick={beginStressEntry} className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] font-medium text-indigo-600">負荷を記録する</button>
             ) : (
@@ -220,7 +229,7 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
                   <label className="block"><span className="mb-1.5 block text-[9px] font-medium text-slate-600">開始日</span><input type="date" value={actualStartDateKey} max={dateKeyFromDate()} onChange={(event) => { setActualStartDateKey(event.target.value); setError(''); }} className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>
                   <label className="block"><span className="mb-1.5 block text-[9px] font-medium text-slate-600">開始時刻</span><input type="time" value={actualStartTime} onChange={(event) => { setActualStartTime(event.target.value); setError(''); }} className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>
                 </div>
-                <p className="mt-1.5 text-[8px] leading-relaxed text-slate-400">覚えていなければ空欄でOKです。時刻を入れた時だけ開始日とセットで保存します。</p>
+                <p className="mt-1.5 text-[8px] leading-relaxed text-slate-400">覚えていなければ空欄でOKです。開始時刻だけ分かる旧記録は、開始日を推測せずそのまま保存します。</p>
               </div>
             )}
 
