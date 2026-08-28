@@ -60,8 +60,11 @@ test('unfinished browser notification control is hidden from the native App Stor
   assert.doesNotMatch(text, /ネイティブ通知は現在準備中/);
 });
 
-test('application-level erase clears every RealitySync storage domain and resets normalized state', () => {
-  const text = source('src/App.jsx');
+test('application-level erase verifies every RealitySync storage domain before resetting normalized state', () => {
+  const app = source('src/App.jsx');
+  const settings = source('src/components/SettingsModal.jsx');
+  const restore = source('src/utils/restore.js');
+
   for (const storageKey of [
     'STORAGE_KEY',
     'LEGACY_STORAGE_KEY',
@@ -70,13 +73,19 @@ test('application-level erase clears every RealitySync storage domain and resets
     'REMINDER_NOTIFIED_STORAGE_KEY',
     'EXPERIMENT_STORAGE_KEY',
   ]) {
-    assert.match(text, new RegExp(storageKey));
+    assert.match(restore, new RegExp(storageKey));
   }
-  assert.match(text, /replaceStore\(createEmptyScheduleStore\(\)\)/);
-  assert.match(text, /replaceTemplates\(\[\]\)/);
-  assert.match(text, /replaceExperiments\(\[\]\)/);
-  assert.match(text, /replaceReminderPreferences\(DEFAULT_REMINDER_PREFERENCES\)/);
-  assert.match(text, /window\.localStorage\.removeItem\(key\)/);
+  assert.match(restore, /eraseStoredRealitySyncData/);
+  assert.match(restore, /storage\.removeItem\(key\)/);
+  assert.match(settings, /const erased = eraseStoredRealitySyncData\(\)/);
+  assert.ok(
+    settings.indexOf('const erased = eraseStoredRealitySyncData()') < settings.indexOf('onEraseAllData();'),
+    'persistent erase must be verified before React state is cleared',
+  );
+  assert.match(app, /replaceStore\(createEmptyScheduleStore\(\)\)/);
+  assert.match(app, /replaceTemplates\(\[\]\)/);
+  assert.match(app, /replaceExperiments\(\[\]\)/);
+  assert.match(app, /replaceReminderPreferences\(DEFAULT_REMINDER_PREFERENCES\)/);
 });
 
 test('native file bundle never attempts PWA service worker registration', () => {
