@@ -38,6 +38,11 @@ function finiteInRange(value, min, max) {
   return Number.isFinite(number) && number >= min && number <= max ? number : null;
 }
 
+function storedNumberInRange(value, min, max, strictNumbers) {
+  if (strictNumbers && typeof value !== 'number') return null;
+  return finiteInRange(value, min, max);
+}
+
 function validStoredId(value) {
   if (typeof value === 'number') return Number.isFinite(value);
   return typeof value === 'string' && Boolean(value.trim()) && value === value.trim();
@@ -55,15 +60,15 @@ function validStoredExperimentIds(value, normalized) {
   ));
 }
 
-function validStoredSnapshot(value, normalized) {
+function validStoredSnapshot(value, normalized, strictNumbers) {
   if (value === undefined || value === null) return true;
   if (!value || typeof value !== 'object' || Array.isArray(value) || !normalized) return false;
   if (Object.keys(value).some((key) => !SNAPSHOT_FIELDS.has(key))) return false;
   if (!isValidTime(value.time)) return false;
   if (typeof value.title !== 'string' || !value.title.trim()) return false;
   if (!VALID_CATEGORIES.has(value.category)) return false;
-  const duration = finiteInRange(value.duration, 0, 1440);
-  const plannedStress = finiteInRange(value.plannedStress, 0, 100);
+  const duration = storedNumberInRange(value.duration, 0, 1440, strictNumbers);
+  const plannedStress = storedNumberInRange(value.plannedStress, 0, 100, strictNumbers);
   if (duration === null || plannedStress === null) return false;
   return normalized.time === value.time
     && normalized.title === value.title.trim()
@@ -72,9 +77,9 @@ function validStoredSnapshot(value, normalized) {
     && normalized.plannedStress === plannedStress;
 }
 
-function optionalNumberPreserved(raw, normalized, key, min, max) {
+function optionalNumberPreserved(raw, normalized, key, min, max, strictNumbers) {
   if (!hasOwn(raw, key) || raw[key] === null || (typeof raw[key] === 'string' && raw[key].trim() === '')) return true;
-  const number = finiteInRange(raw[key], min, max);
+  const number = storedNumberInRange(raw[key], min, max, strictNumbers);
   return number !== null && normalized[key] === number;
 }
 
@@ -84,7 +89,7 @@ function optionalTextPreserved(raw, normalized, key) {
   return normalized[key] === raw[key].trim();
 }
 
-function storedSchedulePreserved(raw, normalized) {
+function storedSchedulePreserved(raw, normalized, { strictNumbers = true } = {}) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !normalized) return false;
   if (Object.keys(raw).some((key) => !SCHEDULE_FIELDS.has(key))) return false;
   if (!validStoredId(raw.id) || normalized.id !== raw.id) return false;
@@ -92,20 +97,20 @@ function storedSchedulePreserved(raw, normalized) {
   if (typeof raw.title !== 'string' || !raw.title.trim() || normalized.title !== raw.title.trim()) return false;
   if (!VALID_CATEGORIES.has(raw.category) || normalized.category !== raw.category) return false;
 
-  const duration = finiteInRange(raw.duration, 0, 1440);
-  const plannedStress = finiteInRange(raw.plannedStress, 0, 100);
+  const duration = storedNumberInRange(raw.duration, 0, 1440, strictNumbers);
+  const plannedStress = storedNumberInRange(raw.plannedStress, 0, 100, strictNumbers);
   if (duration === null || normalized.duration !== duration) return false;
   if (plannedStress === null || normalized.plannedStress !== plannedStress) return false;
   if (!validStoredExperimentIds(raw.appliedExperimentIds, normalized.appliedExperimentIds)) return false;
   if (!VALID_STATUSES.has(raw.status) || normalized.status !== raw.status) return false;
-  if (!validStoredSnapshot(raw.plannedSnapshot, normalized.plannedSnapshot)) return false;
+  if (!validStoredSnapshot(raw.plannedSnapshot, normalized.plannedSnapshot, strictNumbers)) return false;
 
   if (!optionalTextPreserved(raw, normalized, 'actualTitle')) return false;
   if (hasOwn(raw, 'actualCategory') && raw.actualCategory !== null && raw.actualCategory !== '') {
     if (!VALID_CATEGORIES.has(raw.actualCategory) || normalized.actualCategory !== raw.actualCategory) return false;
   }
-  if (!optionalNumberPreserved(raw, normalized, 'actualDuration', 0, 1440)) return false;
-  if (!optionalNumberPreserved(raw, normalized, 'actualStress', 0, 100)) return false;
+  if (!optionalNumberPreserved(raw, normalized, 'actualDuration', 0, 1440, strictNumbers)) return false;
+  if (!optionalNumberPreserved(raw, normalized, 'actualStress', 0, 100, strictNumbers)) return false;
 
   if (hasOwn(raw, 'actualStartTime') && raw.actualStartTime !== null && raw.actualStartTime !== '') {
     if (!isValidTime(raw.actualStartTime) || normalized.actualStartTime !== raw.actualStartTime) return false;
@@ -161,7 +166,7 @@ function storedScheduleShapePreserved(parsed) {
     if (!isValidDateKey(dateKey) || !Array.isArray(schedules)) return false;
     const normalized = normalizeSchedules(schedules, []);
     if (normalized.length !== schedules.length) return false;
-    if (schedules.some((schedule, index) => !storedSchedulePreserved(schedule, normalized[index]))) return false;
+    if (schedules.some((schedule, index) => !storedSchedulePreserved(schedule, normalized[index], { strictNumbers: true }))) return false;
   }
   return true;
 }
@@ -242,7 +247,7 @@ export function migrateLegacySchedulesResult(raw, dateKey, demoSchedules = []) {
 
   const legacy = normalizeSchedules(parsed, demoSchedules);
   if (legacy.length !== parsed.length) return { ok: false, store: createEmptyScheduleStore() };
-  if (parsed.some((schedule, index) => !storedSchedulePreserved(schedule, legacy[index]))) {
+  if (parsed.some((schedule, index) => !storedSchedulePreserved(schedule, legacy[index], { strictNumbers: false }))) {
     return { ok: false, store: createEmptyScheduleStore() };
   }
 
