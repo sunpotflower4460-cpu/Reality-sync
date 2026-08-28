@@ -273,11 +273,11 @@ export default function App() {
     replaceTemplates([]);
     replaceExperiments([]);
     replaceReminderPreferences(DEFAULT_REMINDER_PREFERENCES);
+    let storageRemovalSucceeded = true;
     try {
       for (const key of LOCAL_STORAGE_KEYS) window.localStorage.removeItem(key);
     } catch {
-      // The state is still cleared; write-failure warnings will surface if the
-      // empty state cannot be persisted afterward.
+      storageRemovalSucceeded = false;
     }
     setSelectedDate(today);
     setSelectedScheduleId(null);
@@ -285,6 +285,7 @@ export default function App() {
     setEditorState(null);
     setIsTemplateModalOpen(false);
     setActiveTab(TABS.TRACK);
+    return storageRemovalSucceeded;
   };
 
   const openLegal = (page) => {
