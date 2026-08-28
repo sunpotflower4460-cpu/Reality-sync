@@ -9,9 +9,15 @@ function source(relativePath) {
 test('record editor does not invent a date for legacy time-only reality', () => {
   const modal = source('src/components/RecordModal.jsx');
   assert.match(modal, /schedule\.actualStartDateKey \|\| \(schedule\.actualStartTime \? '' : \(dateKey \|\| ''\)\)/);
-  assert.match(modal, /actualStartDateKey && !actualStartTime/);
   assert.match(modal, /!actualStartTime \|\| !actualStartDateKey \? null : actualStartDateKey/);
   assert.match(modal, /開始時刻だけ分かる旧記録は、開始日を推測せずそのまま保存します/);
+});
+
+test('blank optional start time still allows a new record to save without a start date', () => {
+  const modal = source('src/components/RecordModal.jsx');
+  assert.doesNotMatch(modal, /actualStartDateKey && !actualStartTime/);
+  assert.match(modal, /actualStartTime && actualStartDateKey && !isValidDateKey/);
+  assert.match(modal, /!actualStartTime \|\| !actualStartDateKey \? null : actualStartDateKey/);
 });
 
 test('changed record editor preserves an unknown actual category', () => {
