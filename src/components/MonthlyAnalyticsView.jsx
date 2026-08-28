@@ -7,7 +7,7 @@ import {
   Clock3,
   TrendingUp,
 } from 'lucide-react';
-import { formatMonthLabel, formatShortDateLabel, shiftMonthDateKey } from '../utils/date.js';
+import { dateKeyFromDate, formatMonthLabel, formatShortDateLabel, shiftMonthDateKey, startOfMonthDateKey } from '../utils/date.js';
 import { formatTime } from '../utils/schedule.js';
 
 function formatStartShift(value) {
@@ -25,6 +25,7 @@ function shiftTone(value) {
 
 export function MonthlyAnalyticsView({ insights, selectedDate, onChangeDate }) {
   const hasData = insights.totalSchedules > 0;
+  const futureMonth = startOfMonthDateKey(selectedDate) > dateKeyFromDate();
   const categoryValues = Object.values(insights.categories).flatMap((category) => [category.ideal, category.actual]);
   const maxCategory = Math.max(...categoryValues, 1);
   const weekValues = insights.weeks.flatMap((week) => [week.plannedMinutes, week.actualMinutes]);
@@ -41,7 +42,11 @@ export function MonthlyAnalyticsView({ insights, selectedDate, onChangeDate }) {
       </section>
 
       {!hasData ? (
-        <section className="rounded-3xl border border-dashed border-indigo-200 bg-white p-8 text-center shadow-sm"><h2 className="mb-2 text-lg font-extrabold text-gray-800">この月にはまだ予定がありません</h2><p className="text-sm leading-relaxed text-gray-500">複数週ぶんの計画と実績がたまると、週ごとの変化や曜日ごとの観測傾向を比較できます。</p></section>
+        futureMonth ? (
+          <section className="rounded-3xl border border-dashed border-indigo-200 bg-white p-8 text-center shadow-sm"><h2 className="mb-2 text-lg font-extrabold text-gray-800">この月の現実はまだ観測前です</h2><p className="text-sm leading-relaxed text-gray-500">未来の月は、保存済みの予定があっても「未記録」として数えません。月が始まると観測できる範囲だけを集計します。</p></section>
+        ) : (
+          <section className="rounded-3xl border border-dashed border-indigo-200 bg-white p-8 text-center shadow-sm"><h2 className="mb-2 text-lg font-extrabold text-gray-800">この月にはまだ予定がありません</h2><p className="text-sm leading-relaxed text-gray-500">複数週ぶんの計画と実績がたまると、週ごとの変化や曜日ごとの観測傾向を比較できます。</p></section>
+        )
       ) : (
         <>
           <section className="grid grid-cols-2 gap-3">
