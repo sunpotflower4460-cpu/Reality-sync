@@ -179,6 +179,17 @@ final class ViewController: UIViewController, WKNavigationDelegate, WKUIDelegate
         }
 
         do {
+            let resourceValues = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+            guard
+                resourceValues.isRegularFile != false,
+                let fileSize = resourceValues.fileSize,
+                fileSize >= 0,
+                fileSize <= Self.maximumBackupBytes
+            else {
+                sendBackupStatus(type: "error", message: "選択したバックアップのサイズを安全に確認できませんでした。")
+                return
+            }
+
             let data = try Data(contentsOf: url, options: [.mappedIfSafe])
             guard data.count <= Self.maximumBackupBytes, let text = String(data: data, encoding: .utf8) else {
                 sendBackupStatus(type: "error", message: "選択したバックアップを読み込めませんでした。")
