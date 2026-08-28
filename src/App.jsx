@@ -78,7 +78,7 @@ export default function App() {
   const observationNow = new Date();
   const todayKey = dateKeyFromDate(observationNow);
   const observationTime = timeKeyFromDate(observationNow);
-  const dueSchedules = useDueRecordReminders({ schedules, dateKey: selectedDate, preferences: reminderPreferences });
+  const dueSchedules = useDueRecordReminders({ schedules, dateKey: selectedDate, scheduleDays: store.days, preferences: reminderPreferences });
   const observedDailySchedules = useMemo(() => (
     selectedDate === todayKey
       ? schedules.filter((schedule) => schedule.status !== STATUS.PENDING || schedule.time <= observationTime)
