@@ -88,7 +88,12 @@ export default function App() {
   const todayKey = dateKeyFromDate(observationNow);
   const observationTime = timeKeyFromDate(observationNow);
   const dueSchedules = useDueRecordReminders({ schedules, dateKey: selectedDate, preferences: reminderPreferences });
-  const stats = useMemo(() => calculateStats(schedules), [schedules]);
+  const observedDailySchedules = useMemo(() => (
+    selectedDate === todayKey
+      ? schedules.filter((schedule) => schedule.status !== STATUS.PENDING || schedule.time <= observationTime)
+      : schedules
+  ), [observationTime, schedules, selectedDate, todayKey]);
+  const stats = useMemo(() => calculateStats(observedDailySchedules), [observedDailySchedules]);
   const weeklyInsights = useMemo(
     () => calculateWeeklyInsights(store.days, selectedDate, todayKey, observationTime),
     [observationTime, selectedDate, store.days, todayKey],
@@ -298,7 +303,7 @@ export default function App() {
           <>
             {activeTab === TABS.PLAN && <PlanView schedules={schedules} onCreate={() => setEditorState({ type: 'create' })} onEdit={(id) => setEditorState({ type: 'edit', id })} onCopyPrevious={copyPreviousDay} hasPreviousSchedules={previousSchedules.length > 0} onOpenTemplates={() => setIsTemplateModalOpen(true)} templateCount={templates.length} planFeedbackSuggestions={planFeedbackSuggestions} onReviewPlanFeedback={(suggestion) => setSelectedPlanFeedbackId(suggestion.id)} />}
             {activeTab === TABS.TRACK && <TrackView schedules={schedules} dueSchedules={dueSchedules} dateKey={selectedDate} canRecord={canRecordSelectedDate} onRecord={(schedule) => setSelectedScheduleId(schedule.id)} />}
-            {activeTab === TABS.ANALYTICS && <AnalyticsView stats={stats} weeklyInsights={weeklyInsights} monthlyInsights={monthlyInsights} longitudinalInsights={longitudinalInsights} selectedDate={selectedDate} onChangeDate={changeDate} />}
+            {activeTab === TABS.ANALYTICS && <AnalyticsView stats={stats} plannedCount={schedules.length} weeklyInsights={weeklyInsights} monthlyInsights={monthlyInsights} longitudinalInsights={longitudinalInsights} selectedDate={selectedDate} onChangeDate={changeDate} />}
           </>
         )}
       </main>
