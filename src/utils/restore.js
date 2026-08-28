@@ -34,6 +34,37 @@ function serializedRestoreEntries(data) {
   ];
 }
 
+function rollbackRestoreEntries(storage, entries, previous) {
+  let rollbackOk = true;
+
+  // Do not blindly overwrite a third value that appeared while the restore was
+  // running. It may be a concurrent write from another RealitySync tab. Only
+  // undo values that are still either our attempted value or the original one.
+  for (const [key, attemptedValue] of [...entries].reverse()) {
+    const previousValue = previous.get(key) ?? null;
+    try {
+      const currentValue = storage.getItem(key);
+      if (currentValue === previousValue) continue;
+      if (currentValue !== attemptedValue) {
+        rollbackOk = false;
+        continue;
+      }
+      restoreRawValue(storage, key, previousValue);
+    } catch {
+      rollbackOk = false;
+    }
+  }
+
+  for (const [key] of entries) {
+    try {
+      if (storage.getItem(key) !== (previous.get(key) ?? null)) rollbackOk = false;
+    } catch {
+      rollbackOk = false;
+    }
+  }
+  return rollbackOk;
+}
+
 export function persistRestoredBackup(data, storage = globalThis.window?.localStorage) {
   if (!storage || !data) return { ok: false, rollbackOk: true };
 
@@ -52,23 +83,17 @@ export function persistRestoredBackup(data, storage = globalThis.window?.localSt
     return { ok: false, rollbackOk: true };
   }
 
-  const changedKeys = [];
   try {
+    for (const [key, value] of entries) restoreRawValue(storage, key, value);
+    // A storage implementation can theoretically return from set/remove without
+    // persisting the requested value. Never report a destructive restore as
+    // successful until every domain can be read back exactly as written.
     for (const [key, value] of entries) {
-      restoreRawValue(storage, key, value);
-      changedKeys.push(key);
+      if (storage.getItem(key) !== value) throw new Error('restore verification failed');
     }
     return { ok: true, rollbackOk: true };
   } catch {
-    let rollbackOk = true;
-    for (const key of changedKeys.reverse()) {
-      try {
-        restoreRawValue(storage, key, previous.get(key) ?? null);
-      } catch {
-        rollbackOk = false;
-      }
-    }
-    return { ok: false, rollbackOk };
+    return { ok: false, rollbackOk: rollbackRestoreEntries(storage, entries, previous) };
   }
 }
 
