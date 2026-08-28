@@ -24,6 +24,41 @@ function experiment(overrides = {}) {
   };
 }
 
+function adoptedRoot(overrides = {}) {
+  return experiment({
+    id: 'root',
+    learningRootId: 'root',
+    learningVersion: 1,
+    status: 'completed',
+    decision: 'adopt',
+    decisionDateKey: '2026-09-01',
+    ...overrides,
+  });
+}
+
+function revalidationChild(overrides = {}) {
+  return experiment({
+    id: 'child',
+    learningRootId: 'root',
+    parentExperimentId: 'root',
+    learningVersion: 2,
+    startDateKey: '2026-09-11',
+    baselineFailureRate: 0.25,
+    baselineSampleCount: 8,
+    sourceRetention: {
+      experimentId: 'root',
+      throughDateKey: '2026-09-10',
+      assessmentCount: 8,
+      weekCount: 3,
+      failureRate: 0.25,
+      experimentFailureRate: 0.2,
+      differenceFromExperimentPoints: 5,
+      capturedAt: '2026-09-10T10:00:00Z',
+    },
+    ...overrides,
+  });
+}
+
 function parseMany(experiments) {
   return parseStoredExperimentsForPersistence(JSON.stringify({
     version: EXPERIMENT_STORAGE_VERSION,
@@ -67,38 +102,44 @@ test('explicit trial identity and observation metadata cannot be silently replac
 });
 
 test('orphaned and root-mismatched learning versions are protected during normal storage load', () => {
-  const orphan = experiment({
-    id: 'child',
-    learningRootId: 'root',
-    parentExperimentId: 'missing-parent',
-    learningVersion: 2,
-  });
+  const orphan = revalidationChild({ parentExperimentId: 'missing-parent' });
   assert.equal(parse(orphan).ok, false);
 
-  const root = experiment({ id: 'root', learningRootId: 'root', learningVersion: 1 });
-  const wrongRootChild = experiment({
-    id: 'child',
-    learningRootId: 'other-root',
-    parentExperimentId: 'root',
-    learningVersion: 2,
-  });
+  const root = adoptedRoot();
+  const wrongRootChild = revalidationChild({ learningRootId: 'other-root' });
   assert.equal(parseMany([root, wrongRootChild]).ok, false);
 });
 
 test('learning lineage rejects duplicate or non-increasing versions', () => {
-  const root = experiment({ id: 'root', learningRootId: 'root', learningVersion: 1 });
-  const child = experiment({ id: 'child', learningRootId: 'root', parentExperimentId: 'root', learningVersion: 2 });
-  const duplicateVersion = experiment({ id: 'sibling', learningRootId: 'root', parentExperimentId: 'root', learningVersion: 2 });
-  const reversedVersion = experiment({ id: 'reversed', learningRootId: 'root', parentExperimentId: 'child', learningVersion: 1 });
+  const root = adoptedRoot();
+  const child = revalidationChild();
+  const duplicateVersion = revalidationChild({ id: 'sibling' });
+  const reversedVersion = revalidationChild({ id: 'reversed', parentExperimentId: 'child', learningVersion: 1 });
   assert.equal(parseMany([root, child, duplicateVersion]).ok, false);
   assert.equal(parseMany([root, child, reversedVersion]).ok, false);
 });
 
-test('valid explicit experiment metadata and lineage remain writable', () => {
-  const root = experiment({
-    id: 'root',
-    learningRootId: 'root',
-    learningVersion: 1,
+test('revalidation lineage provenance must match an adopted parent and its retention snapshot', () => {
+  const root = adoptedRoot();
+  assert.equal(parseMany([root, revalidationChild({
+    sourceRetention: { ...revalidationChild().sourceRetention, experimentId: 'some-other-experiment' },
+  })]).ok, false);
+  assert.equal(parseMany([adoptedRoot({ decision: 'reject' }), revalidationChild()]).ok, false);
+  assert.equal(parseMany([root, revalidationChild({
+    sourceRetention: { ...revalidationChild().sourceRetention, throughDateKey: '2026-08-31' },
+  })]).ok, false);
+  assert.equal(parseMany([root, revalidationChild({ startDateKey: '2026-09-10' })]).ok, false);
+  assert.equal(parseMany([root, revalidationChild({ baselineFailureRate: 0.5 })]).ok, false);
+  assert.equal(parseMany([root, revalidationChild({ baselineSampleCount: 9 })]).ok, false);
+});
+
+test('root learning versions cannot claim a revalidation source snapshot', () => {
+  const retention = revalidationChild().sourceRetention;
+  assert.equal(parse(adoptedRoot({ sourceRetention: retention })).ok, false);
+});
+
+test('valid explicit experiment metadata and realistic revalidation lineage remain writable', () => {
+  const root = adoptedRoot({
     trials: [{
       id: 'trial-1',
       recordKey: '2026-08-28::work',
@@ -111,14 +152,10 @@ test('valid explicit experiment metadata and lineage remain writable', () => {
       capturedAt: '2026-08-28T10:00:00Z',
     }],
   });
-  const child = experiment({
-    id: 'child',
-    learningRootId: 'root',
-    parentExperimentId: 'root',
-    learningVersion: 2,
-  });
+  const child = revalidationChild();
   const result = parseMany([root, child]);
   assert.equal(result.ok, true);
   assert.equal(result.experiments[0].trials[0].id, 'trial-1');
   assert.equal(result.experiments[1].parentExperimentId, 'root');
+  assert.equal(result.experiments[1].sourceRetention.experimentId, 'root');
 });
