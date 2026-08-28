@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { INITIAL_SCHEDULES } from '../data/demoSchedules.js';
 import { LEGACY_STORAGE_KEY, STORAGE_KEY, STORAGE_VERSION } from '../constants.js';
 import { dateKeyFromDate } from '../utils/date.js';
@@ -81,6 +81,8 @@ function overlayDirtyDays(baseStore, localStore, dirtyDateKeys) {
 
 export function usePersistentSchedules(dateKey) {
   const [state, setState] = useState(loadScheduleState);
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const {
     store,
     persistenceBlocked,
@@ -202,67 +204,73 @@ export function usePersistentSchedules(dateKey) {
     return () => window.removeEventListener('storage', syncFromStorage);
   }, []);
 
+  // Apply UI mutations synchronously against the latest hook state so callers
+  // know whether a save was actually accepted before closing their editor.
   const setSchedules = useCallback((nextValue) => {
-    setState((currentState) => {
-      if (currentState.persistenceBlocked || currentState.writeConflict) return currentState;
-      const currentDay = currentState.store.days[dateKey] ?? [];
-      const nextDay = typeof nextValue === 'function' ? nextValue(currentDay) : nextValue;
-      if (!Array.isArray(nextDay)) return currentState;
-      const result = parseStoredScheduleStoreResult(JSON.stringify({
-        version: STORAGE_VERSION,
-        days: { [dateKey]: nextDay },
-      }));
-      if (!result.ok) return currentState;
-      const alreadyDirty = currentState.dirtyDateKeys.includes(dateKey);
-      return {
-        ...currentState,
-        needsWrite: true,
-        dirtyDateKeys: alreadyDirty
-          ? currentState.dirtyDateKeys
-          : [...currentState.dirtyDateKeys, dateKey],
-        baseDays: alreadyDirty
-          ? currentState.baseDays
-          : { ...currentState.baseDays, [dateKey]: currentDay },
-        store: {
-          ...currentState.store,
-          days: {
-            ...currentState.store.days,
-            [dateKey]: result.store.days[dateKey] ?? [],
-          },
+    const currentState = stateRef.current;
+    if (currentState.persistenceBlocked || currentState.writeConflict) return false;
+    const currentDay = currentState.store.days[dateKey] ?? [];
+    const nextDay = typeof nextValue === 'function' ? nextValue(currentDay) : nextValue;
+    if (!Array.isArray(nextDay)) return false;
+    const result = parseStoredScheduleStoreResult(JSON.stringify({
+      version: STORAGE_VERSION,
+      days: { [dateKey]: nextDay },
+    }));
+    if (!result.ok) return false;
+    const alreadyDirty = currentState.dirtyDateKeys.includes(dateKey);
+    const nextState = {
+      ...currentState,
+      needsWrite: true,
+      dirtyDateKeys: alreadyDirty
+        ? currentState.dirtyDateKeys
+        : [...currentState.dirtyDateKeys, dateKey],
+      baseDays: alreadyDirty
+        ? currentState.baseDays
+        : { ...currentState.baseDays, [dateKey]: currentDay },
+      store: {
+        ...currentState.store,
+        days: {
+          ...currentState.store.days,
+          [dateKey]: result.store.days[dateKey] ?? [],
         },
-      };
-    });
+      },
+    };
+    stateRef.current = nextState;
+    setState(nextState);
+    return true;
   }, [dateKey]);
 
   const clearDay = useCallback(() => {
-    setState((currentState) => {
-      if (
-        currentState.persistenceBlocked
-        || currentState.writeConflict
-        || !(dateKey in currentState.store.days)
-      ) return currentState;
-      const currentDay = currentState.store.days[dateKey] ?? [];
-      const days = { ...currentState.store.days };
-      delete days[dateKey];
-      const alreadyDirty = currentState.dirtyDateKeys.includes(dateKey);
-      return {
-        ...currentState,
-        needsWrite: true,
-        dirtyDateKeys: alreadyDirty
-          ? currentState.dirtyDateKeys
-          : [...currentState.dirtyDateKeys, dateKey],
-        baseDays: alreadyDirty
-          ? currentState.baseDays
-          : { ...currentState.baseDays, [dateKey]: currentDay },
-        store: { ...currentState.store, days },
-      };
-    });
+    const currentState = stateRef.current;
+    if (
+      currentState.persistenceBlocked
+      || currentState.writeConflict
+      || !(dateKey in currentState.store.days)
+    ) return false;
+    const currentDay = currentState.store.days[dateKey] ?? [];
+    const days = { ...currentState.store.days };
+    delete days[dateKey];
+    const alreadyDirty = currentState.dirtyDateKeys.includes(dateKey);
+    const nextState = {
+      ...currentState,
+      needsWrite: true,
+      dirtyDateKeys: alreadyDirty
+        ? currentState.dirtyDateKeys
+        : [...currentState.dirtyDateKeys, dateKey],
+      baseDays: alreadyDirty
+        ? currentState.baseDays
+        : { ...currentState.baseDays, [dateKey]: currentDay },
+      store: { ...currentState.store, days },
+    };
+    stateRef.current = nextState;
+    setState(nextState);
+    return true;
   }, [dateKey]);
 
   const replaceStore = useCallback((nextStore) => {
     const result = parseStoredScheduleStoreResult(JSON.stringify(nextStore));
-    if (!result.ok) return;
-    setState({
+    if (!result.ok) return false;
+    const nextState = {
       store: result.store,
       persistenceBlocked: false,
       unsupportedVersion: null,
@@ -271,7 +279,10 @@ export function usePersistentSchedules(dateKey) {
       // state replacement, so do not echo a stale whole-store write on mount.
       needsWrite: false,
       ...initialWriteTracking(),
-    });
+    };
+    stateRef.current = nextState;
+    setState(nextState);
+    return true;
   }, []);
 
   return {
