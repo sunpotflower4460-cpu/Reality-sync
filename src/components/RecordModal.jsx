@@ -80,17 +80,12 @@ export function RecordModal({ schedule, dateKey, onClose, onSave }) {
       return;
     }
 
-    if (recordMode !== STATUS.SKIPPED && actualStartDateKey && !actualStartTime) {
-      setError('開始日だけでは保存できません。開始時刻も入力するか、開始日を空欄にしてください。');
-      return;
-    }
-
-    if (recordMode !== STATUS.SKIPPED && actualStartDateKey && !isValidDateKey(actualStartDateKey)) {
+    if (recordMode !== STATUS.SKIPPED && actualStartTime && actualStartDateKey && !isValidDateKey(actualStartDateKey)) {
       setError('実際の開始日を正しい日付で入力してください。');
       return;
     }
 
-    if (recordMode !== STATUS.SKIPPED && actualStartDateKey && actualStartDateKey > dateKeyFromDate()) {
+    if (recordMode !== STATUS.SKIPPED && actualStartTime && actualStartDateKey && actualStartDateKey > dateKeyFromDate()) {
       setError('実際の開始日に未来の日付は保存できません。');
       return;
     }
