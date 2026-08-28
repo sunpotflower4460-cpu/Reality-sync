@@ -6,6 +6,26 @@ import { normalizeReminderPreferences, REMINDER_DELAY_OPTIONS } from './reminder
 import { normalizeScheduleStore, parseStoredScheduleStoreResult } from './storage.js';
 import { normalizeTemplates, parseStoredTemplatesResult } from './template.js';
 
+export const MAX_BACKUP_BYTES = 10 * 1024 * 1024;
+
+const BACKUP_FIELDS = new Set([
+  'format',
+  'version',
+  'exportedAt',
+  'scheduleStore',
+  'templates',
+  'experiments',
+  'reminderPreferences',
+]);
+const REMINDER_FIELDS = new Set(['enabled', 'delayMinutes', 'browserNotifications']);
+
+function hasOnlyKeys(value, allowed) {
+  return Boolean(value)
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && Object.keys(value).every((key) => allowed.has(key));
+}
+
 function countSchedules(store) { return Object.values(store.days).reduce((sum, schedules) => sum + schedules.length, 0); }
 
 function experimentLineageValid(experiments) {
@@ -21,7 +41,7 @@ function experimentLineageValid(experiments) {
 }
 
 function reminderPreferencesPreserved(raw, normalized) {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+  if (!hasOnlyKeys(raw, REMINDER_FIELDS)) return false;
   if (raw.enabled !== undefined && typeof raw.enabled !== 'boolean') return false;
   if (raw.browserNotifications !== undefined && typeof raw.browserNotifications !== 'boolean') return false;
   if (raw.delayMinutes !== undefined) {
@@ -49,11 +69,16 @@ export function createBackupPayload({ store, templates, experiments = [], remind
 export function serializeBackup(input) { return `${JSON.stringify(createBackupPayload(input), null, 2)}\n`; }
 
 export function parseBackup(raw) {
+  if (typeof raw !== 'string' || new TextEncoder().encode(raw).byteLength > MAX_BACKUP_BYTES) {
+    return { ok: false, error: 'バックアップファイルが大きすぎます。10MB以下のファイルを選択してください。' };
+  }
+
   let parsed;
   try { parsed = JSON.parse(raw); } catch { return { ok: false, error: 'JSONとして読み込めませんでした。' }; }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { ok: false, error: 'RealitySyncのバックアップ形式ではありません。' };
+  if (!hasOnlyKeys(parsed, BACKUP_FIELDS)) return { ok: false, error: 'RealitySyncのバックアップ形式ではありません。' };
   if (parsed.format !== BACKUP_FORMAT) return { ok: false, error: 'RealitySyncのバックアップ識別子がありません。' };
   if (parsed.version !== BACKUP_VERSION) return { ok: false, error: 'このバックアップのバージョンにはまだ対応していません。' };
+  if (parsed.exportedAt !== undefined && typeof parsed.exportedAt !== 'string') return { ok: false, error: 'バックアップの書き出し日時が壊れています。' };
   if (!parsed.scheduleStore || typeof parsed.scheduleStore !== 'object' || Array.isArray(parsed.scheduleStore)) return { ok: false, error: '予定・実績データが見つかりません。' };
   if (!parsed.scheduleStore.days || typeof parsed.scheduleStore.days !== 'object' || Array.isArray(parsed.scheduleStore.days)) return { ok: false, error: '予定・実績データの構造が壊れています。' };
   if (!Array.isArray(parsed.templates)) return { ok: false, error: 'テンプレートデータの構造が壊れています。' };
