@@ -1,6 +1,6 @@
 import { BACKUP_FORMAT, BACKUP_VERSION, EXPERIMENT_STORAGE_VERSION } from '../constants.js';
 import { isValidDateKey } from './date.js';
-import { normalizeExperiments } from './experiment.js';
+import { EXPERIMENT_DECISION, EXPERIMENT_STATUS, normalizeExperiments } from './experiment.js';
 import { parseStoredExperimentsForPersistence } from './experimentStorage.js';
 import { normalizeReminderPreferences, parseStoredReminderPreferencesResult } from './reminder.js';
 import { normalizeScheduleStore, parseStoredScheduleStoreResult } from './storage.js';
@@ -37,6 +37,24 @@ function experimentLineageValid(experiments) {
     if ((experiment.learningVersion || 1) <= (parent.learningVersion || 1)) return false;
   }
   return true;
+}
+
+function appliedExperimentReferencesValid(scheduleStore, templates, experiments) {
+  const adoptedIds = new Set(experiments
+    .filter((experiment) => (
+      experiment.status === EXPERIMENT_STATUS.COMPLETED
+      && experiment.decision === EXPERIMENT_DECISION.ADOPT
+    ))
+    .map((experiment) => experiment.id));
+
+  const rows = [
+    ...Object.values(scheduleStore.days).flat(),
+    ...templates.flatMap((template) => template.schedules),
+  ];
+  return rows.every((row) => (
+    Array.isArray(row.appliedExperimentIds)
+    && row.appliedExperimentIds.every((id) => adoptedIds.has(id))
+  ));
 }
 
 export function createBackupPayload({ store, templates, experiments = [], reminderPreferences, exportedAt = new Date().toISOString() }) {
@@ -97,6 +115,9 @@ export function parseBackup(raw) {
     return { ok: false, error: '実験履歴に復元できない項目があります。' };
   }
   const experiments = experimentResult.experiments;
+  if (!appliedExperimentReferencesValid(scheduleStore, templates, experiments)) {
+    return { ok: false, error: '適用済みの学習を参照する予定またはテンプレートと、実験履歴の対応が壊れています。' };
+  }
 
   const reminderResult = parseStoredReminderPreferencesResult(JSON.stringify(parsed.reminderPreferences));
   if (!reminderResult.ok) {
