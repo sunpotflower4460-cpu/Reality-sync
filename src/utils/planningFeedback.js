@@ -238,6 +238,9 @@ export function applyPlanFeedback(experimentValue, dateKey, schedulesValue, sche
 
   if (preview.kind === PLAN_ADJUSTMENT_KIND.BUFFER_BEFORE) {
     if (!newScheduleId) return { ok: false, error: '新しい予定IDを作成できませんでした。', schedules };
+    if (schedules.some((schedule) => String(schedule.id) === String(newScheduleId))) {
+      return { ok: false, error: '新しい予定IDが既存予定と重複したため、変更を適用しませんでした。', schedules };
+    }
     const next = schedules.map((schedule) => {
       if (String(schedule.id) !== String(scheduleId)) return schedule;
       return addExperimentMarker(schedule, experiment.id) ?? schedule;
