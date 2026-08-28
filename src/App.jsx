@@ -82,7 +82,12 @@ export default function App() {
     replaceExperiments,
     storageProtection: experimentStorageProtection,
   } = useExperiments();
-  const { preferences: reminderPreferences, setPreferences: setReminderPreferences, replacePreferences: replaceReminderPreferences } = useReminderPreferences();
+  const {
+    preferences: reminderPreferences,
+    setPreferences: setReminderPreferences,
+    replacePreferences: replaceReminderPreferences,
+    storageProtection: reminderStorageProtection,
+  } = useReminderPreferences();
   const { canInstall, isInstalled, install } = usePwaInstall();
   const observationNow = new Date();
   const todayKey = dateKeyFromDate(observationNow);
@@ -121,6 +126,7 @@ export default function App() {
     if (scheduleStorageProtection.persistenceBlocked) protectedDomains.push('予定・実績');
     if (templateStorageProtection.persistenceBlocked) protectedDomains.push('テンプレート');
     if (experimentStorageProtection.persistenceBlocked) protectedDomains.push('実験履歴');
+    if (reminderStorageProtection.persistenceBlocked) protectedDomains.push('リマインダー設定');
     return {
       persistenceBlocked: protectedDomains.length > 0,
       unsupportedVersion: scheduleStorageProtection.unsupportedVersion ?? experimentStorageProtection.unsupportedVersion,
@@ -129,6 +135,7 @@ export default function App() {
   }, [
     experimentStorageProtection.persistenceBlocked,
     experimentStorageProtection.unsupportedVersion,
+    reminderStorageProtection.persistenceBlocked,
     scheduleStorageProtection.persistenceBlocked,
     scheduleStorageProtection.unsupportedVersion,
     templateStorageProtection.persistenceBlocked,
