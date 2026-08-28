@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { TEMPLATE_STORAGE_KEY } from '../constants.js';
 import { createUniqueId } from '../utils/id.js';
 import { createTemplateFromSchedules, parseStoredTemplatesResult } from '../utils/template.js';
@@ -50,6 +50,8 @@ function loadTemplateState() {
 
 export function useScheduleTemplates() {
   const [state, setState] = useState(loadTemplateState);
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const {
     templates,
     persistenceBlocked,
@@ -120,40 +122,49 @@ export function useScheduleTemplates() {
     return () => window.removeEventListener('storage', syncTemplates);
   }, []);
 
+  // Keep same-frame repeated UI actions on one synchronous source of truth.
+  // This prevents a double click from allocating against the same stale list.
   const updateTemplates = useCallback((updater) => {
-    setState((current) => {
-      if (current.persistenceBlocked || current.writeConflict) return current;
-      const next = typeof updater === 'function' ? updater(current.templates) : updater;
-      const validated = validateTemplates(next);
-      if (!validated) return current;
-      return { ...current, templates: validated, needsWrite: true };
-    });
+    const current = stateRef.current;
+    if (current.persistenceBlocked || current.writeConflict) return false;
+    const next = typeof updater === 'function' ? updater(current.templates) : updater;
+    const validated = validateTemplates(next);
+    if (!validated) return false;
+    const nextState = { ...current, templates: validated, needsWrite: true };
+    stateRef.current = nextState;
+    setState(nextState);
+    return true;
   }, []);
 
-  const saveTemplate = useCallback((name, schedules) => {
-    if (persistenceBlocked || writeConflict) return false;
-    const id = createUniqueId('template', templates.map((template) => template.id));
-    const template = createTemplateFromSchedules(name, schedules, id);
-    if (!template) return false;
-    updateTemplates((current) => [template, ...current]);
-    return true;
-  }, [persistenceBlocked, templates, updateTemplates, writeConflict]);
+  const saveTemplate = useCallback((name, schedules) => (
+    updateTemplates((current) => {
+      const id = createUniqueId('template', current.map((template) => template.id));
+      const template = createTemplateFromSchedules(name, schedules, id);
+      return template ? [template, ...current] : null;
+    })
+  ), [updateTemplates]);
 
-  const deleteTemplate = useCallback((templateId) => {
-    updateTemplates((current) => current.filter((template) => template.id !== templateId));
-  }, [updateTemplates]);
+  const deleteTemplate = useCallback((templateId) => (
+    updateTemplates((current) => {
+      if (!current.some((template) => template.id === templateId)) return null;
+      return current.filter((template) => template.id !== templateId);
+    })
+  ), [updateTemplates]);
 
   const replaceTemplates = useCallback((nextTemplates) => {
     const validated = validateTemplates(Array.isArray(nextTemplates) ? nextTemplates : []);
-    if (!validated) return;
-    setState({
+    if (!validated) return false;
+    const nextState = {
       templates: validated,
       persistenceBlocked: false,
       writeFailed: false,
       needsWrite: false,
       baseSerialized: serializeTemplates(validated),
       writeConflict: false,
-    });
+    };
+    stateRef.current = nextState;
+    setState(nextState);
+    return true;
   }, []);
 
   return {
