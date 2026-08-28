@@ -60,11 +60,11 @@ export function MonthlyAnalyticsView({ insights, selectedDate, onChangeDate }) {
 
           <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-start justify-between gap-3">
-              <div><h2 className="flex items-center gap-2 text-base font-bold text-gray-800"><Clock3 className="h-5 w-5 text-indigo-500" />月間の開始日時ズレ</h2><p className="mt-1 text-xs leading-relaxed text-gray-500">開始日と時刻が明示された記録だけで計算します。深夜跨ぎも日付を使って正確に扱います。</p></div>
+              <div><h2 className="flex items-center gap-2 text-base font-bold text-gray-800"><Clock3 className="h-5 w-5 text-indigo-500" />月間の開始日時ズレ</h2><p className="mt-1 text-xs leading-relaxed text-gray-500">開始日と時刻が明示され、予定日から前後1日以内の記録だけで計算します。深夜跨ぎは日付を使って正確に扱います。</p></div>
               <div className="text-right"><div className={`text-xl font-black ${shiftTone(insights.averageStartDelta)}`}>{formatStartShift(insights.averageStartDelta)}</div><div className="text-[10px] text-gray-400">平均</div></div>
             </div>
             <div className="grid grid-cols-2 gap-3"><SmallStat label="平均絶対ズレ" value={insights.averageAbsoluteStartDelta === null ? '—' : `${insights.averageAbsoluteStartDelta}分`} /><SmallStat label="日時サンプル" value={`${insights.startSampleCount}件`} /></div>
-            {(insights.untimedStartCount > 0 || insights.undatedStartCount > 0) && <div className="mt-4 flex items-start gap-2 rounded-2xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-800"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>開始時刻未記録 {insights.untimedStartCount}件、開始日が不明な旧記録 {insights.undatedStartCount}件は開始ズレの集計から除外しています。</span></div>}
+            {(insights.untimedStartCount > 0 || insights.undatedStartCount > 0 || insights.distantStartCount > 0) && <div className="mt-4 flex items-start gap-2 rounded-2xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-800"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>開始ズレから除外: 開始時刻未記録 {insights.untimedStartCount}件、開始日不明 {insights.undatedStartCount}件、予定日から前後1日より遠い開始 {insights.distantStartCount}件。</span></div>}
           </section>
 
           <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
