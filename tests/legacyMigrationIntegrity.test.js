@@ -58,6 +58,7 @@ test('schedule hook blocks persistence when legacy migration is unsafe', () => {
   const hook = source('src/hooks/usePersistentSchedules.js');
   assert.match(hook, /migrateLegacySchedulesResult/);
   assert.match(hook, /persistenceBlocked: !migration\.ok/);
-  assert.match(hook, /if \(persistenceBlocked\) return;/);
-  assert.ok(hook.indexOf('if (persistenceBlocked) return;') < hook.indexOf('removeItem(LEGACY_STORAGE_KEY)'));
+  assert.match(hook, /if \(persistenceBlocked \|\| !needsWrite\) return;/);
+  assert.ok(hook.indexOf('if (persistenceBlocked || !needsWrite) return;') < hook.indexOf('removeItem(LEGACY_STORAGE_KEY)'));
+  assert.match(hook, /needsWrite: Boolean\(legacyRaw\) && migration\.ok/);
 });
