@@ -65,12 +65,12 @@ export function WeeklyAnalyticsView({ insights, selectedDate, onChangeDate }) {
 
           <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-start justify-between gap-3">
-              <div><h2 className="flex items-center gap-2 text-base font-bold text-gray-800"><Clock3 className="h-5 w-5 text-indigo-500" />開始日時のズレ</h2><p className="mt-1 text-xs leading-relaxed text-gray-500">プラスは予定より遅く、マイナスは早く開始。日付をまたいだ記録も開始日があれば正確に計算します。</p></div>
+              <div><h2 className="flex items-center gap-2 text-base font-bold text-gray-800"><Clock3 className="h-5 w-5 text-indigo-500" />開始日時のズレ</h2><p className="mt-1 text-xs leading-relaxed text-gray-500">プラスは予定より遅く、マイナスは早く開始。同日〜前後1日の記録だけを比較し、遠い日付は誤入力の影響を避けるため平均から除外します。</p></div>
               <div className="text-right"><div className={`text-xl font-black ${shiftTone(insights.averageStartDelta)}`}>{formatStartShift(insights.averageStartDelta)}</div><div className="text-[10px] text-gray-400">平均</div></div>
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm"><SmallStat label="平均絶対ズレ" value={insights.averageAbsoluteStartDelta === null ? '—' : `${insights.averageAbsoluteStartDelta}分`} /><SmallStat label="日時サンプル" value={`${insights.startSampleCount}件`} /></div>
-            {(insights.untimedStartCount > 0 || insights.undatedStartCount > 0) && (
-              <div className="mt-4 flex items-start gap-2 rounded-2xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-800"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>開始時刻未記録 {insights.untimedStartCount}件、開始日は不明だが時刻だけ残る旧記録 {insights.undatedStartCount}件は平均から除外しています。</span></div>
+            {(insights.untimedStartCount > 0 || insights.undatedStartCount > 0 || insights.distantStartCount > 0) && (
+              <div className="mt-4 flex items-start gap-2 rounded-2xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-800"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>平均から除外: 開始時刻未記録 {insights.untimedStartCount}件、開始日不明 {insights.undatedStartCount}件、予定日から前後1日より遠い開始 {insights.distantStartCount}件。</span></div>
             )}
           </section>
 
