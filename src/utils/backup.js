@@ -1,4 +1,4 @@
-import { BACKUP_FORMAT, BACKUP_VERSION } from '../constants.js';
+import { BACKUP_FORMAT, BACKUP_VERSION, EXPERIMENT_STORAGE_VERSION } from '../constants.js';
 import { isValidDateKey } from './date.js';
 import { normalizeExperiments } from './experiment.js';
 import { parseStoredExperimentsForPersistence } from './experimentStorage.js';
@@ -86,7 +86,13 @@ export function parseBackup(raw) {
   const templates = templateResult.templates;
 
   const rawExperiments = parsed.experiments ?? [];
-  const experimentResult = parseStoredExperimentsForPersistence(JSON.stringify(rawExperiments));
+  // A backup is itself a current, versioned format. Do not route its experiment
+  // rows through the legacy bare-array compatibility path, which intentionally
+  // canonicalizes old form-shaped numeric strings during one-time migration.
+  const experimentResult = parseStoredExperimentsForPersistence(JSON.stringify({
+    version: EXPERIMENT_STORAGE_VERSION,
+    experiments: rawExperiments,
+  }));
   if (!experimentResult.ok || !experimentLineageValid(experimentResult.experiments)) {
     return { ok: false, error: '実験履歴に復元できない項目があります。' };
   }
