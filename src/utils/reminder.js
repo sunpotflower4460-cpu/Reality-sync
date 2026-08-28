@@ -9,6 +9,7 @@ export const DEFAULT_REMINDER_PREFERENCES = Object.freeze({
 });
 
 export const REMINDER_DELAY_OPTIONS = Object.freeze([0, 5, 10, 15, 30, 60, 120]);
+const REMINDER_FIELDS = new Set(['enabled', 'delayMinutes', 'browserNotifications']);
 
 export function normalizeReminderPreferences(value) {
   const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -23,13 +24,42 @@ export function normalizeReminderPreferences(value) {
   };
 }
 
-export function parseStoredReminderPreferences(raw) {
-  if (!raw) return { ...DEFAULT_REMINDER_PREFERENCES };
-  try {
-    return normalizeReminderPreferences(JSON.parse(raw));
-  } catch {
-    return { ...DEFAULT_REMINDER_PREFERENCES };
+function reminderPreferencesPreserved(raw, normalized) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+  if (Object.keys(raw).some((key) => !REMINDER_FIELDS.has(key))) return false;
+  if (raw.enabled !== undefined && (typeof raw.enabled !== 'boolean' || normalized.enabled !== raw.enabled)) return false;
+  if (raw.browserNotifications !== undefined && (
+    typeof raw.browserNotifications !== 'boolean'
+    || normalized.browserNotifications !== raw.browserNotifications
+  )) return false;
+  if (raw.delayMinutes !== undefined) {
+    if (typeof raw.delayMinutes !== 'number' || !REMINDER_DELAY_OPTIONS.includes(raw.delayMinutes)) return false;
+    if (normalized.delayMinutes !== raw.delayMinutes) return false;
   }
+  return true;
+}
+
+export function parseStoredReminderPreferencesResult(raw) {
+  if (!raw) {
+    return { ok: true, preferences: { ...DEFAULT_REMINDER_PREFERENCES } };
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { ok: false, preferences: { ...DEFAULT_REMINDER_PREFERENCES } };
+  }
+
+  const preferences = normalizeReminderPreferences(parsed);
+  if (!reminderPreferencesPreserved(parsed, preferences)) {
+    return { ok: false, preferences: { ...DEFAULT_REMINDER_PREFERENCES } };
+  }
+  return { ok: true, preferences };
+}
+
+export function parseStoredReminderPreferences(raw) {
+  return parseStoredReminderPreferencesResult(raw).preferences;
 }
 
 function minutesSinceMidnight(date) {
