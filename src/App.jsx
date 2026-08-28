@@ -54,6 +54,7 @@ export default function App() {
   const {
     schedules,
     setSchedules,
+    resolveSchedulesForMutation,
     store,
     replaceStore,
     storageProtection: scheduleStorageProtection,
@@ -298,6 +299,13 @@ export default function App() {
     setSelectedPlanFeedbackId(null);
   };
 
+  const saveCurrentDayAsTemplate = (name) => {
+    if (protectedMode || schedules.length === 0) return false;
+    const sourceSchedules = resolveSchedulesForMutation(dayRevisionKey(schedules));
+    if (!sourceSchedules || sourceSchedules.length === 0) return false;
+    return saveTemplate(name, sourceSchedules);
+  };
+
   const applyTemplate = (template) => {
     if (protectedMode || !template?.schedules?.length) return false;
     const targetRevision = dayRevisionKey(schedules);
@@ -451,7 +459,7 @@ export default function App() {
       {!protectedMode && canRecordSelectedDate && recordSession && <RecordModal key={`record:${recordSession.dateKey}:${String(recordSession.id)}:${recordSession.baseRevision}`} schedule={recordSession.schedule} dateKey={recordSession.dateKey} stale={recordSessionStale} onClose={() => setRecordSession(null)} onSave={saveRecord} />}
       {!protectedMode && selectedPlanFeedback && <PlanFeedbackModal preview={selectedPlanFeedback.preview} onApply={applySelectedPlanFeedback} onClose={() => setSelectedPlanFeedbackId(null)} />}
       {!protectedMode && editorState && <ScheduleEditorModal key={`editor:${selectedDate}:${editorState.type}:${editorState.type === 'edit' ? editorState.baseRevision : 'new'}`} schedule={editingSchedule} stale={editorSessionStale} onClose={() => setEditorState(null)} onSave={saveSchedule} onDelete={editorState.type === 'edit' ? deleteSchedule : undefined} />}
-      {!protectedMode && isTemplateModalOpen && <TemplateModal templates={templates} currentSchedules={schedules} onClose={() => setIsTemplateModalOpen(false)} onSaveTemplate={(name) => saveTemplate(name, schedules)} onApplyTemplate={applyTemplate} onDeleteTemplate={deleteTemplate} />}
+      {!protectedMode && isTemplateModalOpen && <TemplateModal templates={templates} currentSchedules={schedules} onClose={() => setIsTemplateModalOpen(false)} onSaveTemplate={saveCurrentDayAsTemplate} onApplyTemplate={applyTemplate} onDeleteTemplate={deleteTemplate} />}
       {isSettingsOpen && <SettingsModal store={store} templates={templates} experiments={experiments} reminderPreferences={reminderPreferences} storageProtection={storageProtection} onChangeReminderPreferences={setReminderPreferences} onRestoreBackup={restoreBackup} onEraseAllData={eraseAllData} onOpenLegal={openLegal} canInstall={canInstall} isInstalled={isInstalled} isNativeShell={isNativeShell} onInstall={install} onClose={() => setIsSettingsOpen(false)} />}
       {legalPage && <LegalModal page={legalPage} onClose={() => setLegalPage(null)} />}
     </div>
