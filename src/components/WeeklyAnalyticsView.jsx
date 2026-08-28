@@ -10,7 +10,7 @@ import {
   Smile,
 } from 'lucide-react';
 import { MOOD, STATUS } from '../constants.js';
-import { formatShortDateLabel, formatWeekLabel, shiftDateKey } from '../utils/date.js';
+import { dateKeyFromDate, formatShortDateLabel, formatWeekLabel, shiftDateKey, startOfWeekDateKey } from '../utils/date.js';
 import { formatTime } from '../utils/schedule.js';
 
 function formatStartShift(value) {
@@ -32,6 +32,7 @@ function stressLabel(value) {
 
 export function WeeklyAnalyticsView({ insights, selectedDate, onChangeDate }) {
   const hasWeekData = insights.totalSchedules > 0;
+  const futureWeek = startOfWeekDateKey(selectedDate) > dateKeyFromDate();
   const allCategoryTimes = Object.values(insights.categories).flatMap((category) => [category.ideal, category.actual]);
   const maxCategoryTime = Math.max(...allCategoryTimes, 1);
 
@@ -46,7 +47,11 @@ export function WeeklyAnalyticsView({ insights, selectedDate, onChangeDate }) {
       </section>
 
       {!hasWeekData ? (
-        <section className="rounded-3xl border border-dashed border-indigo-200 bg-white p-8 text-center shadow-sm"><h2 className="mb-2 text-lg font-extrabold text-gray-800">この週にはまだ予定がありません</h2><p className="text-sm leading-relaxed text-gray-500">予定と実績が複数日にたまると、開始時刻のズレや曜日ごとの違いを比較できます。</p></section>
+        futureWeek ? (
+          <section className="rounded-3xl border border-dashed border-indigo-200 bg-white p-8 text-center shadow-sm"><h2 className="mb-2 text-lg font-extrabold text-gray-800">この週の現実はまだ観測前です</h2><p className="text-sm leading-relaxed text-gray-500">未来の週は、保存済みの予定があっても「未記録」として数えません。週が始まると観測できる範囲だけを集計します。</p></section>
+        ) : (
+          <section className="rounded-3xl border border-dashed border-indigo-200 bg-white p-8 text-center shadow-sm"><h2 className="mb-2 text-lg font-extrabold text-gray-800">この週にはまだ予定がありません</h2><p className="text-sm leading-relaxed text-gray-500">予定と実績が複数日にたまると、開始時刻のズレや曜日ごとの違いを比較できます。</p></section>
+        )
       ) : (
         <>
           <section className="grid grid-cols-2 gap-3">
