@@ -72,22 +72,46 @@ export function persistRestoredBackup(data, storage = globalThis.window?.localSt
   }
 }
 
+export function eraseStoredRealitySyncDataResult(storage = globalThis.window?.localStorage) {
+  if (!storage) return { ok: false, rollbackOk: true };
+
+  const previous = new Map();
+  try {
+    for (const key of REALITY_SYNC_STORAGE_KEYS) previous.set(key, storage.getItem(key));
+  } catch {
+    // Never begin a destructive erase when the current state cannot first be
+    // snapshotted for rollback.
+    return { ok: false, rollbackOk: true };
+  }
+
+  try {
+    for (const key of REALITY_SYNC_STORAGE_KEYS) storage.removeItem(key);
+    for (const key of REALITY_SYNC_STORAGE_KEYS) {
+      if (storage.getItem(key) !== null) throw new Error('erase verification failed');
+    }
+    return { ok: true, rollbackOk: true };
+  } catch {
+    let rollbackOk = true;
+    // Restore every domain, not only the keys whose removeItem call returned.
+    // A storage implementation may have mutated before reporting failure.
+    for (const key of REALITY_SYNC_STORAGE_KEYS) {
+      try {
+        restoreRawValue(storage, key, previous.get(key) ?? null);
+      } catch {
+        rollbackOk = false;
+      }
+    }
+    for (const key of REALITY_SYNC_STORAGE_KEYS) {
+      try {
+        if (storage.getItem(key) !== (previous.get(key) ?? null)) rollbackOk = false;
+      } catch {
+        rollbackOk = false;
+      }
+    }
+    return { ok: false, rollbackOk };
+  }
+}
+
 export function eraseStoredRealitySyncData(storage = globalThis.window?.localStorage) {
-  if (!storage) return false;
-  let ok = true;
-  for (const key of REALITY_SYNC_STORAGE_KEYS) {
-    try {
-      storage.removeItem(key);
-    } catch {
-      ok = false;
-    }
-  }
-  for (const key of REALITY_SYNC_STORAGE_KEYS) {
-    try {
-      if (storage.getItem(key) !== null) ok = false;
-    } catch {
-      ok = false;
-    }
-  }
-  return ok;
+  return eraseStoredRealitySyncDataResult(storage).ok;
 }
