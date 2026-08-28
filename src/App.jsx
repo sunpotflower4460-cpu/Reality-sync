@@ -36,6 +36,7 @@ function instantiatePlans(source) {
   });
 }
 function scheduleRevisionKey(schedule) { return schedule ? JSON.stringify(schedule) : 'none'; }
+function dayRevisionKey(schedules) { return JSON.stringify(Array.isArray(schedules) ? schedules : []); }
 function timeKeyFromDate(date) {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
@@ -212,21 +213,27 @@ export default function App() {
 
   const saveRecord = (record) => {
     if (!recordSession || protectedMode || !canRecordSelectedDate || recordSession.dateKey !== selectedDate) return false;
-    const currentSchedule = schedules.find((schedule) => schedule.id === recordSession.id);
-    if (!currentSchedule || scheduleRevisionKey(currentSchedule) !== recordSession.baseRevision) return false;
-    setSchedules((current) => current.map((schedule) => schedule.id === recordSession.id ? { ...schedule, ...record } : schedule));
+    const accepted = setSchedules((current) => {
+      const currentSchedule = current.find((schedule) => schedule.id === recordSession.id);
+      if (!currentSchedule || scheduleRevisionKey(currentSchedule) !== recordSession.baseRevision) return null;
+      return current.map((schedule) => schedule.id === recordSession.id ? { ...schedule, ...record } : schedule);
+    });
+    if (!accepted) return false;
     setRecordSession(null);
     return true;
   };
 
   const saveSchedule = (draft) => {
     if (protectedMode) return false;
+    let accepted;
     if (editorState?.type === 'edit') {
-      const currentSchedule = schedules.find((schedule) => schedule.id === editorState.id);
-      if (!currentSchedule || scheduleRevisionKey(currentSchedule) !== editorState.baseRevision) return false;
-      setSchedules((current) => current.map((schedule) => schedule.id === editorState.id ? { ...schedule, ...draft } : schedule));
+      accepted = setSchedules((current) => {
+        const currentSchedule = current.find((schedule) => schedule.id === editorState.id);
+        if (!currentSchedule || scheduleRevisionKey(currentSchedule) !== editorState.baseRevision) return null;
+        return current.map((schedule) => schedule.id === editorState.id ? { ...schedule, ...draft } : schedule);
+      });
     } else {
-      setSchedules((current) => {
+      accepted = setSchedules((current) => {
         const id = createUniqueId('schedule', current.map((schedule) => schedule.id));
         return [...current, {
           id,
@@ -245,17 +252,22 @@ export default function App() {
         }];
       });
     }
+    if (!accepted) return false;
     setEditorState(null);
     return true;
   };
 
   const deleteSchedule = (scheduleId) => {
     if (protectedMode) return false;
-    if (editorState?.type === 'edit' && editorState.id === scheduleId) {
-      const currentSchedule = schedules.find((schedule) => schedule.id === scheduleId);
-      if (!currentSchedule || scheduleRevisionKey(currentSchedule) !== editorState.baseRevision) return false;
-    }
-    setSchedules((current) => current.filter((schedule) => schedule.id !== scheduleId));
+    const accepted = setSchedules((current) => {
+      if (editorState?.type === 'edit' && editorState.id === scheduleId) {
+        const currentSchedule = current.find((schedule) => schedule.id === scheduleId);
+        if (!currentSchedule || scheduleRevisionKey(currentSchedule) !== editorState.baseRevision) return null;
+      }
+      if (!current.some((schedule) => schedule.id === scheduleId)) return null;
+      return current.filter((schedule) => schedule.id !== scheduleId);
+    });
+    if (!accepted) return false;
     if (recordSession?.id === scheduleId) setRecordSession(null);
     setSelectedPlanFeedbackId(null);
     setEditorState(null);
@@ -269,29 +281,50 @@ export default function App() {
   };
 
   const copyPreviousDay = () => {
-    if (protectedMode || previousSchedules.length === 0 || !confirmReplaceDay('前日の予定')) return;
-    setSchedules(instantiatePlans(previousSchedules));
+    if (protectedMode || previousSchedules.length === 0) return;
+    const baseRevision = dayRevisionKey(schedules);
+    if (!confirmReplaceDay('前日の予定')) return;
+    const accepted = setSchedules((current) => (
+      dayRevisionKey(current) === baseRevision ? instantiatePlans(previousSchedules) : null
+    ));
+    if (!accepted) return;
     setSelectedPlanFeedbackId(null);
   };
 
   const applyTemplate = (template) => {
-    if (protectedMode || !template?.schedules?.length || !confirmReplaceDay(`テンプレート「${template.name}」`)) return;
-    setSchedules(instantiatePlans(template.schedules));
+    if (protectedMode || !template?.schedules?.length) return false;
+    const baseRevision = dayRevisionKey(schedules);
+    if (!confirmReplaceDay(`テンプレート「${template.name}」`)) return false;
+    const accepted = setSchedules((current) => (
+      dayRevisionKey(current) === baseRevision ? instantiatePlans(template.schedules) : null
+    ));
+    if (!accepted) return false;
     setSelectedPlanFeedbackId(null);
     setIsTemplateModalOpen(false);
+    return true;
   };
 
   const applySelectedPlanFeedback = () => {
-    if (protectedMode || !selectedPlanFeedback) return;
+    if (protectedMode || !selectedPlanFeedback) return false;
     const experiment = experiments.find((item) => item.id === selectedPlanFeedback.experimentId);
     if (!experiment) {
       setSelectedPlanFeedbackId(null);
-      return;
+      return false;
     }
-    const newScheduleId = createUniqueId('schedule', schedules.map((schedule) => schedule.id));
-    const result = applyPlanFeedback(experiment, selectedDate, schedules, selectedPlanFeedback.scheduleId, newScheduleId);
-    if (result.ok) setSchedules(result.schedules);
+    const accepted = setSchedules((current) => {
+      const newScheduleId = createUniqueId('schedule', current.map((schedule) => schedule.id));
+      const result = applyPlanFeedback(
+        experiment,
+        selectedDate,
+        current,
+        selectedPlanFeedback.scheduleId,
+        newScheduleId,
+      );
+      return result.ok ? result.schedules : null;
+    });
+    if (!accepted) return false;
     setSelectedPlanFeedbackId(null);
+    return true;
   };
 
   const restoreBackup = ({ scheduleStore, templates: restoredTemplates, reminderPreferences: restoredReminders, experiments: restoredExperiments = [] }) => {
