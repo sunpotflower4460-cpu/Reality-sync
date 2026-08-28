@@ -35,7 +35,7 @@ function loadExperimentState() {
       writeFailed: false,
     };
   } catch {
-    return { experiments: [], persistenceBlocked: false, unsupportedVersion: null, writeFailed: true };
+    return { experiments: [], persistenceBlocked: true, unsupportedVersion: null, writeFailed: false };
   }
 }
 
