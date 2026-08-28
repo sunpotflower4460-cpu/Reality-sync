@@ -129,17 +129,50 @@ export function useScheduleTemplates() {
     return () => window.removeEventListener('storage', syncTemplates);
   }, [applyState]);
 
-  // Keep same-frame repeated UI actions on one synchronous source of truth.
-  // This prevents a double click from allocating against the same stale list.
-  const updateTemplates = useCallback((updater) => {
+  const latestStateBeforeMutation = useCallback(() => {
     const current = stateRef.current;
-    if (current.persistenceBlocked || current.writeConflict) return false;
+    if (current.persistenceBlocked || current.writeConflict) return null;
+    try {
+      const latest = parseStoredTemplatesResult(window.localStorage.getItem(TEMPLATE_STORAGE_KEY));
+      if (!latest.ok) {
+        applyState({ ...current, persistenceBlocked: true, needsWrite: false });
+        return null;
+      }
+      const latestSerialized = serializeTemplates(latest.templates);
+      if (latestSerialized === current.baseSerialized) return current;
+      if (current.needsWrite) {
+        applyState({ ...current, writeConflict: true, writeFailed: false, needsWrite: false });
+        return null;
+      }
+      return {
+        templates: latest.templates,
+        persistenceBlocked: false,
+        writeFailed: false,
+        needsWrite: false,
+        baseSerialized: latestSerialized,
+        writeConflict: false,
+      };
+    } catch {
+      applyState({ ...current, persistenceBlocked: true, needsWrite: false });
+      return null;
+    }
+  }, [applyState]);
+
+  // Keep same-frame repeated UI actions on one synchronous source of truth and
+  // preflight device storage so an undelivered storage event cannot cause a
+  // false-success mutation.
+  const updateTemplates = useCallback((updater) => {
+    const current = latestStateBeforeMutation();
+    if (!current) return false;
     const next = typeof updater === 'function' ? updater(current.templates) : updater;
     const validated = validateTemplates(next);
-    if (!validated) return false;
+    if (!validated) {
+      if (current !== stateRef.current) applyState(current);
+      return false;
+    }
     applyState({ ...current, templates: validated, needsWrite: true });
     return true;
-  }, [applyState]);
+  }, [applyState, latestStateBeforeMutation]);
 
   const saveTemplate = useCallback((name, schedules) => (
     updateTemplates((current) => {
