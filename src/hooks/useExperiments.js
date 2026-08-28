@@ -173,18 +173,58 @@ export function useExperiments() {
     return () => window.removeEventListener('storage', sync);
   }, [applyState]);
 
-  // User actions can fire more than once before React renders the first update.
-  // Keep a synchronous snapshot so a second click evaluates against the first
-  // accepted mutation rather than the stale render-time experiments array.
-  const updateExperiments = useCallback((updater) => {
+  const latestStateBeforeMutation = useCallback(() => {
     const current = stateRef.current;
-    if (current.persistenceBlocked || current.writeConflict) return false;
+    if (current.persistenceBlocked || current.writeConflict) return null;
+    try {
+      const latest = parseStoredExperimentsForPersistence(
+        window.localStorage.getItem(EXPERIMENT_STORAGE_KEY),
+      );
+      if (!latest.ok) {
+        applyState({
+          ...current,
+          persistenceBlocked: true,
+          unsupportedVersion: latest.unsupportedVersion,
+          needsWrite: false,
+        });
+        return null;
+      }
+      const latestSerialized = canonicalExperiments(latest.experiments);
+      if (latestSerialized === current.baseSerialized) return current;
+      if (current.needsWrite) {
+        applyState({ ...current, writeConflict: true, writeFailed: false, needsWrite: false });
+        return null;
+      }
+      return {
+        experiments: latest.experiments,
+        persistenceBlocked: false,
+        unsupportedVersion: null,
+        writeFailed: false,
+        needsWrite: false,
+        baseSerialized: latestSerialized,
+        writeConflict: false,
+      };
+    } catch {
+      applyState({ ...current, persistenceBlocked: true, needsWrite: false });
+      return null;
+    }
+  }, [applyState]);
+
+  // User actions can fire before React renders a storage event or before a
+  // previous accepted click renders. Preflight both the synchronous hook state
+  // and device storage before accepting the mutation.
+  const updateExperiments = useCallback((updater) => {
+    const current = latestStateBeforeMutation();
+    if (!current) return false;
     const next = typeof updater === 'function' ? updater(current.experiments) : updater;
     const validated = validatedExperiments(next);
-    if (!validated) return false;
+    if (!validated) {
+      if (current !== stateRef.current) applyState(current);
+      return false;
+    }
     applyState({ ...current, experiments: validated, needsWrite: true });
     return true;
-  }, [applyState]);
+  }, [applyState, latestStateBeforeMutation]);
 
   const startExperiment = useCallback((candidate, options) => (
     updateExperiments((current) => {
