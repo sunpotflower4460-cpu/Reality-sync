@@ -6,6 +6,7 @@ const VALID_STATUSES = new Set(Object.values(STATUS));
 const VALID_MOODS = new Set(Object.values(MOOD));
 const VALID_CATEGORIES = new Set(CATEGORIES);
 const STORE_FIELDS = new Set(['version', 'days']);
+const SNAPSHOT_FIELDS = new Set(['time', 'title', 'category', 'duration', 'plannedStress']);
 const SCHEDULE_FIELDS = new Set([
   'id',
   'time',
@@ -57,6 +58,7 @@ function validStoredExperimentIds(value, normalized) {
 function validStoredSnapshot(value, normalized) {
   if (value === undefined || value === null) return true;
   if (!value || typeof value !== 'object' || Array.isArray(value) || !normalized) return false;
+  if (Object.keys(value).some((key) => !SNAPSHOT_FIELDS.has(key))) return false;
   if (!isValidTime(value.time)) return false;
   if (typeof value.title !== 'string' || !value.title.trim()) return false;
   if (!VALID_CATEGORIES.has(value.category)) return false;
