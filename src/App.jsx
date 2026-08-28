@@ -176,14 +176,17 @@ export default function App() {
   useEffect(() => {
     const previousTodayKey = previousTodayKeyRef.current;
     if (previousTodayKey === todayKey) return;
+    if (selectedDate !== previousTodayKey) {
+      previousTodayKeyRef.current = todayKey;
+      return;
+    }
+    // Do not throw away unsaved modal input just because midnight passed. Keep
+    // yesterday selected until the active interaction closes, then this effect
+    // runs again and advances the idle app to today.
+    if (recordSession || editorState || isTemplateModalOpen || selectedPlanFeedbackId) return;
     previousTodayKeyRef.current = todayKey;
-    if (selectedDate !== previousTodayKey) return;
-    setRecordSession(null);
-    setSelectedPlanFeedbackId(null);
-    setEditorState(null);
-    setIsTemplateModalOpen(false);
     setSelectedDate(todayKey);
-  }, [selectedDate, todayKey]);
+  }, [editorState, isTemplateModalOpen, recordSession, selectedDate, selectedPlanFeedbackId, todayKey]);
 
   const changeDate = (dateKey) => {
     setRecordSession(null);
