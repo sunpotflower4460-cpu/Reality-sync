@@ -10,7 +10,7 @@ import {
 
 function loadScheduleState() {
   if (typeof window === 'undefined') {
-    return { store: createEmptyScheduleStore(), persistenceBlocked: false, unsupportedVersion: null };
+    return { store: createEmptyScheduleStore(), persistenceBlocked: false, unsupportedVersion: null, writeFailed: false };
   }
 
   try {
@@ -21,6 +21,7 @@ function loadScheduleState() {
         store: result.store,
         persistenceBlocked: !result.ok,
         unsupportedVersion: result.unsupportedVersion,
+        writeFailed: false,
       };
     }
 
@@ -33,15 +34,18 @@ function loadScheduleState() {
       store: migration.store,
       persistenceBlocked: !migration.ok,
       unsupportedVersion: null,
+      writeFailed: false,
     };
   } catch {
-    return { store: createEmptyScheduleStore(), persistenceBlocked: false, unsupportedVersion: null };
+    // A failed read is not evidence that storage is empty. Blocking persistence
+    // prevents a later successful write from replacing unseen on-device data.
+    return { store: createEmptyScheduleStore(), persistenceBlocked: true, unsupportedVersion: null, writeFailed: false };
   }
 }
 
 export function usePersistentSchedules(dateKey) {
   const [state, setState] = useState(loadScheduleState);
-  const { store, persistenceBlocked, unsupportedVersion } = state;
+  const { store, persistenceBlocked, unsupportedVersion, writeFailed } = state;
   const schedules = useMemo(() => store.days[dateKey] ?? [], [dateKey, store.days]);
 
   useEffect(() => {
@@ -49,8 +53,9 @@ export function usePersistentSchedules(dateKey) {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
       window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+      setState((current) => current.writeFailed ? { ...current, writeFailed: false } : current);
     } catch {
-      // Restricted/private browsing can reject storage. In-memory mode remains usable.
+      setState((current) => current.writeFailed ? current : { ...current, writeFailed: true });
     }
   }, [persistenceBlocked, store]);
 
@@ -62,6 +67,7 @@ export function usePersistentSchedules(dateKey) {
         store: result.store,
         persistenceBlocked: !result.ok,
         unsupportedVersion: result.unsupportedVersion,
+        writeFailed: false,
       });
     };
 
@@ -109,6 +115,7 @@ export function usePersistentSchedules(dateKey) {
       store: result.store,
       persistenceBlocked: false,
       unsupportedVersion: null,
+      writeFailed: false,
     });
   }, []);
 
@@ -118,6 +125,6 @@ export function usePersistentSchedules(dateKey) {
     clearDay,
     store,
     replaceStore,
-    storageProtection: { persistenceBlocked, unsupportedVersion },
+    storageProtection: { persistenceBlocked, unsupportedVersion, writeFailed },
   };
 }
