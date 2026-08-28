@@ -259,10 +259,13 @@ function experimentLineageValid(experiments) {
     if (!retention || retention.experimentId !== parent.id) return false;
     if (retention.throughDateKey < parent.decisionDateKey) return false;
     if (experiment.startDateKey <= retention.throughDateKey) return false;
-    if (
+    // Unscoped revalidation uses the overall retention window directly as its
+    // baseline. Context-scoped revalidation intentionally replaces these two
+    // values with a baseline calculated only from records matching contextRule.
+    if (!experiment.contextRule && (
       experiment.baselineFailureRate !== retention.failureRate
       || experiment.baselineSampleCount !== retention.assessmentCount
-    ) return false;
+    )) return false;
   }
 
   return true;
