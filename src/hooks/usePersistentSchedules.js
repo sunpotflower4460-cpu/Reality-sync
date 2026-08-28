@@ -5,7 +5,7 @@ import { dateKeyFromDate } from '../utils/date.js';
 import { normalizeSchedules } from '../utils/schedule.js';
 import {
   createEmptyScheduleStore,
-  migrateLegacySchedules,
+  migrateLegacySchedulesResult,
   normalizeScheduleStore,
   parseStoredScheduleStoreResult,
 } from '../utils/storage.js';
@@ -26,13 +26,14 @@ function loadScheduleState() {
       };
     }
 
+    const migration = migrateLegacySchedulesResult(
+      window.localStorage.getItem(LEGACY_STORAGE_KEY),
+      dateKeyFromDate(),
+      INITIAL_SCHEDULES,
+    );
     return {
-      store: migrateLegacySchedules(
-        window.localStorage.getItem(LEGACY_STORAGE_KEY),
-        dateKeyFromDate(),
-        INITIAL_SCHEDULES,
-      ),
-      persistenceBlocked: false,
+      store: migration.store,
+      persistenceBlocked: !migration.ok,
       unsupportedVersion: null,
     };
   } catch {
