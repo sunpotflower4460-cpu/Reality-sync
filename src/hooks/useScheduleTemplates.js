@@ -10,36 +10,36 @@ function validateTemplates(next) {
 }
 
 function loadTemplateState() {
-  if (typeof window === 'undefined') return { templates: [], persistenceBlocked: false, writeFailed: false };
+  if (typeof window === 'undefined') return { templates: [], persistenceBlocked: false, writeFailed: false, needsWrite: false };
   try {
     const result = parseStoredTemplatesResult(window.localStorage.getItem(TEMPLATE_STORAGE_KEY));
-    return { templates: result.templates, persistenceBlocked: !result.ok, writeFailed: false };
+    return { templates: result.templates, persistenceBlocked: !result.ok, writeFailed: false, needsWrite: false };
   } catch {
     // Do not treat an unreadable storage area as empty: a later write could
     // otherwise erase templates that this tab never successfully read.
-    return { templates: [], persistenceBlocked: true, writeFailed: false };
+    return { templates: [], persistenceBlocked: true, writeFailed: false, needsWrite: false };
   }
 }
 
 export function useScheduleTemplates() {
   const [state, setState] = useState(loadTemplateState);
-  const { templates, persistenceBlocked, writeFailed } = state;
+  const { templates, persistenceBlocked, writeFailed, needsWrite } = state;
 
   useEffect(() => {
-    if (persistenceBlocked) return;
+    if (persistenceBlocked || !needsWrite) return;
     try {
       window.localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
-      setState((current) => current.writeFailed ? { ...current, writeFailed: false } : current);
+      setState((current) => ({ ...current, writeFailed: false, needsWrite: false }));
     } catch {
       setState((current) => current.writeFailed ? current : { ...current, writeFailed: true });
     }
-  }, [persistenceBlocked, templates]);
+  }, [needsWrite, persistenceBlocked, templates]);
 
   useEffect(() => {
     const syncTemplates = (event) => {
       if (event.key !== TEMPLATE_STORAGE_KEY) return;
       const result = parseStoredTemplatesResult(event.newValue);
-      setState({ templates: result.templates, persistenceBlocked: !result.ok, writeFailed: false });
+      setState({ templates: result.templates, persistenceBlocked: !result.ok, writeFailed: false, needsWrite: false });
     };
     window.addEventListener('storage', syncTemplates);
     return () => window.removeEventListener('storage', syncTemplates);
@@ -51,7 +51,7 @@ export function useScheduleTemplates() {
       const next = typeof updater === 'function' ? updater(current.templates) : updater;
       const validated = validateTemplates(next);
       if (!validated) return current;
-      return { ...current, templates: validated };
+      return { ...current, templates: validated, needsWrite: true };
     });
   }, []);
 
@@ -71,7 +71,7 @@ export function useScheduleTemplates() {
   const replaceTemplates = useCallback((nextTemplates) => {
     const validated = validateTemplates(Array.isArray(nextTemplates) ? nextTemplates : []);
     if (!validated) return;
-    setState({ templates: validated, persistenceBlocked: false, writeFailed: false });
+    setState({ templates: validated, persistenceBlocked: false, writeFailed: false, needsWrite: false });
   }, []);
 
   return {
