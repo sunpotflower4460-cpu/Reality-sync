@@ -18,9 +18,11 @@ test('service worker scopes runtime caching, awaits writes and bounds old hashed
   assert.match(worker, /addEventListener\('fetch'/);
   assert.match(worker, /addEventListener\('notificationclick'/);
   assert.match(worker, /MAX_RUNTIME_ASSET_ENTRIES/);
-  assert.match(worker, /event\.waitUntil\(putResponse\(request, response\)\)/);
+  assert.match(worker, /if \(response\.ok\) await putResponse\(request, response\);/);
+  assert.doesNotMatch(worker, /then\(\(response\) => \{[\s\S]*?event\.waitUntil\(putResponse/);
   assert.match(worker, /url\.href\.startsWith\(scopeUrl\.href\)/);
   assert.match(worker, /client\.url\.startsWith\(scopeUrl\.href\)/);
+  assert.match(worker, /Response\.error\(\)/);
 });
 
 test('PWA install prompt is consumed before awaiting and cannot reject into the UI event loop', async () => {
