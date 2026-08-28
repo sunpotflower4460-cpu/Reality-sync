@@ -138,6 +138,9 @@ export default function App() {
     if (experimentStorageProtection.writeFailed) writeFailedDomains.push('実験履歴');
     if (reminderStorageProtection.writeFailed) writeFailedDomains.push('リマインダー設定');
     if (scheduleStorageProtection.writeConflict) conflictDomains.push('予定・実績');
+    if (templateStorageProtection.writeConflict) conflictDomains.push('テンプレート');
+    if (experimentStorageProtection.writeConflict) conflictDomains.push('実験履歴');
+    if (reminderStorageProtection.writeConflict) conflictDomains.push('リマインダー設定');
     return {
       persistenceBlocked: protectedDomains.length > 0,
       writeFailed: writeFailedDomains.length > 0,
@@ -151,8 +154,10 @@ export default function App() {
   }, [
     experimentStorageProtection.persistenceBlocked,
     experimentStorageProtection.unsupportedVersion,
+    experimentStorageProtection.writeConflict,
     experimentStorageProtection.writeFailed,
     reminderStorageProtection.persistenceBlocked,
+    reminderStorageProtection.writeConflict,
     reminderStorageProtection.writeFailed,
     scheduleStorageProtection.conflictDateKeys,
     scheduleStorageProtection.persistenceBlocked,
@@ -160,6 +165,7 @@ export default function App() {
     scheduleStorageProtection.writeConflict,
     scheduleStorageProtection.writeFailed,
     templateStorageProtection.persistenceBlocked,
+    templateStorageProtection.writeConflict,
     templateStorageProtection.writeFailed,
   ]);
   const protectedMode = storageProtection.persistenceBlocked || storageProtection.writeConflict;
@@ -344,7 +350,8 @@ export default function App() {
             <section role="alert" className="app-card mt-4 rounded-[1.25rem] border-amber-200 p-5 text-center">
               <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-50 text-amber-600"><AlertTriangle className="h-5 w-5" /></div>
               <h2 className="text-base font-semibold text-slate-800">別の画面との編集競合を検出しました</h2>
-              <p className="mt-2 text-xs leading-relaxed text-slate-500">同じ日の予定・実績が別タブや別ウィンドウでも変更されたため、自動でどちらかを上書きせず保存を停止しました。この画面の変更はメモリ上に残っています。</p>
+              <p className="mt-2 text-xs leading-relaxed text-slate-500">RealitySyncの保存データが別タブや別ウィンドウでも変更されたため、自動でどちらかを上書きせず保存を停止しました。この画面の変更はメモリ上に残っています。</p>
+              {storageProtection.conflictDomains.length > 0 && <p className="mt-2 text-xs font-medium text-amber-700">競合対象: {storageProtection.conflictDomains.join('・')}</p>}
               {storageProtection.conflictDateKeys.length > 0 && <p className="mt-2 text-xs font-medium text-amber-700">競合日: {storageProtection.conflictDateKeys.join('・')}</p>}
               <p className="mt-2 text-[10px] leading-relaxed text-slate-400">必要な内容をバックアップしてから、他のRealitySync画面を閉じて再読み込みしてください。</p>
               <button type="button" onClick={() => setIsSettingsOpen(true)} className="mt-4 min-h-11 w-full rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white">設定とデータを開く</button>
