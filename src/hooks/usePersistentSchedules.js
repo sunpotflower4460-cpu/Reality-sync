@@ -277,6 +277,11 @@ export function usePersistentSchedules(dateKey) {
       if (event.key !== STORAGE_KEY) return;
       const result = parseStoredScheduleStoreResult(event.newValue);
       applyState((current) => {
+        // Once a conflict is detected, keep the local in-memory copy frozen for
+        // rescue/export. Ignore every later event, even a malformed one, so the
+        // rescue snapshot cannot become persistence-blocked by remote activity.
+        if (current.writeConflict) return current;
+
         if (!result.ok) {
           // Preserve the local dirty store and dirtyDateKeys. If another tab later
           // repairs storage, we still need the original base to decide whether
@@ -287,10 +292,6 @@ export function usePersistentSchedules(dateKey) {
             unsupportedVersion: result.unsupportedVersion,
           };
         }
-
-        // Once a conflict is detected, keep the local in-memory copy frozen for
-        // rescue/export. Later storage events must not silently replace it.
-        if (current.writeConflict) return current;
 
         if (!current.needsWrite || current.dirtyDateKeys.length === 0) {
           return {
