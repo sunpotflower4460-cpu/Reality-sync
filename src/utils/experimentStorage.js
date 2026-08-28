@@ -108,9 +108,7 @@ function trialMetadataPreserved(rawTrials, normalizedTrials) {
     const raw = rawTrials[index];
     const normalized = normalizedTrials[index];
     if (!objectHasOnlyKeys(raw, TRIAL_FIELDS) || !normalized) return false;
-    if (raw.id !== undefined) {
-      if (typeof raw.id !== 'string' || !raw.id.trim() || normalized.id !== raw.id.trim()) return false;
-    }
+    if (typeof raw.id !== 'string' || !raw.id.trim() || normalized.id !== raw.id.trim()) return false;
     if (typeof raw.recordKey !== 'string' || !raw.recordKey.trim() || normalized.recordKey !== raw.recordKey.trim()) return false;
     if (!isValidDateKey(raw.dateKey) || normalized.dateKey !== raw.dateKey) return false;
     if (!VALID_TRIAL_OUTCOMES.has(raw.outcome) || normalized.outcome !== raw.outcome) return false;
@@ -118,12 +116,11 @@ function trialMetadataPreserved(rawTrials, normalizedTrials) {
       const numeric = optionalFiniteNumber(raw.observedValue);
       if (numeric === null || normalized.observedValue !== numeric) return false;
     }
-    if (raw.observedLabel !== undefined && !explicitTextPreserved(raw.observedLabel, normalized.observedLabel)) return false;
-    if (raw.capturedAt !== undefined && !explicitTextPreserved(raw.capturedAt, normalized.capturedAt)) return false;
-    if (raw.planTitle !== undefined && !explicitTextPreserved(raw.planTitle, normalized.planTitle)) return false;
-    if (raw.scheduleId !== undefined) {
-      if ((typeof raw.scheduleId !== 'string' && typeof raw.scheduleId !== 'number') || normalized.scheduleId !== String(raw.scheduleId).trim()) return false;
-    }
+    if (typeof raw.planTitle !== 'string' || !raw.planTitle.trim() || normalized.planTitle !== raw.planTitle.trim()) return false;
+    if (typeof raw.observedLabel !== 'string' || !raw.observedLabel.trim() || normalized.observedLabel !== raw.observedLabel.trim()) return false;
+    if (typeof raw.capturedAt !== 'string' || !raw.capturedAt.trim() || normalized.capturedAt !== raw.capturedAt.trim()) return false;
+    if (raw.scheduleId === undefined || raw.scheduleId === null) return false;
+    if ((typeof raw.scheduleId !== 'string' && typeof raw.scheduleId !== 'number') || normalized.scheduleId !== String(raw.scheduleId).trim() || !normalized.scheduleId) return false;
   }
   return true;
 }
@@ -225,11 +222,45 @@ function explicitMetadataPreserved(raw, normalized) {
   return true;
 }
 
+function experimentProtocolValid(experiment) {
+  if (experiment.trials.length > experiment.targetRuns) return false;
+  let latestTrialDate = null;
+  for (const trial of experiment.trials) {
+    if (!trial.scheduleId || trial.recordKey !== `${trial.dateKey}::${trial.scheduleId}`) return false;
+    if (trial.dateKey < experiment.startDateKey) return false;
+    if (latestTrialDate === null || trial.dateKey > latestTrialDate) latestTrialDate = trial.dateKey;
+  }
+
+  if (experiment.status === EXPERIMENT_STATUS.ACTIVE) {
+    return experiment.decision === null
+      && experiment.decisionDateKey === null
+      && experiment.completedAt === '';
+  }
+
+  if (experiment.status === EXPERIMENT_STATUS.ABANDONED) {
+    return experiment.decision === null
+      && experiment.decisionDateKey === null
+      && Boolean(experiment.completedAt);
+  }
+
+  if (
+    experiment.status !== EXPERIMENT_STATUS.COMPLETED
+    || !VALID_DECISIONS.has(experiment.decision)
+    || !experiment.decisionDateKey
+    || !experiment.completedAt
+    || experiment.trials.length < experiment.targetRuns
+    || experiment.decisionDateKey < experiment.startDateKey
+    || (latestTrialDate && experiment.decisionDateKey < latestTrialDate)
+  ) return false;
+  return true;
+}
+
 function experimentLineageValid(experiments) {
   const byId = new Map(experiments.map((experiment) => [experiment.id, experiment]));
   const versionsByRoot = new Map();
 
   for (const experiment of experiments) {
+    if (!experimentProtocolValid(experiment)) return false;
     const rootId = experiment.learningRootId || experiment.id;
     const version = experiment.learningVersion || 1;
     if (!byId.has(rootId)) return false;
