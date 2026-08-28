@@ -42,6 +42,17 @@ test('navigation caching uses canonical app-shell keys instead of accumulating q
   assert.doesNotMatch(navigationBlock, /putResponse\(request, response\)/);
 });
 
+test('privacy terms and support navigations cannot replace the cached SPA shell', async () => {
+  const worker = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
+  assert.match(worker, /function isAppShellNavigation\(url\)/);
+  assert.match(worker, /url\.pathname === scopeUrl\.pathname \|\| url\.pathname === indexUrl\.pathname/);
+  const navigationStart = worker.indexOf("if (request.mode === 'navigate')");
+  const firstRespond = worker.indexOf('event.respondWith((async () => {', navigationStart);
+  const guard = worker.indexOf('if (!isAppShellNavigation(url)) return;', navigationStart);
+  assert.ok(guard > navigationStart);
+  assert.ok(guard < firstRespond);
+});
+
 test('PWA install prompt is consumed before awaiting and cannot reject into the UI event loop', async () => {
   const hook = await readFile(new URL('../src/hooks/usePwaInstall.js', import.meta.url), 'utf8');
   const inFlightGuard = hook.indexOf('if (!promptEvent || installInFlightRef.current) return null;');
