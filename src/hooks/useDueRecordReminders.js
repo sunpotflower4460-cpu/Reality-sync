@@ -93,14 +93,20 @@ export function useDueRecordReminders({ schedules, dateKey, preferences }) {
     const notify = async () => {
       for (const schedule of pendingNotifications) {
         if (cancelled) return;
-        const shown = await showBrowserNotification(schedule, dateKey);
-        if (!shown || cancelled) continue;
         const key = reminderNotificationKey(dateKey, schedule.id);
-        notified.add(key);
+        // Reserve before awaiting the OS so a focus/visibility rerender cannot
+        // launch a second notification for the same schedule in parallel.
         sessionNotifiedRef.current.add(key);
+        const shown = await showBrowserNotification(schedule, dateKey);
+        if (!shown) {
+          sessionNotifiedRef.current.delete(key);
+          continue;
+        }
+        notified.add(key);
         // Persist when possible; the session ref remains authoritative for this
         // tab if storage is unavailable so the same alert is not sent every minute.
         writeNotifiedKeys([...notified]);
+        if (cancelled) return;
       }
     };
     notify();
