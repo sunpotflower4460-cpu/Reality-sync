@@ -22,3 +22,11 @@ test('notification key is reserved before awaiting OS display to close rerender 
   assert.ok(display > reserve, 'reservation must happen before asynchronous display');
   assert.ok(persist > display, 'persistent dedupe should only be written after a shown notification');
 });
+
+test('cross-midnight carryover notifications retain the previous-day dedupe key for the whole notification pass', () => {
+  const hook = source('src/hooks/useDueRecordReminders.js');
+  assert.match(hook, /const retainedDateKeys = \[todayKey, previousDateKey\]/);
+  assert.match(hook, /normalizeNotifiedReminderKeys\(\[\.\.\.sessionNotifiedRef\.current\], key\)/);
+  assert.match(hook, /readNotifiedKeys\(retainedDateKeys\)/);
+  assert.match(hook, /reminderNotificationKey\(sourceDateKey, schedule\.id\)/);
+});
