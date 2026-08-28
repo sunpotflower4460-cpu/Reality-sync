@@ -10,8 +10,10 @@ test('experiment mutations evaluate same-tick repeated actions against a synchro
   const hook = source('src/hooks/useExperiments.js');
   assert.match(hook, /const stateRef = useRef\(state\)/);
   assert.match(hook, /stateRef\.current = state/);
+  assert.match(hook, /const applyState = useCallback\(\(updater\) =>/);
+  assert.match(hook, /stateRef\.current = next;\s*setState\(next\);/s);
   assert.match(hook, /const current = stateRef\.current;/);
-  assert.match(hook, /stateRef\.current = nextState;\s*setState\(nextState\);/s);
+  assert.match(hook, /applyState\(\{ \.\.\.current, experiments: validated, needsWrite: true \}\)/);
 });
 
 test('starting an experiment rechecks active candidate identity inside the atomic mutation', () => {
