@@ -52,6 +52,14 @@ function observedDateKeys(dateKeys, throughDateKey) {
   return dateKeys.filter((dateKey) => dateKey <= throughDateKey);
 }
 
+function observedSchedules(rawSchedules, dateKey, throughDateKey, throughTime) {
+  const schedules = normalizeSchedules(rawSchedules, []);
+  if (dateKey !== throughDateKey || !isValidTime(throughTime)) return schedules;
+  return schedules.filter((schedule) => (
+    schedule.status !== STATUS.PENDING || schedule.time <= throughTime
+  ));
+}
+
 function createStressBucket() {
   return { count: 0, total: 0 };
 }
@@ -153,12 +161,12 @@ function recordScheduleObservations(state, schedule, plannedDateKey, dayDeltas) 
   dayDeltas.push(delta);
 }
 
-function calculateRangeInsights(days, dateKeys) {
+function calculateRangeInsights(days, dateKeys, throughDateKey = null, throughTime = null) {
   const sourceDays = days && typeof days === 'object' && !Array.isArray(days) ? days : {};
   const state = createOutcomeState();
 
   const daily = dateKeys.map((dateKey) => {
-    const schedules = normalizeSchedules(sourceDays[dateKey] ?? [], []);
+    const schedules = observedSchedules(sourceDays[dateKey] ?? [], dateKey, throughDateKey, throughTime);
     const stats = calculateStats(schedules);
     const dayRecorded = stats.completed + stats.changed + stats.skipped;
     const dayPlannedMinutes = sumCategoryMinutes(stats.categories, 'ideal');
@@ -243,8 +251,9 @@ function calculateRangeInsights(days, dateKeys) {
   };
 }
 
-export function calculateWeeklyInsights(days, anchorDateKey, throughDateKey = null) {
-  return calculateRangeInsights(days, observedDateKeys(getWeekDateKeys(anchorDateKey), throughDateKey));
+export function calculateWeeklyInsights(days, anchorDateKey, throughDateKey = null, throughTime = null) {
+  const dateKeys = observedDateKeys(getWeekDateKeys(anchorDateKey), throughDateKey);
+  return calculateRangeInsights(days, dateKeys, throughDateKey, throughTime);
 }
 
 function createWeekdayBucket(index) {
@@ -289,10 +298,10 @@ function finalizeWeekdayBucket(bucket) {
   };
 }
 
-export function calculateMonthlyInsights(days, anchorDateKey, throughDateKey = null) {
+export function calculateMonthlyInsights(days, anchorDateKey, throughDateKey = null, throughTime = null) {
   const sourceDays = days && typeof days === 'object' && !Array.isArray(days) ? days : {};
   const dateKeys = observedDateKeys(getMonthDateKeys(anchorDateKey), throughDateKey);
-  const range = calculateRangeInsights(sourceDays, dateKeys);
+  const range = calculateRangeInsights(sourceDays, dateKeys, throughDateKey, throughTime);
   const weekdayBuckets = Array.from({ length: 7 }, (_, index) => createWeekdayBucket(index));
   const weekMap = new Map();
 
@@ -312,7 +321,7 @@ export function calculateMonthlyInsights(days, anchorDateKey, throughDateKey = n
       bucket.actualMinutes += day.actualMinutes;
       bucket.unknownActualDurationCount += day.unknownActualDurationCount;
 
-      const schedules = normalizeSchedules(sourceDays[day.dateKey] ?? [], []);
+      const schedules = observedSchedules(sourceDays[day.dateKey] ?? [], day.dateKey, throughDateKey, throughTime);
       for (const schedule of schedules) {
         if (
           (schedule.status === STATUS.AS_PLANNED || schedule.status === STATUS.CHANGED)
