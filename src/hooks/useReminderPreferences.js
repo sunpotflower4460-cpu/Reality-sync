@@ -137,15 +137,49 @@ export function useReminderPreferences() {
     return () => window.removeEventListener('storage', syncPreferences);
   }, [applyState]);
 
-  const setPreferences = useCallback((nextValue) => {
+  const latestStateBeforeMutation = useCallback(() => {
     const current = stateRef.current;
-    if (current.persistenceBlocked || current.writeConflict) return false;
+    if (current.persistenceBlocked || current.writeConflict) return null;
+    try {
+      const latest = parseStoredReminderPreferencesResult(
+        window.localStorage.getItem(REMINDER_STORAGE_KEY),
+      );
+      if (!latest.ok) {
+        applyState({ ...current, persistenceBlocked: true, needsWrite: false });
+        return null;
+      }
+      const latestSerialized = serializePreferences(latest.preferences);
+      if (latestSerialized === current.baseSerialized) return current;
+      if (current.needsWrite) {
+        applyState({ ...current, writeConflict: true, writeFailed: false, needsWrite: false });
+        return null;
+      }
+      return {
+        preferences: latest.preferences,
+        persistenceBlocked: false,
+        writeFailed: false,
+        needsWrite: false,
+        baseSerialized: latestSerialized,
+        writeConflict: false,
+      };
+    } catch {
+      applyState({ ...current, persistenceBlocked: true, needsWrite: false });
+      return null;
+    }
+  }, [applyState]);
+
+  const setPreferences = useCallback((nextValue) => {
+    const current = latestStateBeforeMutation();
+    if (!current) return false;
     const next = typeof nextValue === 'function' ? nextValue(current.preferences) : nextValue;
     const validated = validateReminderPreferences(next);
-    if (!validated) return false;
+    if (!validated) {
+      if (current !== stateRef.current) applyState(current);
+      return false;
+    }
     applyState({ ...current, preferences: validated, needsWrite: true });
     return true;
-  }, [applyState]);
+  }, [applyState, latestStateBeforeMutation]);
 
   const replacePreferences = useCallback((nextValue) => {
     const validated = validateReminderPreferences(nextValue);
