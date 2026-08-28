@@ -135,3 +135,30 @@ test('once a storage conflict is frozen, later malformed storage events cannot d
     );
   }
 });
+
+test('cross-tab removeItem or localStorage.clear cannot be mistaken for an unchanged empty base and resurrect dirty data', () => {
+  const handlers = [
+    ['src/hooks/usePersistentSchedules.js', 'const syncFromStorage = (event) => {', 'STORAGE_KEY'],
+    ['src/hooks/useScheduleTemplates.js', 'const syncTemplates = (event) => {', 'TEMPLATE_STORAGE_KEY'],
+    ['src/hooks/useExperiments.js', 'const sync = (event) => {', 'EXPERIMENT_STORAGE_KEY'],
+    ['src/hooks/useReminderPreferences.js', 'const syncPreferences = (event) => {', 'REMINDER_STORAGE_KEY'],
+  ];
+
+  for (const [path, marker, keyName] of handlers) {
+    const handler = bracedBlockAfter(source(path), marker);
+    assert.match(
+      handler,
+      new RegExp(`event\\.key !== ${keyName} && event\\.key !== null`),
+      `${path} should observe localStorage.clear in addition to its own key`,
+    );
+    const conflictGuard = handler.indexOf('if (current.writeConflict) return current;');
+    const eraseGuard = handler.indexOf('if (event.newValue === null && current.needsWrite) {');
+    const invalidGuard = handler.indexOf('if (!result.ok) {');
+    assert.ok(eraseGuard > conflictGuard, `${path} should preserve an already-frozen rescue snapshot`);
+    assert.ok(eraseGuard < invalidGuard, `${path} should classify destructive deletion before ordinary parsing/recovery`);
+    const eraseBranch = bracedBlockAfter(handler, 'if (event.newValue === null && current.needsWrite) {');
+    assert.match(eraseBranch, /writeConflict:\s*true/);
+    assert.match(eraseBranch, /needsWrite:\s*false/);
+    assert.match(eraseBranch, /persistenceBlocked:\s*false/);
+  }
+});
