@@ -61,6 +61,8 @@ export function SettingsModal({
   ));
   const storageBlocked = Boolean(storageProtection?.persistenceBlocked);
   const storageWriteFailed = Boolean(storageProtection?.writeFailed);
+  const storageConflict = Boolean(storageProtection?.writeConflict);
+  const reminderEditingDisabled = storageBlocked || storageConflict;
 
   const restoreBackupText = useCallback((text) => {
     const parsed = parseBackup(text);
@@ -201,6 +203,12 @@ export function SettingsModal({
   const requestNotifications = async () => {
     setMessage('');
     setError('');
+    if (reminderEditingDisabled) {
+      setError(storageConflict
+        ? '別の画面との編集競合を解決してからリマインダー設定を変更してください。'
+        : '保存データ保護モード中はリマインダー設定を変更できません。');
+      return;
+    }
     if (typeof Notification === 'undefined') {
       setNotificationPermission('unsupported');
       setError('このブラウザはWeb通知に対応していません。アプリ内の記録待ちは利用できます。');
@@ -225,13 +233,13 @@ export function SettingsModal({
     const second = window.confirm('最終確認です。外部へ書き出したバックアップ以外のRealitySync端末内データを削除します。実行しますか？');
     if (!second) return;
 
-    onEraseAllData();
     const erased = eraseStoredRealitySyncData();
     if (!erased) {
       setMessage('');
-      setError('画面上のデータは消しましたが、端末保存領域からすべて削除できたことを確認できませんでした。再読み込みすると以前のデータが戻る可能性があります。');
+      setError('端末保存領域からすべて削除できたことを確認できなかったため、画面のデータも変更していません。再読み込みせず、必要なら先にバックアップを書き出してください。');
       return;
     }
+    onEraseAllData();
     window.dispatchEvent(new Event(BACKUP_RESTORED_EVENT));
     setError('');
     setMessage('この端末のRealitySyncデータを削除しました。');
@@ -270,7 +278,14 @@ export function SettingsModal({
           </section>
         )}
 
-        {storageWriteFailed && !storageBlocked && (
+        {storageConflict && !storageBlocked && (
+          <section className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[9px] leading-relaxed text-amber-800">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div><div className="font-semibold">別の画面との編集競合</div><p className="mt-1">別タブや別ウィンドウでも保存データが変更されました。現在画面の内容はメモリ上に残しています。必要ならバックアップを書き出してから、他のRealitySync画面を閉じて再読み込みしてください。{storageProtection.conflictDomains?.length ? ` 競合対象: ${storageProtection.conflictDomains.join('・')}` : ''}</p></div>
+          </section>
+        )}
+
+        {storageWriteFailed && !storageBlocked && !storageConflict && (
           <section className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[9px] leading-relaxed text-amber-800">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <div><div className="font-semibold">端末保存が完了していません</div><p className="mt-1">画面上の最新データを端末へ書き込めていません。再読み込み前にバックアップを書き出すことをおすすめします。バックアップ機能はこの状態でも利用できます。</p></div>
@@ -288,12 +303,12 @@ export function SettingsModal({
           <div className="app-group divide-y divide-slate-100">
             <label className="flex min-h-14 items-center justify-between gap-4 px-3.5 py-2.5">
               <span><span className="block text-[11px] font-semibold text-slate-700">アプリ内の記録待ち</span><span className="mt-0.5 block text-[8px] leading-relaxed text-slate-400">今日の未記録予定だけを表示</span></span>
-              <Toggle checked={reminderPreferences.enabled} onChange={(checked) => onChangeReminderPreferences((current) => ({ ...current, enabled: checked }))} />
+              <Toggle checked={reminderPreferences.enabled} disabled={reminderEditingDisabled} onChange={(checked) => onChangeReminderPreferences((current) => ({ ...current, enabled: checked }))} />
             </label>
 
             <label className="flex min-h-12 items-center justify-between gap-3 px-3.5 py-2.5">
               <span className="text-[10px] font-medium text-slate-600">記録待ちのタイミング</span>
-              <select value={reminderPreferences.delayMinutes} disabled={!reminderPreferences.enabled} onChange={(event) => onChangeReminderPreferences((current) => ({ ...current, delayMinutes: Number(event.target.value) }))} className="max-w-[11.5rem] rounded-lg border-0 bg-slate-50 px-2.5 py-2 text-right text-[10px] font-medium text-slate-700 outline-none disabled:opacity-45">
+              <select value={reminderPreferences.delayMinutes} disabled={!reminderPreferences.enabled || reminderEditingDisabled} onChange={(event) => onChangeReminderPreferences((current) => ({ ...current, delayMinutes: Number(event.target.value) }))} className="max-w-[11.5rem] rounded-lg border-0 bg-slate-50 px-2.5 py-2 text-right text-[10px] font-medium text-slate-700 outline-none disabled:opacity-45">
                 {REMINDER_DELAY_OPTIONS.map((minutes) => <option key={minutes} value={minutes}>{minutes === 0 ? '予定時刻になったら' : `開始から${minutes}分後`}</option>)}
               </select>
             </label>
@@ -303,7 +318,7 @@ export function SettingsModal({
                 <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-3.5 text-[10px] font-medium text-slate-600">
                   <span className="flex items-center gap-2">{notificationPermission === 'granted' ? <Bell className="h-3.5 w-3.5 text-emerald-500" /> : <BellOff className="h-3.5 w-3.5 text-slate-400" />}Web版のOS通知</span><ChevronRight className="h-3.5 w-3.5 text-slate-300 transition group-open:rotate-90" />
                 </summary>
-                <div className="border-t border-slate-100 bg-slate-50/60 p-3"><p className="text-[8px] leading-relaxed text-slate-400">Web版では許可時にブラウザ通知を利用します。</p><button type="button" onClick={requestNotifications} className="mt-2 min-h-10 w-full rounded-xl bg-white px-3 text-[9px] font-semibold text-indigo-600 ring-1 ring-slate-200">{notificationPermission === 'granted' ? '通知許可を確認済み' : 'OS通知を確認する'}</button></div>
+                <div className="border-t border-slate-100 bg-slate-50/60 p-3"><p className="text-[8px] leading-relaxed text-slate-400">Web版では許可時にブラウザ通知を利用します。</p><button type="button" onClick={requestNotifications} disabled={reminderEditingDisabled} className="mt-2 min-h-10 w-full rounded-xl bg-white px-3 text-[9px] font-semibold text-indigo-600 ring-1 ring-slate-200 disabled:cursor-not-allowed disabled:opacity-40">{notificationPermission === 'granted' ? '通知許可を確認済み' : 'OS通知を確認する'}</button></div>
               </details>
             )}
           </div>
@@ -354,10 +369,10 @@ function SectionLabel({ icon: Icon, children }) {
   return <p className="app-section-label flex items-center gap-1.5"><Icon className="h-3 w-3 text-indigo-400" aria-hidden="true" />{children}</p>;
 }
 
-function Toggle({ checked, onChange }) {
+function Toggle({ checked, onChange, disabled = false }) {
   return (
-    <span className="relative shrink-0">
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="peer sr-only" />
+    <span className={`relative shrink-0 ${disabled ? 'opacity-45' : ''}`}>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} className="peer sr-only" />
       <span className="block h-6 w-11 rounded-full bg-slate-200 transition peer-checked:bg-indigo-600" />
       <span className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition peer-checked:translate-x-5" />
     </span>
