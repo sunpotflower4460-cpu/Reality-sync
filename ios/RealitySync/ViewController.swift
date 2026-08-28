@@ -57,7 +57,7 @@ final class ViewController: UIViewController, WKNavigationDelegate, WKUIDelegate
             return
         }
 
-        webRootURL = root
+        webRootURL = root.standardizedFileURL
         let indexURL = root.appendingPathComponent("index.html")
         webView.loadFileURL(indexURL, allowingReadAccessTo: root)
     }
@@ -70,6 +70,13 @@ final class ViewController: UIViewController, WKNavigationDelegate, WKUIDelegate
         <p>アプリ内のWeb資産が見つかりません。開発ビルドでは、Xcodeを開く前にリポジトリ直下で <strong>npm run ios:prepare</strong> を実行してください。</p>
         """
         webView.loadHTMLString(html, baseURL: nil)
+    }
+
+    private func isBundledFileURL(_ url: URL) -> Bool {
+        guard url.isFileURL, let root = webRootURL else { return false }
+        let rootPath = root.standardizedFileURL.resolvingSymlinksInPath().path
+        let candidatePath = url.standardizedFileURL.resolvingSymlinksInPath().path
+        return candidatePath == rootPath || candidatePath.hasPrefix(rootPath + "/")
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -251,11 +258,7 @@ final class ViewController: UIViewController, WKNavigationDelegate, WKUIDelegate
         }
 
         if url.isFileURL {
-            if let root = webRootURL, url.path.hasPrefix(root.path) {
-                decisionHandler(.allow)
-            } else {
-                decisionHandler(.cancel)
-            }
+            decisionHandler(isBundledFileURL(url) ? .allow : .cancel)
             return
         }
 
@@ -272,7 +275,7 @@ final class ViewController: UIViewController, WKNavigationDelegate, WKUIDelegate
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
         guard navigationAction.targetFrame == nil, let url = navigationAction.request.url else { return nil }
-        if url.isFileURL {
+        if isBundledFileURL(url) {
             webView.load(navigationAction.request)
         } else if let scheme = url.scheme?.lowercased(), ["https", "http", "mailto"].contains(scheme) {
             UIApplication.shared.open(url)
