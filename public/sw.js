@@ -52,31 +52,30 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin || !url.href.startsWith(scopeUrl.href)) return;
 
   if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response.ok) event.waitUntil(putResponse(request, response));
-          return response;
-        })
-        .catch(async () => {
-          const cache = await caches.open(CACHE_NAME);
-          return await cache.match(request)
-            || await cache.match(scopeUrl.href)
-            || await cache.match(indexUrl.href);
-        }),
-    );
+    event.respondWith((async () => {
+      try {
+        const response = await fetch(request);
+        if (response.ok) await putResponse(request, response);
+        return response;
+      } catch {
+        const cache = await caches.open(CACHE_NAME);
+        return await cache.match(request)
+          || await cache.match(scopeUrl.href)
+          || await cache.match(indexUrl.href)
+          || Response.error();
+      }
+    })());
     return;
   }
 
-  event.respondWith(
-    caches.open(CACHE_NAME).then(async (cache) => {
-      const cached = await cache.match(request);
-      if (cached) return cached;
-      const response = await fetch(request);
-      if (response.ok) event.waitUntil(putResponse(request, response));
-      return response;
-    }),
-  );
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(request);
+    if (cached) return cached;
+    const response = await fetch(request);
+    if (response.ok) await putResponse(request, response);
+    return response;
+  })());
 });
 
 self.addEventListener('notificationclick', (event) => {
