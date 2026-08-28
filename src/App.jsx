@@ -1,15 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Plus, Settings } from 'lucide-react';
-import {
-  EXPERIMENT_STORAGE_KEY,
-  LEGACY_STORAGE_KEY,
-  REMINDER_NOTIFIED_STORAGE_KEY,
-  REMINDER_STORAGE_KEY,
-  STATUS,
-  STORAGE_KEY,
-  TEMPLATE_STORAGE_KEY,
-  TABS,
-} from './constants.js';
+import { STATUS, TABS } from './constants.js';
 import { calculateMonthlyInsights, calculateWeeklyInsights } from './utils/analytics.js';
 import { dateKeyFromDate, shiftDateKey } from './utils/date.js';
 import { createUniqueId } from './utils/id.js';
@@ -48,15 +39,6 @@ function scheduleRevisionKey(schedule) { return schedule ? JSON.stringify(schedu
 function timeKeyFromDate(date) {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
-
-const LOCAL_STORAGE_KEYS = Object.freeze([
-  STORAGE_KEY,
-  LEGACY_STORAGE_KEY,
-  TEMPLATE_STORAGE_KEY,
-  REMINDER_STORAGE_KEY,
-  REMINDER_NOTIFIED_STORAGE_KEY,
-  EXPERIMENT_STORAGE_KEY,
-]);
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(TABS.TRACK);
@@ -286,19 +268,12 @@ export default function App() {
     replaceTemplates([]);
     replaceExperiments([]);
     replaceReminderPreferences(DEFAULT_REMINDER_PREFERENCES);
-    let storageRemovalSucceeded = true;
-    try {
-      for (const key of LOCAL_STORAGE_KEYS) window.localStorage.removeItem(key);
-    } catch {
-      storageRemovalSucceeded = false;
-    }
     setSelectedDate(today);
     setSelectedScheduleId(null);
     setSelectedPlanFeedbackId(null);
     setEditorState(null);
     setIsTemplateModalOpen(false);
     setActiveTab(TABS.TRACK);
-    return storageRemovalSucceeded;
   };
 
   const openLegal = (page) => {
