@@ -83,12 +83,15 @@ export function useScheduleTemplates() {
     try {
       const latest = parseStoredTemplatesResult(window.localStorage.getItem(TEMPLATE_STORAGE_KEY));
       if (!latest.ok) {
-        applyState((current) => ({ ...current, persistenceBlocked: true, needsWrite: false }));
+        // Keep the local pending mutation marked dirty. A later valid storage
+        // event can then compare against baseSerialized and either resume the
+        // write or freeze as a conflict instead of silently replacing it.
+        applyState((current) => ({ ...current, persistenceBlocked: true }));
         return;
       }
       const latestSerialized = serializeTemplates(latest.templates);
       if (latestSerialized !== baseSerialized) {
-        applyState((current) => ({ ...current, writeConflict: true, writeFailed: false, needsWrite: false }));
+        applyState((current) => ({ ...current, persistenceBlocked: false, writeConflict: true, writeFailed: false, needsWrite: false }));
         return;
       }
 
@@ -97,19 +100,19 @@ export function useScheduleTemplates() {
       // after the first preflight is never overwritten as if nothing happened.
       const preWrite = parseStoredTemplatesResult(window.localStorage.getItem(TEMPLATE_STORAGE_KEY));
       if (!preWrite.ok) {
-        applyState((current) => ({ ...current, persistenceBlocked: true, needsWrite: false }));
+        applyState((current) => ({ ...current, persistenceBlocked: true }));
         return;
       }
       const preWriteSerialized = serializeTemplates(preWrite.templates);
       if (preWriteSerialized !== latestSerialized) {
-        applyState((current) => ({ ...current, writeConflict: true, writeFailed: false, needsWrite: false }));
+        applyState((current) => ({ ...current, persistenceBlocked: false, writeConflict: true, writeFailed: false, needsWrite: false }));
         return;
       }
 
       window.localStorage.setItem(TEMPLATE_STORAGE_KEY, writtenSerialized);
       const readBack = parseStoredTemplatesResult(window.localStorage.getItem(TEMPLATE_STORAGE_KEY));
       if (!readBack.ok) {
-        applyState((current) => ({ ...current, persistenceBlocked: true, needsWrite: false }));
+        applyState((current) => ({ ...current, persistenceBlocked: true }));
         return;
       }
       const readBackSerialized = serializeTemplates(readBack.templates);
@@ -117,7 +120,7 @@ export function useScheduleTemplates() {
         if (readBackSerialized === preWriteSerialized) {
           applyState((current) => ({ ...current, writeFailed: true }));
         } else {
-          applyState((current) => ({ ...current, writeConflict: true, writeFailed: false, needsWrite: false }));
+          applyState((current) => ({ ...current, persistenceBlocked: false, writeConflict: true, writeFailed: false, needsWrite: false }));
         }
         return;
       }
@@ -127,6 +130,7 @@ export function useScheduleTemplates() {
         const changedAgain = currentSerialized !== writtenSerialized;
         return {
           ...current,
+          persistenceBlocked: false,
           writeFailed: false,
           needsWrite: changedAgain,
           baseSerialized: writtenSerialized,
@@ -143,14 +147,26 @@ export function useScheduleTemplates() {
       const result = parseStoredTemplatesResult(event.newValue);
       applyState((current) => {
         if (!result.ok) {
-          return { ...current, persistenceBlocked: true, writeFailed: false, needsWrite: false };
+          // Preserve needsWrite and the in-memory templates. If storage becomes
+          // valid again we must still know that these local edits need a commit.
+          return { ...current, persistenceBlocked: true };
         }
         const externalSerialized = serializeTemplates(result.templates);
         if (current.needsWrite) {
           if (externalSerialized !== current.baseSerialized) {
-            return { ...current, writeConflict: true, writeFailed: false, needsWrite: false };
+            return {
+              ...current,
+              persistenceBlocked: false,
+              writeConflict: true,
+              writeFailed: false,
+              needsWrite: false,
+            };
           }
-          return current;
+          return {
+            ...current,
+            persistenceBlocked: false,
+            writeFailed: false,
+          };
         }
         if (current.writeConflict) return current;
         return {
@@ -173,13 +189,13 @@ export function useScheduleTemplates() {
     try {
       const latest = parseStoredTemplatesResult(window.localStorage.getItem(TEMPLATE_STORAGE_KEY));
       if (!latest.ok) {
-        applyState({ ...current, persistenceBlocked: true, needsWrite: false });
+        applyState({ ...current, persistenceBlocked: true });
         return null;
       }
       const latestSerialized = serializeTemplates(latest.templates);
       if (latestSerialized === current.baseSerialized) return current;
       if (current.needsWrite) {
-        applyState({ ...current, writeConflict: true, writeFailed: false, needsWrite: false });
+        applyState({ ...current, persistenceBlocked: false, writeConflict: true, writeFailed: false, needsWrite: false });
         return null;
       }
       return {
@@ -191,7 +207,7 @@ export function useScheduleTemplates() {
         writeConflict: false,
       };
     } catch {
-      applyState({ ...current, persistenceBlocked: true, needsWrite: false });
+      applyState({ ...current, persistenceBlocked: true });
       return null;
     }
   }, [applyState]);
