@@ -2,6 +2,19 @@ import UIKit
 import UniformTypeIdentifiers
 import WebKit
 
+private final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
+    weak var delegate: WKScriptMessageHandler?
+
+    init(delegate: WKScriptMessageHandler) {
+        self.delegate = delegate
+        super.init()
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        delegate?.userContentController(userContentController, didReceive: message)
+    }
+}
+
 final class ViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler, UIDocumentPickerDelegate {
     private enum BackupPickerOperation {
         case exporting
@@ -21,8 +34,8 @@ final class ViewController: UIViewController, WKNavigationDelegate, WKUIDelegate
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
-        configuration.userContentController.add(self, name: Self.backupExportHandler)
-        configuration.userContentController.add(self, name: Self.backupImportHandler)
+        configuration.userContentController.add(WeakScriptMessageHandler(delegate: self), name: Self.backupExportHandler)
+        configuration.userContentController.add(WeakScriptMessageHandler(delegate: self), name: Self.backupImportHandler)
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = self
