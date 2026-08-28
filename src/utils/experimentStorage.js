@@ -82,9 +82,10 @@ function objectHasOnlyKeys(value, allowed) {
     && Object.keys(value).every((key) => allowed.has(key));
 }
 
-function optionalFiniteNumber(value) {
+function optionalFiniteNumber(value, strictNumbers = false) {
   if (value === null || value === undefined) return null;
   if (typeof value === 'string' && value.trim() === '') return null;
+  if (strictNumbers && typeof value !== 'number') return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -101,7 +102,7 @@ function optionalTextFieldPreserved(raw, normalized, key) {
   return raw[key] === undefined || explicitTextPreserved(raw[key], normalized[key]);
 }
 
-function trialMetadataPreserved(rawTrials, normalizedTrials) {
+function trialMetadataPreserved(rawTrials, normalizedTrials, strictNumbers) {
   if (!Array.isArray(rawTrials)) return rawTrials === undefined;
   if (rawTrials.length !== normalizedTrials.length) return false;
   for (let index = 0; index < rawTrials.length; index += 1) {
@@ -113,7 +114,7 @@ function trialMetadataPreserved(rawTrials, normalizedTrials) {
     if (!isValidDateKey(raw.dateKey) || normalized.dateKey !== raw.dateKey) return false;
     if (!VALID_TRIAL_OUTCOMES.has(raw.outcome) || normalized.outcome !== raw.outcome) return false;
     if (raw.observedValue !== undefined && raw.observedValue !== null && raw.observedValue !== '') {
-      const numeric = optionalFiniteNumber(raw.observedValue);
+      const numeric = optionalFiniteNumber(raw.observedValue, strictNumbers);
       if (numeric === null || normalized.observedValue !== numeric) return false;
     }
     if (typeof raw.planTitle !== 'string' || !raw.planTitle.trim() || normalized.planTitle !== raw.planTitle.trim()) return false;
@@ -125,7 +126,7 @@ function trialMetadataPreserved(rawTrials, normalizedTrials) {
   return true;
 }
 
-function explicitMetadataPreserved(raw, normalized) {
+function explicitMetadataPreserved(raw, normalized, strictNumbers) {
   if (!objectHasOnlyKeys(raw, EXPERIMENT_FIELDS) || !normalized) return false;
 
   if (typeof raw.id !== 'string' || !raw.id.trim() || normalized.id !== raw.id.trim()) return false;
@@ -136,10 +137,10 @@ function explicitMetadataPreserved(raw, normalized) {
   if (raw.startDateKey !== undefined && (!isValidDateKey(raw.startDateKey) || normalized.startDateKey !== raw.startDateKey)) return false;
   if (!objectHasOnlyKeys(raw.condition, CONDITION_FIELDS) || !sameJson(raw.condition, normalized.condition)) return false;
   if (raw.condition.kind === 'planned-category' && !CATEGORIES.includes(raw.condition.value)) return false;
-  if (!trialMetadataPreserved(raw.trials, normalized.trials)) return false;
+  if (!trialMetadataPreserved(raw.trials, normalized.trials, strictNumbers)) return false;
 
   if (raw.targetRuns !== undefined) {
-    const targetRuns = optionalFiniteNumber(raw.targetRuns);
+    const targetRuns = optionalFiniteNumber(raw.targetRuns, strictNumbers);
     if (!Number.isInteger(targetRuns) || targetRuns < 3 || targetRuns > 10 || normalized.targetRuns !== targetRuns) return false;
   }
 
@@ -196,7 +197,7 @@ function explicitMetadataPreserved(raw, normalized) {
     if (parent === undefined || normalized.parentExperimentId !== parent) return false;
   }
   if (raw.learningVersion !== undefined) {
-    const version = optionalFiniteNumber(raw.learningVersion);
+    const version = optionalFiniteNumber(raw.learningVersion, strictNumbers);
     if (!Number.isInteger(version) || version < 1 || version > 999 || normalized.learningVersion !== version) return false;
   }
   if (raw.revalidationReason !== undefined) {
@@ -207,12 +208,12 @@ function explicitMetadataPreserved(raw, normalized) {
     if (raw.baselineFailureRate === null) {
       if (normalized.baselineFailureRate !== null) return false;
     } else {
-      const rate = optionalFiniteNumber(raw.baselineFailureRate);
+      const rate = optionalFiniteNumber(raw.baselineFailureRate, strictNumbers);
       if (rate === null || rate < 0 || rate > 1 || normalized.baselineFailureRate !== rate) return false;
     }
   }
   if (raw.baselineSampleCount !== undefined) {
-    const count = optionalFiniteNumber(raw.baselineSampleCount);
+    const count = optionalFiniteNumber(raw.baselineSampleCount, strictNumbers);
     if (!Number.isInteger(count) || count < 0 || count > 100000 || normalized.baselineSampleCount !== count) return false;
   }
 
@@ -304,14 +305,17 @@ function experimentLineageValid(experiments) {
 
 function parsePayload(raw) {
   let parsed;
-  try { parsed = JSON.parse(raw); } catch { return { ok: false, rawExperiments: [], unsupportedVersion: null }; }
-  if (Array.isArray(parsed)) return { ok: true, rawExperiments: parsed, unsupportedVersion: null };
-  if (!objectHasOnlyKeys(parsed, PAYLOAD_FIELDS)) return { ok: false, rawExperiments: [], unsupportedVersion: null };
+  try { parsed = JSON.parse(raw); } catch { return { ok: false, rawExperiments: [], unsupportedVersion: null, strictNumbers: true }; }
+  // Bare arrays are the known legacy experiment format. They may contain old
+  // form-shaped numeric strings; the hook rewrites them to the versioned schema
+  // once. Versioned payloads must already use the exact current numeric types.
+  if (Array.isArray(parsed)) return { ok: true, rawExperiments: parsed, unsupportedVersion: null, strictNumbers: false };
+  if (!objectHasOnlyKeys(parsed, PAYLOAD_FIELDS)) return { ok: false, rawExperiments: [], unsupportedVersion: null, strictNumbers: true };
   if (parsed.version !== EXPERIMENT_STORAGE_VERSION) {
-    return { ok: false, rawExperiments: [], unsupportedVersion: parsed.version ?? 'unknown' };
+    return { ok: false, rawExperiments: [], unsupportedVersion: parsed.version ?? 'unknown', strictNumbers: true };
   }
-  if (!Array.isArray(parsed.experiments)) return { ok: false, rawExperiments: [], unsupportedVersion: null };
-  return { ok: true, rawExperiments: parsed.experiments, unsupportedVersion: null };
+  if (!Array.isArray(parsed.experiments)) return { ok: false, rawExperiments: [], unsupportedVersion: null, strictNumbers: true };
+  return { ok: true, rawExperiments: parsed.experiments, unsupportedVersion: null, strictNumbers: true };
 }
 
 export function parseStoredExperimentsForPersistence(raw) {
@@ -324,7 +328,7 @@ export function parseStoredExperimentsForPersistence(raw) {
     return { ok: false, experiments: [], unsupportedVersion: null };
   }
   for (let index = 0; index < payload.rawExperiments.length; index += 1) {
-    if (!explicitMetadataPreserved(payload.rawExperiments[index], experiments[index])) {
+    if (!explicitMetadataPreserved(payload.rawExperiments[index], experiments[index], payload.strictNumbers)) {
       return { ok: false, experiments: [], unsupportedVersion: null };
     }
   }
