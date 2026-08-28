@@ -61,6 +61,59 @@ test('structured adopted experiment metadata survives backup round-trip', () => 
   assert.equal(parsed.data.experiments[0].decisionDateKey, '2026-09-01');
 });
 
+test('backup rejects applied-experiment markers whose provenance is missing or not adopted', () => {
+  const base = {
+    format: 'reality-sync-backup',
+    version: 1,
+    scheduleStore: {
+      version: 2,
+      days: {
+        '2026-09-02': [{
+          id: 'plan', time: '09:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 40,
+          appliedExperimentIds: ['exp-source'], status: STATUS.PENDING,
+        }],
+      },
+    },
+    templates: [],
+    reminderPreferences: { enabled: true, delayMinutes: 15, browserNotifications: false },
+  };
+
+  const missing = parseBackup(JSON.stringify({ ...base, experiments: [] }));
+  assert.equal(missing.ok, false);
+  assert.match(missing.error, /適用済みの学習/);
+
+  const active = parseBackup(JSON.stringify({
+    ...base,
+    experiments: [{
+      id: 'exp-source', title: 'Test', action: '余白', metricKind: 'deviation', metricLabel: '変更',
+      condition: { kind: 'weekday', value: 2 }, startDateKey: '2026-09-02', targetRuns: 3,
+      baselineFailureRate: 0.5, baselineSampleCount: 8, status: 'active', trials: [],
+    }],
+  }));
+  assert.equal(active.ok, false);
+  assert.match(active.error, /適用済みの学習/);
+});
+
+test('backup rejects template markers whose adopted experiment provenance is missing', () => {
+  const parsed = parseBackup(JSON.stringify({
+    format: 'reality-sync-backup',
+    version: 1,
+    scheduleStore: { version: 2, days: {} },
+    templates: [{
+      id: 'template',
+      name: 'Saved plan',
+      schedules: [{
+        time: '09:00', title: 'Work', category: '仕事', duration: 60, plannedStress: 40,
+        appliedExperimentIds: ['missing-adopted-experiment'],
+      }],
+    }],
+    experiments: [],
+    reminderPreferences: { enabled: true, delayMinutes: 15, browserNotifications: false },
+  }));
+  assert.equal(parsed.ok, false);
+  assert.match(parsed.error, /適用済みの学習/);
+});
+
 test('older v1 backups without experiment history remain readable as an empty experiment list', () => {
   const parsed = parseBackup(JSON.stringify({
     format: 'reality-sync-backup', version: 1, exportedAt: '2026-08-23T00:00:00Z',
