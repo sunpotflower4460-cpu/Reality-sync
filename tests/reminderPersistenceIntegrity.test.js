@@ -58,7 +58,7 @@ test('global protection mode includes malformed reminder storage', () => {
   assert.match(app, /storageProtection: reminderStorageProtection/);
   assert.match(app, /reminderStorageProtection\.persistenceBlocked/);
   assert.match(app, /protectedDomains\.push\('リマインダー設定'\)/);
-  assert.match(hook, /if \(persistenceBlocked \|\| !needsWrite\) return;/);
+  assert.match(hook, /if \(persistenceBlocked \|\| writeConflict \|\| !needsWrite\) return;/);
   assert.match(hook, /parseStoredReminderPreferencesResult\(event\.newValue\)/);
   assert.match(hook, /needsWrite: false/);
 });
